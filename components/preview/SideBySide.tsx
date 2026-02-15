@@ -6,11 +6,13 @@ import { useAppStore } from '@/stores/app-store';
 function PdfPreviewPane({
   title,
   bytes,
-  fileName
+  fileName,
+  score
 }: {
   title: string;
   bytes?: ArrayBuffer;
   fileName: string;
+  score?: number;
 }) {
   const blobUrl = useMemo(() => {
     if (!bytes) return null;
@@ -39,7 +41,12 @@ function PdfPreviewPane({
 
   return (
     <div className="space-y-3 rounded border border-slate-200 p-4 dark:border-slate-700">
-      <p className="font-medium">{title}</p>
+      <div>
+        <p className="font-medium">{title}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          {typeof score === 'number' ? `Compliance score: ${score}%` : 'Compliance score: unavailable'}
+        </p>
+      </div>
       <iframe
         src={blobUrl ?? undefined}
         title={title}
@@ -72,11 +79,17 @@ export function SideBySide({ fileId }: { fileId: string }) {
 
   return (
     <section className="grid gap-4 md:grid-cols-2">
-      <PdfPreviewPane title="Original preview" bytes={file?.originalBytes} fileName={file?.name ?? 'original.pdf'} />
+      <PdfPreviewPane
+        title="Original preview"
+        bytes={file?.originalBytes}
+        fileName={file?.name ?? 'original.pdf'}
+        score={file?.auditResult?.score}
+      />
       <PdfPreviewPane
         title="Remediated preview"
         bytes={file?.remediatedBytes}
         fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
+        score={file?.postRemediationAudit?.score}
       />
     </section>
   );
