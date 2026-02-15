@@ -1,6 +1,7 @@
 import { getDocument } from 'pdfjs-dist';
 import { ensurePdfJsWorkerConfigured } from './configure-worker';
 import type { ParsedPDF } from './types';
+import { decodeManifest } from '@/lib/remediate/manifest';
 
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
   ensurePdfJsWorkerConfigured();
@@ -17,6 +18,8 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
           ])
         )
       : {};
+
+  const manifest = decodeManifest(metadata.Keywords) ?? decodeManifest(metadata.Subject);
 
   const textItems: ParsedPDF['textItems'] = [];
 
@@ -45,17 +48,21 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
     }
   }
 
+  if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
+    metadata['pdfuaid:part'] = manifest.pdfUaPart;
+  }
+
   return {
     pageCount: doc.numPages,
     metadata,
-    language: metadata.Language,
+    language: manifest?.language ?? metadata.Language,
     title: metadata.Title,
-    hasStructTree: false,
-    tags: [],
+    hasStructTree: manifest?.hasStructTree ?? false,
+    tags: manifest?.tags ?? [],
     textItems,
-    images: [],
-    links: [],
-    outlines: [],
-    forms: []
+    images: manifest?.images ?? [],
+    links: manifest?.links ?? [],
+    outlines: manifest?.outlines ?? [],
+    forms: manifest?.forms ?? []
   };
 }
