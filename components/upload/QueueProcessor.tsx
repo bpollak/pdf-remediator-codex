@@ -28,8 +28,9 @@ export function QueueProcessor() {
         updateFile(next.id, { status: 'remediating', progress: 75, auditResult });
         const remediated = await remediatePdf(parsedData, parsedData.language ?? 'en-US');
         const remediatedBytes = new Uint8Array(remediated).buffer;
+        const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));
 
-        const postRemediationAudit = runAudit(parsedData);
+        const postRemediationAudit = runAudit(remediatedParsedData);
         updateFile(next.id, {
           status: 'remediated',
           progress: 100,
