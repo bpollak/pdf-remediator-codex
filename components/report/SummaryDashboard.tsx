@@ -16,8 +16,8 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
 
   if (!auditResult) {
     return (
-      <section className="rounded border p-4 dark:border-slate-700">
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
+        <p className="text-sm text-[var(--ucsd-blue)]">
           {variant === 'remediated' ? 'No remediated audit result yet.' : 'No audit result yet.'}
         </p>
       </section>
@@ -25,9 +25,9 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   }
 
   return (
-    <section className="rounded border p-4 dark:border-slate-700">
+    <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <ComplianceScore score={auditResult.score} />
-      <p className="mt-2 text-sm">Findings: {auditResult.findings.length}</p>
+      <p className="mt-2 text-sm text-[var(--ucsd-blue)]">Findings: {auditResult.findings.length}</p>
     </section>
   );
 }

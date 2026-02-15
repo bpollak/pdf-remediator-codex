@@ -18,8 +18,8 @@ export function DropZone() {
   };
 
   return (
-    <label className="block rounded-lg border-2 border-dashed border-indigo-300 p-6 text-center">
-      <span className="mb-2 block font-medium">Upload PDFs (up to 10 files, 50MB each)</span>
+    <label className="block rounded-lg border-2 border-dashed border-[var(--ucsd-blue)] bg-white p-6 text-center shadow-sm">
+      <span className="mb-2 block font-medium text-[var(--ucsd-navy)]">Upload PDFs (up to 10 files, 50MB each)</span>
       <input aria-label="Upload PDF files" type="file" accept="application/pdf" multiple className="mx-auto" onChange={onChange} />
     </label>
   );

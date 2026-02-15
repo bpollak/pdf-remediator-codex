@@ -57,7 +57,7 @@ export async function buildRemediatedPdf(parsed: ParsedPDF, language: string) {
 
   pdf.setLanguage(language || 'en-US');
   pdf.setTitle(parsed.title ?? 'Remediated PDF');
-  pdf.setAuthor('AccessiblePDF Remediation');
+  pdf.setAuthor('UC San Diego Accessible PDF');
   pdf.setSubject(parsed.metadata.Subject ?? 'Accessibility remediated document');
   pdf.setKeywords(['accessible', 'wcag', encodeManifest(manifest)]);
 

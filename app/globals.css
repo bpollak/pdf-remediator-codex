@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ucsd-navy: #182b49;
+  --ucsd-blue: #00629b;
+  --ucsd-gold: #c69214;
+  --ucsd-yellow: #ffcd00;
+  --ucsd-sand: #f5f0e6;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  background: var(--ucsd-sand);
+  color: var(--ucsd-navy);
 }

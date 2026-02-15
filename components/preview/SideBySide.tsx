@@ -30,8 +30,8 @@ function PdfPreviewPane({
 
   if (!bytes) {
     return (
-      <div className="rounded border border-slate-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
-        <p className="font-medium">{title}</p>
+      <div className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)]">
+        <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
         <p className="mt-2">
           This preview is unavailable right now. Upload/process the file in this browser session, then open Compare again.
         </p>
@@ -40,24 +40,24 @@ function PdfPreviewPane({
   }
 
   return (
-    <div className="space-y-3 rounded border border-slate-200 p-4 dark:border-slate-700">
+    <div className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <p className="font-medium">{title}</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+        <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
+        <p className="text-sm text-[var(--ucsd-blue)]">
           {typeof score === 'number' ? `Compliance score: ${score}%` : 'Compliance score: unavailable'}
         </p>
       </div>
       <iframe
         src={blobUrl ?? undefined}
         title={title}
-        className="h-[70vh] w-full rounded border border-slate-200 dark:border-slate-700"
+        className="h-[70vh] w-full rounded border border-[rgba(24,43,73,0.2)]"
       />
       <a
         href={blobUrl ?? undefined}
         download={fileName}
         target="_blank"
         rel="noreferrer"
-        className="inline-block text-sm text-indigo-600 hover:underline"
+        className="inline-block text-sm text-[var(--ucsd-blue)] hover:underline"
       >
         Open or download PDF
       </a>

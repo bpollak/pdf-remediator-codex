@@ -18,7 +18,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
 
   if (!auditResult) {
     return (
-      <section className="rounded border p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)] shadow-sm">
         {variant === 'remediated' ? 'No remediated audit result yet.' : 'No audit result yet.'}
       </section>
     );
@@ -26,7 +26,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
 
   if (!auditResult.findings.length) {
     return (
-      <section className="rounded border p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)] shadow-sm">
         No issues identified.
       </section>
     );
