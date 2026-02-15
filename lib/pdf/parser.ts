@@ -1,7 +1,9 @@
 import { getDocument } from 'pdfjs-dist';
+import { ensurePdfJsWorkerConfigured } from './configure-worker';
 import type { ParsedPDF } from './types';
 
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
+  ensurePdfJsWorkerConfigured();
   const loadingTask = getDocument({ data: bytes });
   const doc = await loadingTask.promise;
   const metadataResult = await doc.getMetadata().catch(() => ({ info: {} as Record<string, unknown> }));
