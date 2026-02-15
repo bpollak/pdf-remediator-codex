@@ -18,6 +18,33 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
         )
       : {};
 
+  const textItems: ParsedPDF['textItems'] = [];
+
+  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+    const page = await doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+
+    for (const item of content.items) {
+      if (!('str' in item) || !item.str.trim()) {
+        continue;
+      }
+
+      const transform = item.transform;
+      const fontSize = Math.max(8, Math.abs(transform[0]) || Math.abs(transform[3]) || 12);
+
+      textItems.push({
+        text: item.str,
+        x: transform[4],
+        y: transform[5],
+        width: Math.max(1, item.width || 1),
+        height: Math.max(1, item.height || fontSize),
+        fontName: item.fontName ?? 'Helvetica',
+        fontSize,
+        page: pageNumber
+      });
+    }
+  }
+
   return {
     pageCount: doc.numPages,
     metadata,
@@ -25,7 +52,7 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
     title: metadata.Title,
     hasStructTree: false,
     tags: [],
-    textItems: [],
+    textItems,
     images: [],
     links: [],
     outlines: [],
