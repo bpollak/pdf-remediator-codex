@@ -11,6 +11,8 @@ export function FileCard({ file }: { file: FileEntry }) {
       <div className="mt-2 h-2 rounded bg-slate-200 dark:bg-slate-800">
         <div className="h-2 rounded bg-indigo-600" style={{ width: `${file.progress}%` }} />
       </div>
+
+      {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
       <div className="mt-3 space-x-3 text-sm">
         <Link className="text-indigo-600 hover:underline" href={`/app/${file.id}`}>Report</Link>
         <Link className="text-indigo-600 hover:underline" href={`/app/${file.id}/compare`}>Compare</Link>
