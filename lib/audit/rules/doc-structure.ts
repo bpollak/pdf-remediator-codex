@@ -48,21 +48,5 @@ export const docStructureRules: AuditRule[] = [
             recommendation: 'Set /Lang in the catalog.',
             autoFixable: true
           }]
-  },
-  {
-    id: 'DOC-004',
-    evaluate: ({ parsed }) =>
-      parsed.textItems.length > 0
-        ? []
-        : [{
-            ruleId: 'DOC-004',
-            category: 'Document Structure',
-            severity: 'critical',
-            description: 'No extractable text detected (document appears to be scan-only).',
-            wcagCriterion: '1.3.1 Info and Relationships',
-            location: {},
-            recommendation: 'Run OCR and verify the generated text layer reading order.',
-            autoFixable: false
-          }]
   }
 ];

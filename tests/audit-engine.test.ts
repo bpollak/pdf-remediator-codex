@@ -37,14 +37,4 @@ describe('runAudit', () => {
     const result = runAudit(parsed);
     expect(result.score).toBeGreaterThan(70);
   });
-
-  it('assigns a low score to scan-only PDFs that have no text layer', () => {
-    const parsed = createBase();
-    parsed.textItems = [];
-
-    const result = runAudit(parsed);
-
-    expect(result.findings.some((f) => f.ruleId === 'DOC-004')).toBe(true);
-    expect(result.score).toBeLessThan(50);
-  });
 });
