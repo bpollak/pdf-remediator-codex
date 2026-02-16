@@ -3,6 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 
+function formatBytes(byteLength: number): string {
+  if (byteLength < 1024) return `${byteLength} B`;
+  if (byteLength < 1024 * 1024) return `${(byteLength / 1024).toFixed(1)} KB`;
+  return `${(byteLength / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function hashToHex(hash: ArrayBuffer): string {
+  return Array.from(new Uint8Array(hash))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function PdfPreviewPane({
   title,
   bytes,
@@ -20,6 +32,39 @@ function PdfPreviewPane({
     if (!bytes) return null;
     const blob = new Blob([bytes], { type: 'application/pdf' });
     return URL.createObjectURL(blob);
+  }, [bytes]);
+  const [sha256, setSha256] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!bytes) {
+      setSha256(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      setSha256('unavailable in this browser');
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setSha256(null);
+    crypto.subtle
+      .digest('SHA-256', bytes.slice(0))
+      .then((hash) => {
+        if (!cancelled) setSha256(hashToHex(hash));
+      })
+      .catch(() => {
+        if (!cancelled) setSha256('failed to compute');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [bytes]);
 
   useEffect(() => {
@@ -47,6 +92,11 @@ function PdfPreviewPane({
         <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
         <p className="text-sm text-[var(--ucsd-blue)]">
           {typeof score === 'number' ? `Compliance score: ${score}%` : 'Compliance score: unavailable'}
+        </p>
+        <p className="text-xs text-[var(--ucsd-blue)]">File size: {formatBytes(bytes.byteLength)}</p>
+        <p className="text-xs text-[var(--ucsd-blue)]">
+          SHA-256:{' '}
+          <span className="break-all font-mono text-[11px]">{sha256 ?? 'calculating...'}</span>
         </p>
       </div>
       <iframe
