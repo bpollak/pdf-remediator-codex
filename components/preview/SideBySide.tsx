@@ -81,7 +81,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
     <section className="grid gap-4 md:grid-cols-2">
       <PdfPreviewPane
         title="Original preview"
-        bytes={file?.originalBytes}
+        bytes={file?.uploadedBytes}
         fileName={file?.name ?? 'original.pdf'}
         score={file?.auditResult?.score}
       />

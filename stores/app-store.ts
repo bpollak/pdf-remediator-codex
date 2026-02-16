@@ -8,7 +8,7 @@ export interface FileEntry {
   id: string;
   name: string;
   size: number;
-  originalBytes: ArrayBuffer;
+  uploadedBytes: ArrayBuffer;
   status: 'queued' | 'parsing' | 'ocr' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';
   progress: number;
   ocrAttempted?: boolean;
@@ -35,7 +35,7 @@ export const useAppStore = create<AppStore>((set) => ({
         id: crypto.randomUUID(),
         name: file.name,
         size: file.size,
-        originalBytes: await file.arrayBuffer(),
+        uploadedBytes: await file.arrayBuffer(),
         status: 'queued' as const,
         progress: 0
       }))

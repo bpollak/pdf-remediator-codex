@@ -23,7 +23,7 @@ export function QueueProcessor() {
     (async () => {
       try {
         updateFile(next.id, { status: 'parsing', progress: 10 });
-        let sourceBytes = next.originalBytes.slice(0);
+        let sourceBytes = next.uploadedBytes.slice(0);
         let parsedData = await parsePdfBytes(sourceBytes.slice(0));
         let ocrAttempted = false;
         let ocrApplied = false;
