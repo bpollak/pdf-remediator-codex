@@ -1,4 +1,5 @@
 import type { AuditRule } from '../types';
+import { isLikelyScannedPdf } from '@/lib/ocr/detection';
 
 export const docStructureRules: AuditRule[] = [
   {
@@ -48,5 +49,21 @@ export const docStructureRules: AuditRule[] = [
             recommendation: 'Set /Lang in the catalog.',
             autoFixable: true
           }]
+  },
+  {
+    id: 'DOC-004',
+    evaluate: ({ parsed }) =>
+      isLikelyScannedPdf(parsed)
+        ? [{
+            ruleId: 'DOC-004',
+            category: 'Document Structure',
+            severity: 'critical',
+            description: 'Document appears image-only/scanned with insufficient extractable text.',
+            wcagCriterion: '1.3.1 Info and Relationships',
+            location: {},
+            recommendation: 'Run OCR and add semantic structure before publishing.',
+            autoFixable: true
+          }]
+        : []
   }
 ];

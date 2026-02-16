@@ -8,5 +8,16 @@ export function computeComplianceScore(totalRules: number, findings: AuditFindin
   }, 0);
 
   const maxPenalty = totalRules * 6;
-  return Math.max(0, Math.round(((maxPenalty - weightedPenalty) / maxPenalty) * 100));
+  const ruleIds = new Set(findings.map((finding) => finding.ruleId));
+  let score = Math.max(0, Math.round(((maxPenalty - weightedPenalty) / maxPenalty) * 100));
+
+  if (ruleIds.has('DOC-002')) {
+    score = Math.min(score, 45);
+  }
+
+  if (ruleIds.has('DOC-004')) {
+    score = Math.min(score, 20);
+  }
+
+  return score;
 }

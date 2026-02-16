@@ -24,6 +24,24 @@ describe('runAudit', () => {
     expect(result.score).toBeLessThan(100);
   });
 
+  it('assigns a low score to scanned/image-only documents', () => {
+    const scanned: ParsedPDF = {
+      pageCount: 6,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [],
+      images: [],
+      links: [],
+      outlines: [],
+      forms: []
+    };
+
+    const result = runAudit(scanned);
+    expect(result.findings.some((f) => f.ruleId === 'DOC-004')).toBe(true);
+    expect(result.score).toBeLessThanOrEqual(20);
+  });
+
   it('returns improved score for accessible-like document', () => {
     const parsed = createBase();
     parsed.hasStructTree = true;

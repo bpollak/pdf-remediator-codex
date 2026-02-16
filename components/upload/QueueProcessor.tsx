@@ -23,26 +23,32 @@ export function QueueProcessor() {
     (async () => {
       try {
         updateFile(next.id, { status: 'parsing', progress: 10 });
-        let sourceBytes = next.uploadedBytes.slice(0);
-        let parsedData = await parsePdfBytes(sourceBytes.slice(0));
+        const uploadedBytes = next.uploadedBytes.slice(0);
+        const originalParsedData = await parsePdfBytes(uploadedBytes.slice(0));
+        let remediationSourceBytes = uploadedBytes.slice(0);
+        let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
         let ocrApplied = false;
         let ocrReason: string | undefined;
 
-        if (isLikelyScannedPdf(parsedData)) {
+        if (isLikelyScannedPdf(originalParsedData)) {
           ocrAttempted = true;
           updateFile(next.id, { status: 'ocr', progress: 30 });
-          const ocrResult = await runOcrViaApi(sourceBytes.slice(0), next.name, parsedData.language);
+          const ocrResult = await runOcrViaApi(remediationSourceBytes.slice(0), next.name, originalParsedData.language);
 
           if (ocrResult.bytes) {
-            sourceBytes = ocrResult.bytes;
-            parsedData = await parsePdfBytes(sourceBytes.slice(0));
+            remediationSourceBytes = ocrResult.bytes;
+            remediationParsedData = await parsePdfBytes(remediationSourceBytes.slice(0));
             ocrApplied = true;
             ocrReason = undefined;
           } else {
-            const localOcr = await runLocalOcr(parsedData, sourceBytes.slice(0), parsedData.language);
+            const localOcr = await runLocalOcr(
+              remediationParsedData,
+              remediationSourceBytes.slice(0),
+              remediationParsedData.language
+            );
             if (localOcr.applied && localOcr.parsed) {
-              parsedData = localOcr.parsed;
+              remediationParsedData = localOcr.parsed;
               ocrApplied = true;
               ocrReason = ocrResult.reason ? `${ocrResult.reason}; used local OCR fallback` : 'Used local OCR fallback';
             } else {
@@ -51,11 +57,22 @@ export function QueueProcessor() {
           }
         }
 
-        updateFile(next.id, { status: 'auditing', progress: 45, parsedData, ocrAttempted, ocrApplied, ocrReason });
-        const auditResult = runAudit(parsedData);
+        updateFile(next.id, {
+          status: 'auditing',
+          progress: 45,
+          parsedData: originalParsedData,
+          ocrAttempted,
+          ocrApplied,
+          ocrReason
+        });
+        const auditResult = runAudit(originalParsedData);
 
         updateFile(next.id, { status: 'remediating', progress: 75, auditResult });
-        const remediated = await remediatePdf(parsedData, parsedData.language ?? 'en-US', sourceBytes.slice(0));
+        const remediated = await remediatePdf(
+          remediationParsedData,
+          remediationParsedData.language ?? originalParsedData.language ?? 'en-US',
+          remediationSourceBytes.slice(0)
+        );
         const remediatedBytes = new Uint8Array(remediated).buffer;
         const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));
 

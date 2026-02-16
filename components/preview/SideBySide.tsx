@@ -7,12 +7,14 @@ function PdfPreviewPane({
   title,
   bytes,
   fileName,
-  score
+  score,
+  downloadLabel
 }: {
   title: string;
   bytes?: ArrayBuffer;
   fileName: string;
   score?: number;
+  downloadLabel: string;
 }) {
   const blobUrl = useMemo(() => {
     if (!bytes) return null;
@@ -59,7 +61,7 @@ function PdfPreviewPane({
         rel="noreferrer"
         className="inline-block text-sm text-[var(--ucsd-blue)] hover:underline"
       >
-        Open or download PDF
+        {downloadLabel}
       </a>
     </div>
   );
@@ -84,12 +86,14 @@ export function SideBySide({ fileId }: { fileId: string }) {
         bytes={file?.uploadedBytes}
         fileName={file?.name ?? 'original.pdf'}
         score={file?.auditResult?.score}
+        downloadLabel="Open or download original PDF"
       />
       <PdfPreviewPane
         title="Remediated preview"
         bytes={file?.remediatedBytes}
         fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
         score={file?.postRemediationAudit?.score}
+        downloadLabel="Open or download remediated PDF"
       />
     </section>
   );
