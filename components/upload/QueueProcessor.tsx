@@ -29,6 +29,7 @@ export function QueueProcessor() {
         let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
         let ocrApplied = false;
+        let localOcrApplied = false;
         let ocrReason: string | undefined;
 
         if (isLikelyScannedPdf(originalParsedData)) {
@@ -50,6 +51,7 @@ export function QueueProcessor() {
             if (localOcr.applied && localOcr.parsed) {
               remediationParsedData = localOcr.parsed;
               ocrApplied = true;
+              localOcrApplied = true;
               ocrReason = ocrResult.reason ? `${ocrResult.reason}; used local OCR fallback` : 'Used local OCR fallback';
             } else {
               ocrReason = ocrResult.reason ?? localOcr.reason;
@@ -71,7 +73,8 @@ export function QueueProcessor() {
         const remediated = await remediatePdf(
           remediationParsedData,
           remediationParsedData.language ?? originalParsedData.language ?? 'en-US',
-          remediationSourceBytes.slice(0)
+          remediationSourceBytes.slice(0),
+          { addInvisibleTextLayer: localOcrApplied }
         );
         const remediatedBytes = new Uint8Array(remediated).buffer;
         const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));

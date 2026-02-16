@@ -28,7 +28,7 @@ interface OcrLineLike {
   bbox?: { x0?: number; y0?: number; x1?: number; y1?: number };
 }
 
-function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: number): TextItem | null {
+function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: number, viewportScale: number): TextItem | null {
   const text = normalizeText(line.text);
   if (!text) return null;
 
@@ -39,13 +39,13 @@ function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: numb
   const y0 = line.bbox?.y0 ?? 0;
   const x1 = line.bbox?.x1 ?? x0 + 1;
   const y1 = line.bbox?.y1 ?? y0 + 1;
-  const width = Math.max(1, x1 - x0);
-  const height = Math.max(1, y1 - y0);
-  const y = Math.max(0, viewportHeight - y1);
+  const width = Math.max(1, (x1 - x0) / viewportScale);
+  const height = Math.max(1, (y1 - y0) / viewportScale);
+  const y = Math.max(0, (viewportHeight - y1) / viewportScale);
 
   return {
     text,
-    x: Math.max(0, x0),
+    x: Math.max(0, x0 / viewportScale),
     y,
     width,
     height,
@@ -98,7 +98,7 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
         const lines = ((recognition as any)?.data?.lines ?? []) as OcrLineLike[];
 
         for (const line of lines) {
-          const item = ocrLineToTextItem(line, pageNumber, viewport.height);
+          const item = ocrLineToTextItem(line, pageNumber, viewport.height, LOCAL_OCR_SCALE);
           if (item) ocrItems.push(item);
         }
       }

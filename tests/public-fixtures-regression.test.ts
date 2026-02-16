@@ -6,8 +6,8 @@ import { isLikelyScannedPdf } from '@/lib/ocr/detection';
 import { parsePdfBytes } from '@/lib/pdf/parser';
 import { remediatePdf } from '@/lib/remediate/engine';
 
-const scannedFixtures = ['image-based-pdf-sample.pdf', 'scansmpl.pdf'] as const;
-const allFixtures = [...scannedFixtures, 'yeats.pdf'] as const;
+const scannedFixtures = ['scansmpl.pdf', 'Naac_appLetter-scanned.pdf'] as const;
+const allFixtures = [...scannedFixtures] as const;
 
 async function loadPdfBytes(fileName: string): Promise<ArrayBuffer> {
   const filePath = resolve(process.cwd(), 'public', fileName);

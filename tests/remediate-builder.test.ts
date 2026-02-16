@@ -3,6 +3,7 @@ import { buildRemediatedPdf } from '@/lib/remediate/builder';
 import { PDFDocument } from 'pdf-lib';
 import { runAudit } from '@/lib/audit/engine';
 import { decodeManifest } from '@/lib/remediate/manifest';
+import { parsePdfBytes } from '@/lib/pdf/parser';
 import type { ParsedPDF } from '@/lib/pdf/types';
 
 describe('buildRemediatedPdf', () => {
@@ -49,6 +50,40 @@ describe('buildRemediatedPdf', () => {
     expect(remediatedPdf.getPages()[0]?.getHeight()).toBeCloseTo(595, 3);
     expect(remediatedPdf.getPages()[1]?.getWidth()).toBeCloseTo(612, 3);
     expect(remediatedPdf.getPages()[1]?.getHeight()).toBeCloseTo(792, 3);
+  });
+
+  it('embeds an invisible OCR text layer when local OCR fallback is used', async () => {
+    const sourcePdf = await PDFDocument.create();
+    sourcePdf.addPage([612, 792]);
+    const sourceBytes = await sourcePdf.save();
+
+    const parsed: ParsedPDF = {
+      pageCount: 1,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [
+        {
+          text: 'To whom so ever it may concern',
+          x: 120,
+          y: 520,
+          width: 220,
+          height: 12,
+          fontName: 'OCR',
+          fontSize: 12,
+          page: 1
+        }
+      ],
+      images: [],
+      links: [],
+      outlines: [],
+      forms: []
+    };
+
+    const remediatedBytes = await buildRemediatedPdf(parsed, 'en-US', sourceBytes, { addInvisibleTextLayer: true });
+    const remediatedParsed = await parsePdfBytes(remediatedBytes.slice(0));
+
+    expect(remediatedParsed.textItems.some((item) => /to whom so ever it may concern/i.test(item.text))).toBe(true);
   });
 
   it('embeds remediation manifest so post-remediation audits reflect applied fixes', async () => {

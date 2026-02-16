@@ -10,6 +10,7 @@ const MAX_TEXT_LENGTH = 160;
 const MAX_LINKS_IN_MANIFEST = 300;
 const MAX_IMAGES_IN_MANIFEST = 300;
 const MAX_FORMS_IN_MANIFEST = 300;
+const MAX_OCR_TEXT_LAYER_ITEMS = 20000;
 
 const genericLinkTextPattern = /^(click here|read more|learn more|more|https?:\/\/)/i;
 const listPattern = /^([\u2022\-*]|\d+[.)]|[a-zA-Z][.)])\s+/;
@@ -189,7 +190,46 @@ function parseColor(color?: string) {
   return rgb(r, g, b);
 }
 
-export async function buildRemediatedPdf(parsed: ParsedPDF, language: string, sourceBytes?: ArrayBuffer | Uint8Array) {
+async function embedInvisibleOcrTextLayer(pdf: PDFDocument, parsed: ParsedPDF) {
+  const ocrTextItems = parsed.textItems.filter((item) => item.fontName === 'OCR').slice(0, MAX_OCR_TEXT_LAYER_ITEMS);
+  if (!ocrTextItems.length) return;
+
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const pages = pdf.getPages();
+
+  for (const item of ocrTextItems) {
+    const page = pages[item.page - 1];
+    if (!page) continue;
+
+    const safeText = sanitizeTextForFont(font, item.text).trim();
+    if (!safeText) continue;
+
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+    const x = Math.min(Math.max(item.x, 0), Math.max(0, pageWidth - 1));
+    const y = Math.min(Math.max(item.y, 0), Math.max(0, pageHeight - 1));
+
+    page.drawText(safeText, {
+      x,
+      y,
+      size: Math.max(6, Math.min(item.fontSize, 72)),
+      font,
+      color: rgb(0, 0, 0),
+      opacity: 0
+    });
+  }
+}
+
+export interface BuildRemediatedPdfOptions {
+  addInvisibleTextLayer?: boolean;
+}
+
+export async function buildRemediatedPdf(
+  parsed: ParsedPDF,
+  language: string,
+  sourceBytes?: ArrayBuffer | Uint8Array,
+  options: BuildRemediatedPdfOptions = {}
+) {
   const chosenLanguage = language || parsed.language || 'en-US';
   const plan = extractRemediationPlan(parsed);
   const tags = buildSemanticTags(parsed, plan);
@@ -244,6 +284,10 @@ export async function buildRemediatedPdf(parsed: ParsedPDF, language: string, so
         });
       }
     }
+  }
+
+  if (sourceBytes && options.addInvisibleTextLayer) {
+    await embedInvisibleOcrTextLayer(pdf, parsed);
   }
 
   const existingKeywords = new Set(
