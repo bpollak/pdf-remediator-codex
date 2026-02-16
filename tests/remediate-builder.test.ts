@@ -23,6 +23,34 @@ describe('buildRemediatedPdf', () => {
     expect(bytes.byteLength).toBeGreaterThan(0);
   });
 
+  it('preserves original page dimensions when source bytes are provided', async () => {
+    const sourcePdf = await PDFDocument.create();
+    sourcePdf.addPage([420, 595]).drawText('Original first page', { x: 60, y: 520, size: 18 });
+    sourcePdf.addPage([612, 792]).drawText('Original second page', { x: 72, y: 700, size: 14 });
+    const sourceBytes = await sourcePdf.save();
+
+    const parsed: ParsedPDF = {
+      pageCount: 2,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [],
+      images: [],
+      links: [],
+      outlines: [],
+      forms: []
+    };
+
+    const remediatedBytes = await buildRemediatedPdf(parsed, 'en-US', sourceBytes);
+    const remediatedPdf = await PDFDocument.load(remediatedBytes);
+
+    expect(remediatedPdf.getPageCount()).toBe(2);
+    expect(remediatedPdf.getPages()[0]?.getWidth()).toBeCloseTo(420, 3);
+    expect(remediatedPdf.getPages()[0]?.getHeight()).toBeCloseTo(595, 3);
+    expect(remediatedPdf.getPages()[1]?.getWidth()).toBeCloseTo(612, 3);
+    expect(remediatedPdf.getPages()[1]?.getHeight()).toBeCloseTo(792, 3);
+  });
+
   it('embeds remediation manifest so post-remediation audits reflect applied fixes', async () => {
     const parsed: ParsedPDF = {
       pageCount: 5,

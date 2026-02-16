@@ -15,6 +15,14 @@ export function FileCard({ file }: { file: FileEntry }) {
       </div>
 
       {file.error ? <p className="mt-2 text-sm text-[var(--ucsd-gold)]">{file.error}</p> : null}
+      {file.ocrApplied ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+          OCR text layer applied for scanned content{file.ocrReason ? ` (${file.ocrReason})` : ''}.
+        </p>
+      ) : null}
+      {file.ocrAttempted && !file.ocrApplied && file.ocrReason ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">OCR skipped: {file.ocrReason}.</p>
+      ) : null}
       {isProcessed ? (
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           <Link

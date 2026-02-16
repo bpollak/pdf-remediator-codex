@@ -1,11 +1,41 @@
 export function Footer() {
+  const year = new Date().getFullYear();
+
   return (
-    <footer className="mt-10 border-t border-[rgba(24,43,73,0.2)] bg-white">
-      <div className="mx-auto w-full max-w-6xl px-6 pb-8 pt-5 text-sm text-[var(--ucsd-blue)]">
-        <p className="font-semibold text-[var(--ucsd-navy)]">UC San Diego Accessible PDF</p>
-        <p className="mt-1">
-          This tool performs automated structural remediation. Manual review is still recommended for full WCAG 2.1 AA compliance.
-        </p>
+    <footer className="ucsd-site-footer">
+      <div className="ucsd-layout-container">
+        <div className="ucsd-site-footer-row">
+          <div className="ucsd-site-footer-left">
+            <p>
+              <span>UC San Diego 9500 Gilman Dr. La Jolla, CA 92093 (858) 534-2230</span>
+              <br />
+              <span>Copyright © {year} Regents of the University of California. All rights reserved.</span>
+            </p>
+            <ul className="ucsd-site-footer-links">
+              <li>
+                <a href="https://accessibility.ucsd.edu/">Accessibility</a>
+              </li>
+              <li>
+                <a href="https://ucsd.edu/about/privacy.html">Privacy</a>
+              </li>
+              <li>
+                <a href="https://ucsd.edu/about/terms-of-use.html">Terms of Use</a>
+              </li>
+              <li>
+                <a href="mailto:brand@ucsd.edu">Feedback</a>
+              </li>
+            </ul>
+          </div>
+          <div className="ucsd-site-footer-right">
+            <a href="https://ucsd.edu/">
+              <img
+                alt="UCSD homepage"
+                className="ucsd-site-footer-logo"
+                src="https://cdn.ucsd.edu/developer/decorator/5.0.2/img/ucsd-footer-logo-white.png"
+              />
+            </a>
+          </div>
+        </div>
       </div>
     </footer>
   );

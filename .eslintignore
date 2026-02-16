@@ -2,5 +2,4 @@ node_modules
 .next
 out
 coverage
-.DS_Store
-.vercel
+tsconfig.tsbuildinfo

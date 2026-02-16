@@ -6,7 +6,9 @@ export const headingRules: AuditRule[] = [
   {
     id: 'HDG-001',
     evaluate: ({ parsed }) => {
-      const headings = parsed.tags.filter((t) => headingPattern.test(t.type));
+      const headings = parsed.tags
+        .filter((t) => headingPattern.test(t.type))
+        .sort((a, b) => (a.page ?? 0) - (b.page ?? 0));
       const levels = headings.map((h) => Number(h.type.slice(1)));
       const skipped = levels.some((level, idx) => idx > 0 && level - levels[idx - 1]! > 1);
       return skipped

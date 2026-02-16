@@ -9,8 +9,11 @@ export interface FileEntry {
   name: string;
   size: number;
   originalBytes: ArrayBuffer;
-  status: 'queued' | 'parsing' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';
+  status: 'queued' | 'parsing' | 'ocr' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';
   progress: number;
+  ocrAttempted?: boolean;
+  ocrApplied?: boolean;
+  ocrReason?: string;
   parsedData?: ParsedPDF;
   auditResult?: AuditResult;
   remediatedBytes?: ArrayBuffer;
