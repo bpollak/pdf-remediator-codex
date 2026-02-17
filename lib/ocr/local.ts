@@ -95,11 +95,14 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
       await worker.terminate();
     }
 
-    if (ocrItems.length < 5) {
+    // Scale minimum text threshold by pages processed — a single-page scan
+    // may legitimately have few lines, but multi-page docs should yield more.
+    const minItems = Math.max(5, pageLimit * 3);
+    if (ocrItems.length < minItems) {
       return {
         attempted: true,
         applied: false,
-        reason: 'Local OCR did not detect enough text'
+        reason: `Local OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`
       };
     }
 
