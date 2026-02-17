@@ -34,14 +34,6 @@ export function FileCard({ file }: { file: FileEntry }) {
       </div>
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
-      {file.ocrApplied ? (
-        <p className="mt-2 text-sm text-gray-500">
-          OCR text layer applied for scanned content{file.ocrReason ? ` (${file.ocrReason})` : ''}.
-        </p>
-      ) : null}
-      {file.ocrAttempted && !file.ocrApplied && file.ocrReason ? (
-        <p className="mt-2 text-sm text-gray-500">OCR skipped: {file.ocrReason}.</p>
-      ) : null}
       {isProcessed ? (
         <div className="mt-3">
           <Link
