@@ -1,22 +1,11 @@
 import { getDocument } from 'pdfjs-dist';
 import type { ParsedPDF, TextItem } from '@/lib/pdf/types';
 import { ensurePdfJsWorkerConfigured } from '@/lib/pdf/configure-worker';
+import { mapToTesseractLang } from './language';
 
 const LOCAL_OCR_MAX_PAGES = 8;
 const LOCAL_OCR_SCALE = 1.6;
 const LOCAL_OCR_MIN_CONFIDENCE = 35;
-
-function mapToTesseractLang(language?: string): string {
-  if (!language) return 'eng';
-  const normalized = language.toLowerCase();
-  if (normalized.startsWith('en')) return 'eng';
-  if (normalized.startsWith('es')) return 'spa';
-  if (normalized.startsWith('fr')) return 'fra';
-  if (normalized.startsWith('de')) return 'deu';
-  if (normalized.startsWith('it')) return 'ita';
-  if (normalized.startsWith('pt')) return 'por';
-  return 'eng';
-}
 
 function normalizeText(value: string | undefined): string {
   return (value ?? '').replace(/\s+/g, ' ').trim();

@@ -2,7 +2,7 @@
   "extends": ["next/core-web-vitals", "next/typescript"],
   "overrides": [
     {
-      "files": ["lib/pdf/parser.ts", "lib/pdf/renderer.ts", "lib/remediate/builder.ts", "lib/audit/rules/helpers.ts"],
+      "files": ["lib/pdf/parser.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "off"
       }

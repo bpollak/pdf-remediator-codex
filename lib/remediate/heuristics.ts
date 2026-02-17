@@ -1,12 +1,11 @@
 import type { ParsedPDF } from '@/lib/pdf/types';
+import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
 
 interface HeadingCandidate {
   text: string;
   level: number;
   page: number;
 }
-
-const listPattern = /^([\u2022\-*]|\d+[.)]|[a-zA-Z][.)])\s+/;
 
 function deriveBodyFontSize(parsed: ParsedPDF): number {
   const frequencies = new Map<number, number>();
@@ -57,7 +56,7 @@ function cleanHeadingText(text: string): string {
 
 function looksLikeHeadingText(text: string): boolean {
   if (!text || text.length > 110) return false;
-  if (listPattern.test(text)) return false;
+  if (LIST_ITEM_PATTERN.test(text)) return false;
   if (/^[\d.\s]+$/.test(text)) return false;
 
   const alphaChars = (text.match(/[A-Za-z]/g) ?? []).length;
@@ -116,14 +115,14 @@ export function detectHeadings(parsed: ParsedPDF): HeadingCandidate[] {
 export function detectListItems(parsed: ParsedPDF): Array<{ text: string; page: number }> {
   return parsed.textItems
     .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
-    .filter((item) => listPattern.test(item.text) && item.text.length <= 300)
+    .filter((item) => LIST_ITEM_PATTERN.test(item.text) && item.text.length <= 300)
     .map((item) => ({ text: item.text, page: item.page }));
 }
 
 export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page: number }> {
   return parsed.textItems
     .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
-    .filter((item) => item.text.length > 0 && !listPattern.test(item.text))
+    .filter((item) => item.text.length > 0 && !LIST_ITEM_PATTERN.test(item.text))
     .sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x)
     .slice(0, 600)
     .map((item) => ({ text: item.text, page: item.page }));

@@ -27,6 +27,8 @@ export function decodeManifest(value?: string): RemediationManifest | null {
   try {
     const parsed = JSON.parse(decodeURIComponent(encoded));
     if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.hasStructTree !== 'boolean') return null;
+    if (!Array.isArray(parsed.tags)) return null;
     return parsed as RemediationManifest;
   } catch {
     return null;

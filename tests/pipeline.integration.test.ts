@@ -1,40 +1,39 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import test from "node:test";
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { runAudit } from '@/lib/audit/engine';
+import { parsePdfBytes } from '@/lib/pdf/parser';
+import { remediatePdf } from '@/lib/remediate/engine';
 
-import { runAuditEngine } from "../lib/audit/engine";
-import { parsePdfBytes } from "../lib/pdf/parser";
-import { runRemediationEngine } from "../lib/remediate/engine";
+describe('pipeline integration', () => {
+  it('parse -> audit -> remediate -> re-audit reduces issue count', { timeout: 30000 }, async () => {
+    const fixturePath = resolve(process.cwd(), 'fixtures/untagged.pdf');
+    const sourceBuffer = await readFile(fixturePath);
+    const sourceBytes = sourceBuffer.buffer.slice(
+      sourceBuffer.byteOffset,
+      sourceBuffer.byteOffset + sourceBuffer.byteLength
+    );
 
-test("parse -> audit -> remediate -> re-audit reduces issue count", { timeout: 30000 }, async () => {
-  const fixturePath = resolve(process.cwd(), "fixtures/untagged.pdf");
-  const sourceBuffer = await readFile(fixturePath);
+    const originalParsed = await parsePdfBytes(sourceBytes.slice(0));
+    const before = runAudit(originalParsed);
 
-  const sourceBytes = sourceBuffer.buffer.slice(sourceBuffer.byteOffset, sourceBuffer.byteOffset + sourceBuffer.byteLength);
+    const remediatedBytes = await remediatePdf(
+      originalParsed,
+      originalParsed.language ?? 'en-US',
+      sourceBytes.slice(0)
+    );
 
-  const originalParsed = await parsePdfBytes({
-    fileId: "integration-source",
-    fileName: "untagged.pdf",
-    bytes: sourceBytes
+    const remediatedArrayBuffer =
+      remediatedBytes instanceof Uint8Array
+        ? remediatedBytes.buffer.slice(remediatedBytes.byteOffset, remediatedBytes.byteOffset + remediatedBytes.byteLength)
+        : remediatedBytes;
+
+    const reparsed = await parsePdfBytes(remediatedArrayBuffer.slice(0));
+    const after = runAudit(reparsed);
+
+    expect(
+      after.findings.length,
+      `Expected issue count to decrease (${before.findings.length} -> ${after.findings.length})`
+    ).toBeLessThan(before.findings.length);
   });
-
-  const before = runAuditEngine({ parsed: originalParsed });
-
-  const remediation = await runRemediationEngine({
-    fileName: "untagged.pdf",
-    bytes: sourceBytes,
-    parsed: originalParsed,
-    options: { language: "en-US" }
-  });
-
-  const reparsed = await parsePdfBytes({
-    fileId: "integration-remediated",
-    fileName: "untagged-remediated.pdf",
-    bytes: remediation.remediatedBytes
-  });
-
-  const after = runAuditEngine({ parsed: reparsed });
-
-  assert.ok(after.counts.total < before.counts.total, `Expected issue count to decrease (${before.counts.total} -> ${after.counts.total})`);
 });

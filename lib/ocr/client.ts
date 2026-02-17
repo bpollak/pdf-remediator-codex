@@ -1,16 +1,6 @@
-const OCR_API_PATH = '/api/ocr';
+import { mapToTesseractLang } from './language';
 
-function mapToTesseractLang(language?: string): string {
-  if (!language) return 'eng';
-  const normalized = language.toLowerCase();
-  if (normalized.startsWith('en')) return 'eng';
-  if (normalized.startsWith('es')) return 'spa';
-  if (normalized.startsWith('fr')) return 'fra';
-  if (normalized.startsWith('de')) return 'deu';
-  if (normalized.startsWith('it')) return 'ita';
-  if (normalized.startsWith('pt')) return 'por';
-  return 'eng';
-}
+const OCR_API_PATH = '/api/ocr';
 
 function summarizeError(status: number): string {
   if (status === 404 || status === 501 || status === 503) return 'OCR service unavailable';

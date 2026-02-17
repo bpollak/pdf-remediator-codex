@@ -1,10 +1,11 @@
 import type { AuditRule } from '../types';
+import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
 
 export const listRules: AuditRule[] = [
   {
     id: 'LST-001',
     evaluate: ({ parsed }) => {
-      const fakeListLines = parsed.textItems.filter((item) => /^([\u2022\-*]|\d+[.)]|[a-zA-Z][.)])\s+/.test(item.text)).length;
+      const fakeListLines = parsed.textItems.filter((item) => LIST_ITEM_PATTERN.test(item.text)).length;
       const semanticLists = parsed.tags.filter((t) => t.type === 'L').length;
       return fakeListLines > 2 && semanticLists === 0
         ? [{

@@ -4,6 +4,7 @@ import { extractRemediationPlan } from './extractor';
 import { mapFontName } from './font-mapper';
 import { buildTagTree, type TagNode } from './tagger';
 import { encodeManifest, MANIFEST_PREFIX } from './manifest';
+import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
 
 const MAX_TAGS_IN_MANIFEST = 1200;
 const MAX_TEXT_LENGTH = 160;
@@ -13,7 +14,6 @@ const MAX_FORMS_IN_MANIFEST = 300;
 const MAX_OCR_TEXT_LAYER_ITEMS = 20000;
 
 const genericLinkTextPattern = /^(click here|read more|learn more|more|https?:\/\/)/i;
-const listPattern = /^([\u2022\-*]|\d+[.)]|[a-zA-Z][.)])\s+/;
 
 function sanitizeTextForFont(font: Awaited<ReturnType<PDFDocument['embedFont']>>, text: string): string {
   let sanitized = '';
@@ -88,18 +88,38 @@ function dedupeTags(
   return deduped;
 }
 
-function inferImageAltText(parsed: ParsedPDF, image: ParsedPDF['images'][number]): string {
-  const nearestText = parsed.textItems
-    .filter((item) => item.page === image.page)
-    .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
-    .filter((item) => item.text.length >= 8 && !listPattern.test(item.text))
-    .sort((a, b) => {
-      const aDistance = Math.abs(a.y - image.y) + Math.abs(a.x - image.x) * 0.15;
-      const bDistance = Math.abs(b.y - image.y) + Math.abs(b.x - image.x) * 0.15;
-      return aDistance - bDistance;
-    })[0];
+type CandidateTextItem = { text: string; x: number; y: number };
 
-  if (nearestText?.text) return truncateText(nearestText.text, 120) ?? `Illustration on page ${image.page}`;
+function buildPageTextIndex(parsed: ParsedPDF): Map<number, CandidateTextItem[]> {
+  const index = new Map<number, CandidateTextItem[]>();
+  for (const item of parsed.textItems) {
+    const text = item.text.replace(/\s+/g, ' ').trim();
+    if (text.length < 8 || LIST_ITEM_PATTERN.test(text)) continue;
+    let bucket = index.get(item.page);
+    if (!bucket) { bucket = []; index.set(item.page, bucket); }
+    bucket.push({ text, x: item.x, y: item.y });
+  }
+  return index;
+}
+
+function inferImageAltText(
+  pageTextIndex: Map<number, CandidateTextItem[]>,
+  image: ParsedPDF['images'][number]
+): string {
+  const candidates = pageTextIndex.get(image.page);
+  if (!candidates || candidates.length === 0) return `Illustration on page ${image.page}`;
+
+  let bestText = '';
+  let bestDistance = Infinity;
+  for (const item of candidates) {
+    const distance = Math.abs(item.y - image.y) + Math.abs(item.x - image.x) * 0.15;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestText = item.text;
+    }
+  }
+
+  if (bestText) return truncateText(bestText, 120) ?? `Illustration on page ${image.page}`;
   return `Illustration on page ${image.page}`;
 }
 
@@ -141,12 +161,13 @@ function normalizeForms(forms: ParsedPDF['forms']): ParsedPDF['forms'] {
 }
 
 function normalizeImages(parsed: ParsedPDF): ParsedPDF['images'] {
+  const pageTextIndex = buildPageTextIndex(parsed);
   return parsed.images.slice(0, MAX_IMAGES_IN_MANIFEST).map((image) => {
     if (image.decorative) return image;
     if (image.alt?.trim()) return { ...image, alt: truncateText(image.alt, 120) };
     return {
       ...image,
-      alt: inferImageAltText(parsed, image)
+      alt: inferImageAltText(pageTextIndex, image)
     };
   });
 }
