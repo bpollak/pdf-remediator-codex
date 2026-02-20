@@ -26,6 +26,11 @@ export function Header() {
                 App
               </Link>
             </li>
+            <li>
+              <Link className="ucsd-navbar-link" href="/about">
+                About
+              </Link>
+            </li>
           </ul>
         </div>
       </nav>
