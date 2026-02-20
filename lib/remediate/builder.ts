@@ -3,6 +3,7 @@ import type { ParsedPDF } from '@/lib/pdf/types';
 import { extractRemediationPlan } from './extractor';
 import { mapFontName } from './font-mapper';
 import { buildTagTree, type TagNode } from './tagger';
+import { injectStructTree } from './struct-tree';
 import { encodeManifest, MANIFEST_PREFIX } from './manifest';
 import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
 
@@ -102,19 +103,54 @@ function buildPageTextIndex(parsed: ParsedPDF): Map<number, CandidateTextItem[]>
   return index;
 }
 
+const CAPTION_PATTERN = /^(fig(ure)?|table|image|photo|chart|graph|diagram|illustration)\s*\.?\s*\d*/i;
+const SMALL_IMAGE_THRESHOLD = 50;
+
 function inferImageAltText(
   pageTextIndex: Map<number, CandidateTextItem[]>,
   image: ParsedPDF['images'][number]
 ): string {
+  // Very small images are likely decorative icons
+  if (image.width < SMALL_IMAGE_THRESHOLD && image.height < SMALL_IMAGE_THRESHOLD) {
+    return 'Decorative image';
+  }
+
   const candidates = pageTextIndex.get(image.page);
   if (!candidates || candidates.length === 0) return `Illustration on page ${image.page}`;
 
+  // Prefer caption-like text below the image
+  const captionCandidates = candidates.filter((item) => {
+    const isBelow = item.y < image.y && Math.abs(item.y - image.y) < 60;
+    return isBelow && CAPTION_PATTERN.test(item.text);
+  });
+
+  if (captionCandidates.length > 0) {
+    // Pick the closest caption below the image
+    captionCandidates.sort((a, b) => Math.abs(a.y - image.y) - Math.abs(b.y - image.y));
+    return truncateText(captionCandidates[0]!.text, 120) ?? `Illustration on page ${image.page}`;
+  }
+
+  // Also check for caption-like text regardless of position
+  const anyCaptions = candidates.filter((item) => CAPTION_PATTERN.test(item.text));
+  if (anyCaptions.length > 0) {
+    anyCaptions.sort(
+      (a, b) =>
+        (Math.abs(a.y - image.y) + Math.abs(a.x - image.x) * 0.15) -
+        (Math.abs(b.y - image.y) + Math.abs(b.x - image.x) * 0.15)
+    );
+    return truncateText(anyCaptions[0]!.text, 120) ?? `Illustration on page ${image.page}`;
+  }
+
+  // Fall back to proximity but prefer shorter text (more likely a label)
   let bestText = '';
-  let bestDistance = Infinity;
+  let bestScore = Infinity;
   for (const item of candidates) {
     const distance = Math.abs(item.y - image.y) + Math.abs(item.x - image.x) * 0.15;
-    if (distance < bestDistance) {
-      bestDistance = distance;
+    // Penalize very long text (likely a paragraph, not a caption)
+    const lengthPenalty = item.text.length > 80 ? 50 : 0;
+    const score = distance + lengthPenalty;
+    if (score < bestScore) {
+      bestScore = score;
       bestText = item.text;
     }
   }
@@ -164,6 +200,10 @@ function normalizeImages(parsed: ParsedPDF): ParsedPDF['images'] {
   const pageTextIndex = buildPageTextIndex(parsed);
   return parsed.images.slice(0, MAX_IMAGES_IN_MANIFEST).map((image) => {
     if (image.decorative) return image;
+    // Mark very small images as decorative
+    if (image.width < SMALL_IMAGE_THRESHOLD && image.height < SMALL_IMAGE_THRESHOLD) {
+      return { ...image, decorative: true, alt: '' };
+    }
     if (image.alt?.trim()) return { ...image, alt: truncateText(image.alt, 120) };
     return {
       ...image,
@@ -183,15 +223,21 @@ function buildSemanticTags(parsed: ParsedPDF, plan: ReturnType<typeof extractRem
     text: truncateText(heading.text)
   }));
 
-  const listTags = plan.listItems.flatMap((item) => {
+  // Group consecutive list items under single L nodes (mirrors tagger.ts grouping)
+  const listTags: Array<{ type: string; page?: number; text?: string }> = [];
+  let prevListPage = -Infinity;
+  for (const item of plan.listItems) {
     const marker = item.text.split(/\s+/, 1)[0] ?? '';
-    return [
-      { type: 'L', page: item.page },
+    if (Math.abs(item.page - prevListPage) > 1 || listTags.length === 0) {
+      listTags.push({ type: 'L', page: item.page });
+    }
+    listTags.push(
       { type: 'LI', page: item.page },
       { type: 'Lbl', page: item.page, text: truncateText(marker, 20) },
       { type: 'LBody', page: item.page, text: truncateText(item.text) }
-    ];
-  });
+    );
+    prevListPage = item.page;
+  }
 
   const tagTree = buildTagTree(plan);
   const treeTags = flattenTagTree(tagTree.children);
@@ -327,6 +373,10 @@ export async function buildRemediatedPdf(
   pdf.setAuthor(parsed.metadata.Author ?? pdf.getAuthor() ?? 'UC San Diego Accessible PDF');
   pdf.setSubject(parsed.metadata.Subject ?? pdf.getSubject() ?? 'Accessibility remediated document');
   pdf.setKeywords([...existingKeywords]);
+
+  // Inject real StructTreeRoot, MarkInfo, RoleMap, and per-page Tabs
+  const tagTree = buildTagTree(plan);
+  injectStructTree(pdf, tagTree);
 
   return pdf.save();
 }

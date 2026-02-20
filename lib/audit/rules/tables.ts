@@ -1,4 +1,5 @@
 import type { AuditRule } from '../types';
+import { detectTables } from '@/lib/remediate/heuristics';
 
 export const tableRules: AuditRule[] = [
   {
@@ -27,6 +28,28 @@ export const tableRules: AuditRule[] = [
         }];
       }
       return [];
+    }
+  },
+  {
+    id: 'TBL-002',
+    evaluate: ({ parsed }) => {
+      // Skip if document already has table tags
+      const hasTableTags = parsed.tags.some((t) => t.type === 'Table');
+      if (hasTableTags) return [];
+
+      const detected = detectTables(parsed);
+      if (detected.length === 0) return [];
+
+      return [{
+        ruleId: 'TBL-002',
+        category: 'Tables',
+        severity: 'major',
+        description: `Detected ${detected.length} tabular layout(s) without semantic table tags.`,
+        wcagCriterion: '1.3.1 Info and Relationships',
+        location: { page: detected[0]!.page },
+        recommendation: 'Add Table, TR, TH, and TD tags so screen readers can convey row/column relationships.',
+        autoFixable: true
+      }];
     }
   }
 ];

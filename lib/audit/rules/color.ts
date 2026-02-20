@@ -39,14 +39,16 @@ export const colorRules: AuditRule[] = [
 
         if (ratio < threshold && !flaggedPages.has(item.page)) {
           flaggedPages.add(item.page);
+          // Background color is assumed white since actual background cannot be
+          // reliably extracted; use minor severity to reflect this uncertainty.
           findings.push({
             ruleId: 'CLR-001',
             category: 'Color & Visual',
-            severity: 'major',
-            description: `Text has insufficient contrast ratio (${ratio}:1) against white background.`,
+            severity: 'minor',
+            description: `Text may have insufficient contrast ratio (${ratio}:1) against assumed white background.`,
             wcagCriterion: '1.4.3 Contrast (Minimum)',
             location: { page: item.page },
-            recommendation: 'Ensure text color meets WCAG AA contrast ratio of 4.5:1 (3:1 for large text).',
+            recommendation: 'Verify text contrast against the actual page background meets WCAG AA ratio of 4.5:1 (3:1 for large text).',
             autoFixable: false
           });
         }
