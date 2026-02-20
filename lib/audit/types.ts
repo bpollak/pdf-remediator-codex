@@ -12,6 +12,18 @@ export type Category =
   | 'Forms'
   | 'Metadata & Navigation';
 
+export const ALL_CATEGORIES: Category[] = [
+  'Document Structure',
+  'Headings & Structure',
+  'Images & Non-Text Content',
+  'Tables',
+  'Lists',
+  'Links & Navigation',
+  'Color & Visual',
+  'Forms',
+  'Metadata & Navigation',
+];
+
 export interface AuditFinding {
   ruleId: string;
   category: Category;
