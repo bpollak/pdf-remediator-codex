@@ -6,33 +6,35 @@ export default function AboutPage() {
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--ucsd-navy)]">About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-gray-700">
-          UC San Diego Accessible PDF is a free, browser-based tool that audits PDF documents against WCAG&nbsp;2.1
-          Level&nbsp;AA guidelines and automatically remediates common accessibility issues.
+          UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to
+          WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.
         </p>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">What It Does</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
-          Upload a PDF and the tool runs a multi-step pipeline entirely in your browser:
+          Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and scanned files can
+          use a configured OCR service:
         </p>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
           <li>
-            <strong>Parse</strong> &mdash; Extracts text, images, links, form fields, bookmarks, and existing tags from
-            the PDF.
+            <strong>Parse</strong> &mdash; Extracts text, links, form fields, bookmarks/outlines, existing tags, and
+            metadata from the PDF.
           </li>
           <li>
-            <strong>OCR</strong> &mdash; Detects scanned or image-only pages and applies optical character recognition so
-            the text becomes searchable and readable by assistive technology.
+            <strong>OCR</strong> &mdash; For likely scanned or image-only files, the app first tries a configured OCR
+            API and falls back to local in-browser OCR when needed.
           </li>
           <li>
             <strong>Audit</strong> &mdash; Evaluates the document against accessibility rules covering structure, headings,
-            images, tables, lists, links, color contrast, forms, and metadata. Each finding maps to a specific WCAG
-            criterion.
+            images, tables, lists, links, color/visual checks, forms, and metadata/navigation. Findings map to specific
+            WCAG criteria used by this ruleset.
           </li>
           <li>
-            <strong>Remediate</strong> &mdash; Generates a new PDF with a proper tagged structure tree, semantic headings,
-            lists, tables, document language, bookmarks, improved link text, form labels, and alt text for images.
+            <strong>Remediate</strong> &mdash; Generates a remediated PDF with injected structure tags, document
+            language, PDF/UA metadata, normalized link text, generated form labels, outlines, and heuristic
+            heading/list/table structure.
           </li>
           <li>
             <strong>Re-audit</strong> &mdash; Runs the same rules against the remediated document so you can see exactly
@@ -44,34 +46,35 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Accessibility Features Applied</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-gray-700">
-          <li>Tagged PDF structure tree with headings (H1&ndash;H6), paragraphs, lists, and tables</li>
-          <li>Document sections that enable screen reader section navigation</li>
-          <li>Document language set for correct speech synthesis</li>
-          <li>Alt text for images, preferring captions when available</li>
-          <li>Bookmarks generated from document headings</li>
-          <li>Generic link text (e.g. &ldquo;click here&rdquo;) replaced with descriptive text</li>
-          <li>Form field labels generated from field names</li>
-          <li>PDF/UA compliance metadata</li>
-          <li>Searchable text layer for scanned documents via OCR</li>
-          <li>Multi-column reading order correction</li>
-          <li>Repeating headers, footers, and page numbers identified as artifacts</li>
+          <li>StructTreeRoot and semantic tags (Document, Sect, H1&ndash;H6, P, L/LI, Table/TR/TH/TD)</li>
+          <li>Document language and metadata updates, including PDF/UA identifier metadata</li>
+          <li>Bookmarks/outlines preserved or generated from detected headings</li>
+          <li>Generic link text (e.g. &ldquo;click here&rdquo;) rewritten to more descriptive text</li>
+          <li>Form field labels inferred from field names when labels are missing</li>
+          <li>Heuristic alt text generation when image metadata is available</li>
+          <li>Searchable OCR text support for scanned documents (service or local fallback)</li>
+          <li>Heuristic multi-column reading-order reordering during remediation planning</li>
+          <li>Post-remediation re-audit and before/after comparison workflow</li>
         </ul>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Privacy</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
-          All processing happens locally in your browser. Your PDF files are never uploaded to a server unless you have
-          configured an external OCR service. Files stay on your device and are discarded when you close the page.
+          Processing is browser-first. If a file appears scanned and <code>OCR_SERVICE_URL</code> is configured, the
+          file is sent through <code>/api/ocr</code> to your OCR backend. If no backend is available, local OCR fallback
+          runs in the browser. Outside OCR requests, files stay on your device and are discarded when you close the
+          page.
         </p>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Limitations</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
-          Automated remediation addresses many common issues but cannot replace a full manual accessibility review.
-          Complex documents with intricate layouts, forms, or visual-only information may require additional attention.
-          Always verify the remediated output with assistive technology and a PDF accessibility checker such as PAC.
+          Automated remediation addresses many common issues but does not provide full WCAG or PDF/UA certification.
+          Several checks are heuristic or advisory (especially color contrast and complex layout interpretation), and
+          some documents need manual fixes. Always verify remediated output with assistive technology and a PDF
+          accessibility checker such as PAC.
         </p>
       </section>
 
