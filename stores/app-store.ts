@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import type { ParsedPDF } from '@/lib/pdf/types';
 import type { AuditResult } from '@/lib/audit/types';
+import type { VerapdfResult } from '@/lib/verapdf/types';
 
 export interface FileEntry {
   id: string;
@@ -18,6 +19,7 @@ export interface FileEntry {
   auditResult?: AuditResult;
   remediatedBytes?: ArrayBuffer;
   postRemediationAudit?: AuditResult;
+  verapdfResult?: VerapdfResult;
   error?: string;
 }
 

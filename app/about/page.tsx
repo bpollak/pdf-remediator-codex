@@ -14,8 +14,8 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">What It Does</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
-          Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and scanned files can
-          use a configured OCR service:
+          Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and optional OCR and
+          verification services can be configured:
         </p>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
           <li>
@@ -40,6 +40,10 @@ export default function AboutPage() {
             <strong>Re-audit</strong> &mdash; Runs the same rules against the remediated document so you can see exactly
             what improved.
           </li>
+          <li>
+            <strong>Verify (optional)</strong> &mdash; If configured, sends the remediated PDF through <code>/api/verapdf</code>{' '}
+            to a veraPDF REST backend for an external PDF/UA compliance check.
+          </li>
         </ol>
       </section>
 
@@ -63,8 +67,9 @@ export default function AboutPage() {
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Processing is browser-first. If a file appears scanned and <code>OCR_SERVICE_URL</code> is configured, the
           file is sent through <code>/api/ocr</code> to your OCR backend. If no backend is available, local OCR fallback
-          runs in the browser. Outside OCR requests, files stay on your device and are discarded when you close the
-          page.
+          runs in the browser. If <code>VERAPDF_SERVICE_URL</code> is configured, remediated output can be sent through{' '}
+          <code>/api/verapdf</code> for external verification. Outside configured OCR and verification requests, files stay
+          on your device and are discarded when you close the page.
         </p>
       </section>
 
@@ -73,8 +78,8 @@ export default function AboutPage() {
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Automated remediation addresses many common issues but does not provide full WCAG or PDF/UA certification.
           Several checks are heuristic or advisory (especially color contrast and complex layout interpretation), and
-          some documents need manual fixes. Always verify remediated output with assistive technology and a PDF
-          accessibility checker such as PAC.
+          some documents need manual fixes. veraPDF REST adds useful automated verification when configured, but you
+          should still validate output with assistive technology and manual review.
         </p>
       </section>
 

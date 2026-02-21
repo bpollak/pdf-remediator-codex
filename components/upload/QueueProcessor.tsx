@@ -7,6 +7,7 @@ import { runOcrViaApi } from '@/lib/ocr/client';
 import { isLikelyScannedPdf } from '@/lib/ocr/detection';
 import { runLocalOcr } from '@/lib/ocr/local';
 import { remediatePdf } from '@/lib/remediate/engine';
+import { runVerapdfViaApi } from '@/lib/verapdf/client';
 import { useAppStore } from '@/stores/app-store';
 
 export function QueueProcessor() {
@@ -80,6 +81,9 @@ export function QueueProcessor() {
         const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));
 
         const postRemediationAudit = runAudit(remediatedParsedData);
+        updateFile(next.id, { status: 'remediating', progress: 90, postRemediationAudit });
+        const verapdfResult = await runVerapdfViaApi(remediatedBytes.slice(0), `remediated-${next.name}`);
+
         updateFile(next.id, {
           status: 'remediated',
           progress: 100,
@@ -87,7 +91,8 @@ export function QueueProcessor() {
           ocrApplied,
           ocrReason,
           remediatedBytes,
-          postRemediationAudit
+          postRemediationAudit,
+          verapdfResult
         });
       } catch (error) {
         updateFile(next.id, {

@@ -18,9 +18,17 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `OCR_SERVICE_TOKEN` (optional): Bearer token for OCR backend auth.
 - `OCR_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for OCR backend auth.
 - `OCR_TIMEOUT_MS` (optional): OCR request timeout in milliseconds (default `240000`).
+- `VERAPDF_SERVICE_URL` (optional): veraPDF REST base URL or full validate endpoint.
+- `VERAPDF_VALIDATION_PROFILE` (optional): validation profile ID (default `ua1`).
+- `VERAPDF_SERVICE_TOKEN` (optional): Bearer token for veraPDF backend auth.
+- `VERAPDF_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for veraPDF backend auth.
+- `VERAPDF_TIMEOUT_MS` (optional): veraPDF request timeout in milliseconds (default `120000`).
 
 If `OCR_SERVICE_URL` is not configured, OCR is skipped and processing continues with the original PDF.
 When no backend is configured, local browser OCR fallback is attempted automatically.
+
+If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
+can show an external PDF/UA compliance verdict and rule/check counts.
 
 ### Recommended OCR backend
 
@@ -34,3 +42,4 @@ A ready-to-run template is included at:
 
 Vercel function request body limits can affect very large PDF uploads routed through `/api/ocr`.
 For larger scanned files, use an OCR backend that can ingest files directly (object storage URL pattern) and keep `/api/ocr` as orchestration/auth.
+The same upload limit considerations apply to `/api/verapdf` if you run external verification in the request path.
