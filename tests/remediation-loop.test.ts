@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   computeFailureScore,
   createByteFingerprint,
-  decideRemediationLoop
+  decideRemediationLoop,
+  selectBestRemediationIteration
 } from '@/lib/remediate/loop';
 
 describe('remediation loop controls', () => {
@@ -63,5 +64,71 @@ describe('remediation loop controls', () => {
     });
     expect(decision.continue).toBe(true);
     expect(decision.reason).toBeUndefined();
+  });
+
+  it('prefers candidates that do not regress below original internal score', () => {
+    const selected = selectBestRemediationIteration(
+      [
+        {
+          iteration: 1,
+          internalScore: 92,
+          failureScore: 200,
+          verapdfResult: { attempted: true, compliant: false, summary: { failedChecks: 200 } }
+        },
+        {
+          iteration: 2,
+          internalScore: 70,
+          failureScore: 120,
+          verapdfResult: { attempted: true, compliant: false, summary: { failedChecks: 120 } }
+        }
+      ],
+      78
+    );
+
+    expect(selected?.iteration).toBe(1);
+  });
+
+  it('prefers better external failure score when both candidates are above baseline', () => {
+    const selected = selectBestRemediationIteration(
+      [
+        {
+          iteration: 1,
+          internalScore: 90,
+          failureScore: 200,
+          verapdfResult: { attempted: true, compliant: false, summary: { failedChecks: 200 } }
+        },
+        {
+          iteration: 2,
+          internalScore: 88,
+          failureScore: 120,
+          verapdfResult: { attempted: true, compliant: false, summary: { failedChecks: 120 } }
+        }
+      ],
+      78
+    );
+
+    expect(selected?.iteration).toBe(2);
+  });
+
+  it('prefers compliant candidate when both are safe', () => {
+    const selected = selectBestRemediationIteration(
+      [
+        {
+          iteration: 1,
+          internalScore: 95,
+          failureScore: 10,
+          verapdfResult: { attempted: true, compliant: false, summary: { failedChecks: 10 } }
+        },
+        {
+          iteration: 2,
+          internalScore: 88,
+          failureScore: 0,
+          verapdfResult: { attempted: true, compliant: true, summary: { failedChecks: 0 } }
+        }
+      ],
+      78
+    );
+
+    expect(selected?.iteration).toBe(2);
   });
 });

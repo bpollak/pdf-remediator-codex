@@ -13,12 +13,22 @@ import {
   computeFailureScore,
   createByteFingerprint,
   decideRemediationLoop,
+  selectBestRemediationIteration,
   type RemediationIterationSummary,
   type RemediationStopReason
 } from '@/lib/remediate/loop';
 import { runVerapdfViaApi } from '@/lib/verapdf/client';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import { useAppStore } from '@/stores/app-store';
+
+interface RemediationIterationArtifact {
+  iteration: number;
+  internalScore: number;
+  failureScore?: number;
+  verapdfResult: VerapdfResult;
+  remediatedBytes: ArrayBuffer;
+  postRemediationAudit: AuditResult;
+}
 
 export function QueueProcessor() {
   const files = useAppStore((s) => s.files);
@@ -83,14 +93,13 @@ export function QueueProcessor() {
         updateFile(next.id, { status: 'remediating', progress: 75, auditResult });
 
         const remediationIterations: RemediationIterationSummary[] = [];
+        const remediationIterationArtifacts: RemediationIterationArtifact[] = [];
         let remediationStopReason: RemediationStopReason = 'max_iterations';
         let previousFingerprint: string | undefined;
         let previousFailureScore: number | undefined;
         let latestVerapdfResult: VerapdfResult | undefined;
         let currentSourceBytes = remediationSourceBytes.slice(0);
         let currentParsedData = remediationParsedData;
-        let remediatedBytes: ArrayBuffer | undefined;
-        let postRemediationAudit: AuditResult | undefined;
 
         for (let iteration = 1; iteration <= MAX_REMEDIATION_ITERATIONS; iteration += 1) {
           const remediated = await remediatePdf(
@@ -103,9 +112,9 @@ export function QueueProcessor() {
               verapdfFeedback: latestVerapdfResult
             }
           );
-          remediatedBytes = new Uint8Array(remediated).buffer;
+          const remediatedBytes = new Uint8Array(remediated).buffer;
           const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));
-          postRemediationAudit = runAudit(remediatedParsedData);
+          const postRemediationAudit = runAudit(remediatedParsedData);
 
           updateFile(next.id, {
             status: 'remediating',
@@ -122,6 +131,14 @@ export function QueueProcessor() {
             verapdfCompliant: verapdfResult.compliant,
             failedRules: verapdfResult.summary?.failedRules,
             failedChecks: verapdfResult.summary?.failedChecks
+          });
+          remediationIterationArtifacts.push({
+            iteration,
+            internalScore: postRemediationAudit.score,
+            failureScore,
+            verapdfResult,
+            remediatedBytes: remediatedBytes.slice(0),
+            postRemediationAudit
           });
 
           const loopDecision = decideRemediationLoop({
@@ -146,11 +163,14 @@ export function QueueProcessor() {
           currentParsedData = remediatedParsedData;
         }
 
-        if (!remediatedBytes || !postRemediationAudit || !latestVerapdfResult) {
+        const selected = selectBestRemediationIteration(remediationIterationArtifacts, auditResult.score);
+        if (!selected) {
           throw new Error('Remediation loop did not produce a remediated artifact.');
         }
-
-        const verapdfResult = latestVerapdfResult;
+        const selectedArtifact = remediationIterationArtifacts.find((artifact) => artifact.iteration === selected.iteration);
+        if (!selectedArtifact) {
+          throw new Error('Selected remediation iteration artifact was not found.');
+        }
 
         updateFile(next.id, {
           status: 'remediated',
@@ -158,9 +178,9 @@ export function QueueProcessor() {
           ocrAttempted,
           ocrApplied,
           ocrReason,
-          remediatedBytes,
-          postRemediationAudit,
-          verapdfResult,
+          remediatedBytes: selectedArtifact.remediatedBytes,
+          postRemediationAudit: selectedArtifact.postRemediationAudit,
+          verapdfResult: selectedArtifact.verapdfResult,
           remediationIterations,
           remediationStopReason
         });

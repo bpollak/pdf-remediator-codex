@@ -17,6 +17,13 @@ export interface RemediationIterationSummary {
   failedChecks?: number;
 }
 
+export interface RemediationIterationCandidate {
+  iteration: number;
+  internalScore: number;
+  failureScore?: number;
+  verapdfResult?: VerapdfResult;
+}
+
 export interface RemediationLoopDecisionInput {
   iteration: number;
   maxIterations: number;
@@ -88,4 +95,55 @@ export function decideRemediationLoop(input: RemediationLoopDecisionInput): Reme
   }
 
   return { continue: true };
+}
+
+function isSafeInternalScore(candidate: RemediationIterationCandidate, originalInternalScore: number): boolean {
+  return candidate.internalScore >= originalInternalScore;
+}
+
+function isCompliant(candidate: RemediationIterationCandidate): boolean {
+  return candidate.verapdfResult?.compliant === true;
+}
+
+function normalizedFailureScore(candidate: RemediationIterationCandidate): number {
+  return typeof candidate.failureScore === 'number' ? candidate.failureScore : Number.POSITIVE_INFINITY;
+}
+
+function isBetterCandidate(
+  candidate: RemediationIterationCandidate,
+  best: RemediationIterationCandidate,
+  originalInternalScore: number
+): boolean {
+  const candidateSafe = isSafeInternalScore(candidate, originalInternalScore);
+  const bestSafe = isSafeInternalScore(best, originalInternalScore);
+  if (candidateSafe !== bestSafe) return candidateSafe;
+
+  const candidateCompliant = isCompliant(candidate);
+  const bestCompliant = isCompliant(best);
+  if (candidateCompliant !== bestCompliant) return candidateCompliant;
+
+  const candidateFailure = normalizedFailureScore(candidate);
+  const bestFailure = normalizedFailureScore(best);
+  if (candidateFailure !== bestFailure) return candidateFailure < bestFailure;
+
+  if (candidate.internalScore !== best.internalScore) {
+    return candidate.internalScore > best.internalScore;
+  }
+
+  return candidate.iteration < best.iteration;
+}
+
+export function selectBestRemediationIteration(
+  candidates: RemediationIterationCandidate[],
+  originalInternalScore: number
+): RemediationIterationCandidate | undefined {
+  if (!candidates.length) return undefined;
+
+  let best = candidates[0]!;
+  for (const candidate of candidates.slice(1)) {
+    if (isBetterCandidate(candidate, best, originalInternalScore)) {
+      best = candidate;
+    }
+  }
+  return best;
 }
