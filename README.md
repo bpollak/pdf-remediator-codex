@@ -31,6 +31,17 @@ If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POS
 can show an external PDF/UA compliance verdict and rule/check counts.
 In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
 
+### Vercel deployment
+
+Vercel cannot run Docker Compose in-serverless runtime. For production, host veraPDF REST externally and set:
+
+- `VERAPDF_SERVICE_URL` (required to enable verification on Vercel)
+- `VERAPDF_VALIDATION_PROFILE` (optional)
+- `VERAPDF_SERVICE_TOKEN` / `VERAPDF_SERVICE_API_KEY` (optional auth)
+- `VERAPDF_TIMEOUT_MS` (optional timeout)
+
+If `VERAPDF_SERVICE_URL` is not set in Vercel, verification stays disabled and the UI reports "Not enabled".
+
 ### Local veraPDF (free/self-hosted)
 
 1. Copy local env template:

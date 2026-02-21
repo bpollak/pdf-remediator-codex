@@ -22,7 +22,9 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     ? 'Compliant'
     : verification.compliant === false
       ? 'Not compliant'
-      : 'No verdict';
+      : verification.attempted === false
+        ? 'Not enabled'
+        : 'No verdict';
 
   const verdictClassName = verification.compliant === true
     ? 'bg-green-100 text-green-700'

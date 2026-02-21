@@ -51,6 +51,13 @@ function resolveServiceUrl(): { url?: string; source: 'env' | 'dev-default' | 'n
   return { source: 'none' };
 }
 
+function notConfiguredReason(): string {
+  if (process.env.NODE_ENV === 'development') {
+    return 'veraPDF service is not configured (set VERAPDF_SERVICE_URL). In development, run docker compose -f docker-compose.verapdf.yml up -d.';
+  }
+  return 'veraPDF verification is not enabled for this deployment. Set VERAPDF_SERVICE_URL in Vercel environment variables.';
+}
+
 function resolveInfoUrl(serviceUrl: string): string {
   const parsed = new URL(serviceUrl);
   const normalizedPath = parsed.pathname.replace(/\/+$/, '');
@@ -96,7 +103,10 @@ export async function GET() {
         reachable: false,
         source: resolved.source,
         profile,
-        reason: 'Set VERAPDF_SERVICE_URL, or run local docker-compose in development.'
+        reason:
+          process.env.NODE_ENV === 'development'
+            ? 'Set VERAPDF_SERVICE_URL, or run local docker-compose in development.'
+            : 'Set VERAPDF_SERVICE_URL in Vercel environment variables to enable verification.'
       },
       { status: 503 }
     );
@@ -128,7 +138,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         attempted: false,
-        reason: 'veraPDF service is not configured (set VERAPDF_SERVICE_URL). In development, run docker compose -f docker-compose.verapdf.yml up -d.'
+        reason: notConfiguredReason()
       },
       { status: 503 }
     );
