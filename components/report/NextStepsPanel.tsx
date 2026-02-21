@@ -32,7 +32,7 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
           Use this checklist to finish manual fixes after automated remediation.
         </p>
         <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
-          Internal score is this app&apos;s ruleset. veraPDF status is an external, independent PDF/UA compliance check.
+          Internal score is this app&apos;s ruleset. veraPDF status is an external, independent PDF/UA check.
         </p>
       </div>
 

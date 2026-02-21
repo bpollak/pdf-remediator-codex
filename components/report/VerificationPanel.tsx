@@ -9,12 +9,26 @@ function metricValue(value: number | undefined): string {
 
 function stopReasonLabel(reason: RemediationStopReason | undefined): string | null {
   if (!reason) return null;
-  if (reason === 'compliant') return 'Stopped: external verification passed.';
+  if (reason === 'compliant') return 'Stopped: external verification reported no failed rules.';
   if (reason === 'service_unavailable') return 'Stopped: external verification unavailable.';
   if (reason === 'no_change') return 'Stopped: additional pass produced identical output.';
   if (reason === 'no_improvement') return 'Stopped: no improvement in failed veraPDF checks.';
   if (reason === 'max_iterations') return 'Stopped: reached max remediation iterations.';
   return null;
+}
+
+function neutralStatement(statement: string | undefined): string | null {
+  if (!statement) return null;
+  if (/\bcompliant\b/i.test(statement)) return null;
+  return statement;
+}
+
+function neutralReason(reason: string | undefined): string | null {
+  if (!reason) return null;
+  if (/compliance verdict/i.test(reason)) {
+    return 'veraPDF returned detailed check counts but did not return a verdict label.';
+  }
+  return reason;
 }
 
 export function VerificationPanel({ fileId }: { fileId: string }) {
@@ -23,6 +37,8 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const iterations = file?.remediationIterations ?? [];
   const stopReason = file?.remediationStopReason;
   const stopReasonMessage = stopReasonLabel(stopReason);
+  const statement = neutralStatement(verification?.statement);
+  const reason = neutralReason(verification?.reason);
 
   if (!verification) {
     return (
@@ -36,34 +52,15 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     );
   }
 
-  const verdictLabel = verification.compliant === true
-    ? 'Compliant'
-    : verification.compliant === false
-      ? 'Not compliant'
-      : verification.attempted === false
-        ? 'Not enabled'
-        : 'No verdict';
-
-  const verdictClassName = verification.compliant === true
-    ? 'bg-green-100 text-green-700'
-    : verification.compliant === false
-      ? 'bg-red-100 text-red-700'
-      : 'bg-gray-100 text-gray-700';
-
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">veraPDF verification</h3>
-        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${verdictClassName}`}>
-          {verdictLabel}
-        </span>
-      </div>
+      <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">veraPDF verification</h3>
 
       <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
         veraPDF is an independent, open-source checker for PDF/UA technical compliance.
       </p>
       <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
-        This is an external result, so it can differ from the internal score shown below.
+        This external check can differ from the internal score because it uses a different ruleset.
       </p>
 
       <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
@@ -97,12 +94,12 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         </dl>
       ) : null}
 
-      {verification.statement ? (
-        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{verification.statement}</p>
+      {statement ? (
+        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{statement}</p>
       ) : null}
 
-      {verification.reason ? (
-        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{verification.reason}</p>
+      {reason ? (
+        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{reason}</p>
       ) : null}
 
       {stopReasonMessage ? (
