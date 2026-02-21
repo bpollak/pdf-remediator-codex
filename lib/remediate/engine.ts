@@ -1,8 +1,11 @@
 import type { ParsedPDF } from '@/lib/pdf/types';
 import { buildRemediatedPdf } from './builder';
+import type { VerapdfResult } from '@/lib/verapdf/types';
 
 export interface RemediationOptions {
   addInvisibleTextLayer?: boolean;
+  strictPdfUa?: boolean;
+  verapdfFeedback?: VerapdfResult;
 }
 
 export async function remediatePdf(

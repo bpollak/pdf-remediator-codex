@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { ParsedPDF } from '@/lib/pdf/types';
 import type { AuditResult } from '@/lib/audit/types';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import type { RemediationIterationSummary, RemediationStopReason } from '@/lib/remediate/loop';
 
 export interface FileEntry {
   id: string;
@@ -20,6 +21,8 @@ export interface FileEntry {
   remediatedBytes?: ArrayBuffer;
   postRemediationAudit?: AuditResult;
   verapdfResult?: VerapdfResult;
+  remediationIterations?: RemediationIterationSummary[];
+  remediationStopReason?: RemediationStopReason;
   error?: string;
 }
 

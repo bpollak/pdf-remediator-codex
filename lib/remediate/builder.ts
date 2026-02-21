@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, PDFName, StandardFonts, rgb } from 'pdf-lib';
 import type { ParsedPDF } from '@/lib/pdf/types';
 import { extractRemediationPlan } from './extractor';
 import { mapFontName } from './font-mapper';
@@ -6,6 +6,7 @@ import { buildTagTree, type TagNode } from './tagger';
 import { injectStructTree } from './struct-tree';
 import { encodeManifest, MANIFEST_PREFIX } from './manifest';
 import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
+import type { VerapdfResult } from '@/lib/verapdf/types';
 
 const MAX_TAGS_IN_MANIFEST = 1200;
 const MAX_TEXT_LENGTH = 160;
@@ -289,6 +290,21 @@ async function embedInvisibleOcrTextLayer(pdf: PDFDocument, parsed: ParsedPDF) {
 
 export interface BuildRemediatedPdfOptions {
   addInvisibleTextLayer?: boolean;
+  strictPdfUa?: boolean;
+  verapdfFeedback?: VerapdfResult;
+}
+
+function shouldForceStrictMetadata(options: BuildRemediatedPdfOptions): boolean {
+  if (options.strictPdfUa) return true;
+  if (options.verapdfFeedback?.compliant === false) return true;
+
+  const failedRules = options.verapdfFeedback?.summary?.failedRules;
+  if (typeof failedRules === 'number' && failedRules > 0) return true;
+
+  const failedChecks = options.verapdfFeedback?.summary?.failedChecks;
+  if (typeof failedChecks === 'number' && failedChecks > 0) return true;
+
+  return false;
 }
 
 export async function buildRemediatedPdf(
@@ -298,6 +314,7 @@ export async function buildRemediatedPdf(
   options: BuildRemediatedPdfOptions = {}
 ) {
   const chosenLanguage = language || parsed.language || 'en-US';
+  const strictMetadata = shouldForceStrictMetadata(options);
   const plan = extractRemediationPlan(parsed);
   const tags = buildSemanticTags(parsed, plan);
   const outlines =
@@ -368,10 +385,24 @@ export async function buildRemediatedPdf(
   const encodedManifest = encodeManifest(manifest);
   existingKeywords.add(encodedManifest);
 
+  const metadataTitle = parsed.title ?? pdf.getTitle() ?? 'Accessible remediated PDF';
+  const metadataAuthor = parsed.metadata.Author ?? pdf.getAuthor() ?? 'UC San Diego Accessible PDF';
+  const metadataSubject = parsed.metadata.Subject ?? pdf.getSubject() ?? 'Accessibility remediated document';
+
   pdf.setLanguage(chosenLanguage);
-  pdf.setTitle(parsed.title ?? pdf.getTitle() ?? 'Remediated PDF');
-  pdf.setAuthor(parsed.metadata.Author ?? pdf.getAuthor() ?? 'UC San Diego Accessible PDF');
-  pdf.setSubject(parsed.metadata.Subject ?? pdf.getSubject() ?? 'Accessibility remediated document');
+  pdf.setTitle(metadataTitle);
+  pdf.setAuthor(metadataAuthor);
+  pdf.setSubject(metadataSubject);
+  pdf.setCreator('UC San Diego Accessible PDF');
+  pdf.setProducer('UC San Diego Accessible PDF');
+
+  if (strictMetadata) {
+    // Display document title in viewers and keep metadata explicit for stricter validators.
+    const viewerPreferences = pdf.context.obj({ DisplayDocTitle: true });
+    const viewerPreferencesRef = pdf.context.register(viewerPreferences);
+    pdf.catalog.set(PDFName.of('ViewerPreferences'), viewerPreferencesRef);
+  }
+
   pdf.setKeywords([...existingKeywords]);
 
   // Inject real StructTreeRoot, MarkInfo, RoleMap, and per-page Tabs

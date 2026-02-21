@@ -1,13 +1,28 @@
 'use client';
 
 import { useAppStore } from '@/stores/app-store';
+import type { RemediationStopReason } from '@/lib/remediate/loop';
 
 function metricValue(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : 'n/a';
 }
 
+function stopReasonLabel(reason: RemediationStopReason | undefined): string | null {
+  if (!reason) return null;
+  if (reason === 'compliant') return 'Stopped: external verification passed.';
+  if (reason === 'service_unavailable') return 'Stopped: external verification unavailable.';
+  if (reason === 'no_change') return 'Stopped: additional pass produced identical output.';
+  if (reason === 'no_improvement') return 'Stopped: no improvement in failed veraPDF checks.';
+  if (reason === 'max_iterations') return 'Stopped: reached max remediation iterations.';
+  return null;
+}
+
 export function VerificationPanel({ fileId }: { fileId: string }) {
-  const verification = useAppStore((s) => s.files.find((f) => f.id === fileId)?.verapdfResult);
+  const file = useAppStore((s) => s.files.find((f) => f.id === fileId));
+  const verification = file?.verapdfResult;
+  const iterations = file?.remediationIterations ?? [];
+  const stopReason = file?.remediationStopReason;
+  const stopReasonMessage = stopReasonLabel(stopReason);
 
   if (!verification) {
     return (
@@ -45,6 +60,12 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         Profile: {verification.profile ?? 'not reported'}
       </p>
 
+      {iterations.length > 0 ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+          Remediation passes: {iterations.length}
+        </p>
+      ) : null}
+
       {verification.summary ? (
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-blue)] md:grid-cols-4">
           <div>
@@ -72,6 +93,10 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
 
       {verification.reason ? (
         <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{verification.reason}</p>
+      ) : null}
+
+      {stopReasonMessage ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">{stopReasonMessage}</p>
       ) : null}
     </section>
   );

@@ -30,6 +30,8 @@ When no backend is configured, local browser OCR fallback is attempted automatic
 If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
 can show an external PDF/UA compliance verdict and rule/check counts.
 In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
+When verification is enabled, remediation now runs in an iterative loop (up to 3 passes) and stops early on:
+external compliance pass, no output change, no failed-check improvement, or service unavailability.
 
 ### Vercel deployment
 
