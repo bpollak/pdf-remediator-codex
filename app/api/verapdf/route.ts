@@ -8,6 +8,7 @@ export const maxDuration = 300;
 
 const DEFAULT_VERAPDF_TIMEOUT_MS = 120_000;
 const DEFAULT_VERAPDF_PROFILE = 'ua1';
+const DEFAULT_LOCAL_VERAPDF_URL = 'http://127.0.0.1:8081';
 
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.VERAPDF_TIMEOUT_MS);
@@ -39,11 +40,96 @@ function resolveValidationUrl(serviceUrl: string, profile: string): string {
   return parsed.toString();
 }
 
-export async function POST(request: NextRequest) {
-  const serviceUrl = process.env.VERAPDF_SERVICE_URL;
+function resolveServiceUrl(): { url?: string; source: 'env' | 'dev-default' | 'none' } {
+  const configured = process.env.VERAPDF_SERVICE_URL?.trim();
+  if (configured) return { url: configured, source: 'env' };
+
+  if (process.env.NODE_ENV === 'development') {
+    return { url: DEFAULT_LOCAL_VERAPDF_URL, source: 'dev-default' };
+  }
+
+  return { source: 'none' };
+}
+
+function resolveInfoUrl(serviceUrl: string): string {
+  const parsed = new URL(serviceUrl);
+  const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+
+  if (/\/api\/info$/i.test(normalizedPath)) return parsed.toString();
+  if (/\/api\/validate(?:\/[^/]+)?$/i.test(normalizedPath)) {
+    parsed.pathname = normalizedPath.replace(/\/validate(?:\/[^/]+)?$/i, '/info');
+    return parsed.toString();
+  }
+
+  parsed.pathname = `${normalizedPath}/api/info`.replace(/\/{2,}/g, '/');
+  return parsed.toString();
+}
+
+async function probeVerapdf(serviceUrl: string): Promise<boolean> {
+  const infoUrl = resolveInfoUrl(serviceUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3_000);
+
+  try {
+    const response = await fetch(infoUrl, {
+      method: 'GET',
+      signal: controller.signal,
+      cache: 'no-store'
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function GET() {
+  const profile = getConfiguredProfile();
+  const resolved = resolveServiceUrl();
+  const serviceUrl = resolved.url;
+
   if (!serviceUrl) {
     return NextResponse.json(
-      { attempted: false, reason: 'veraPDF service is not configured (set VERAPDF_SERVICE_URL).' },
+      {
+        configured: false,
+        reachable: false,
+        source: resolved.source,
+        profile,
+        reason: 'Set VERAPDF_SERVICE_URL, or run local docker-compose in development.'
+      },
+      { status: 503 }
+    );
+  }
+
+  let reachable = false;
+  try {
+    reachable = await probeVerapdf(serviceUrl);
+  } catch {
+    reachable = false;
+  }
+
+  return NextResponse.json(
+    {
+      configured: true,
+      reachable,
+      source: resolved.source,
+      profile,
+      serviceUrl
+    },
+    { status: reachable ? 200 : 503 }
+  );
+}
+
+export async function POST(request: NextRequest) {
+  const resolved = resolveServiceUrl();
+  const serviceUrl = resolved.url;
+  if (!serviceUrl) {
+    return NextResponse.json(
+      {
+        attempted: false,
+        reason: 'veraPDF service is not configured (set VERAPDF_SERVICE_URL). In development, run docker compose -f docker-compose.verapdf.yml up -d.'
+      },
       { status: 503 }
     );
   }
@@ -130,7 +216,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         attempted: true,
-        reason: 'Failed to contact veraPDF backend.',
+        reason:
+          resolved.source === 'dev-default'
+            ? 'Failed to contact local veraPDF backend at http://127.0.0.1:8081. Start it with docker compose -f docker-compose.verapdf.yml up -d.'
+            : 'Failed to contact veraPDF backend.',
         detail: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 502 }

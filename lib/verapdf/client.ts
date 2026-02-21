@@ -9,6 +9,13 @@ function summarizeError(status: number): string {
   return `veraPDF verification failed (${status})`;
 }
 
+interface ErrorPayload {
+  attempted?: boolean;
+  reason?: string;
+  error?: string;
+  detail?: string;
+}
+
 function parseResult(payload: unknown): VerapdfResult | null {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as Record<string, unknown>;
@@ -52,9 +59,14 @@ export async function runVerapdfViaApi(bytes: ArrayBuffer, fileName: string): Pr
     });
 
     if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null) as ErrorPayload | null;
+      const reason = errorPayload?.reason ?? errorPayload?.error ?? summarizeError(response.status);
+      const detail = typeof errorPayload?.detail === 'string' && errorPayload.detail.trim()
+        ? ` (${errorPayload.detail.trim()})`
+        : '';
       return {
-        attempted: response.status !== 503,
-        reason: summarizeError(response.status)
+        attempted: typeof errorPayload?.attempted === 'boolean' ? errorPayload.attempted : response.status !== 503,
+        reason: `${reason}${detail}`
       };
     }
 

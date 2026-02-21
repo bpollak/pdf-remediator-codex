@@ -29,6 +29,41 @@ When no backend is configured, local browser OCR fallback is attempted automatic
 
 If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
 can show an external PDF/UA compliance verdict and rule/check counts.
+In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
+
+### Local veraPDF (free/self-hosted)
+
+1. Copy local env template:
+
+```bash
+cp .env.local.example .env.local
+```
+
+2. Start local veraPDF REST service:
+
+```bash
+npm run verapdf:up
+```
+
+3. Verify the service:
+
+```bash
+npm run verapdf:status
+```
+
+4. Run a smoke test against a fixture PDF:
+
+```bash
+npm run verapdf:smoke
+```
+
+5. Stop service when done:
+
+```bash
+npm run verapdf:down
+```
+
+`verapdf:smoke` validates `fixtures/accessible.pdf` via `/api/validate/ua1` and confirms a `validationReport` is returned.
 
 ### Recommended OCR backend
 

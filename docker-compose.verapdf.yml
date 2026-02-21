@@ -1,0 +1,7 @@
+services:
+  verapdf:
+    image: verapdf/rest:latest
+    container_name: verapdf-rest
+    ports:
+      - "8081:8080"
+    restart: unless-stopped

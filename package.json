@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "verapdf:up": "bash ./scripts/verapdf-local.sh up",
+    "verapdf:down": "bash ./scripts/verapdf-local.sh down",
+    "verapdf:status": "bash ./scripts/verapdf-local.sh status",
+    "verapdf:smoke": "bash ./scripts/verapdf-local.sh smoke"
   },
   "dependencies": {
     "next": "14.2.35",
