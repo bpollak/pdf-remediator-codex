@@ -32,6 +32,8 @@ can show an external PDF/UA compliance verdict and rule/check counts.
 In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
 When verification is enabled, remediation now runs in an iterative loop (up to 3 passes) and stops early on:
 external compliance pass, no output change, no failed-check improvement, or service unavailability.
+The compare view includes a "What To Do Next" panel that converts remaining findings and verification outcomes into
+prioritized manual follow-up steps.
 
 ### Vercel deployment
 

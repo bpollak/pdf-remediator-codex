@@ -20,6 +20,7 @@ const severityBadge = {
 export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashboardProps) {
   const file = useAppStore((s) => s.files.find((f) => f.id === fileId));
   const auditResult = variant === 'remediated' ? file?.postRemediationAudit : file?.auditResult;
+  const verapdfResult = file?.verapdfResult;
 
   if (!auditResult) {
     return (
@@ -46,6 +47,11 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
     <section className="space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       {/* Score */}
       <ComplianceScore score={score} />
+      {variant === 'remediated' && verapdfResult?.compliant === false && (
+        <p className="text-sm text-[var(--ucsd-blue)]">
+          Internal rules improved the file, but external PDF/UA verification still reports non-compliance.
+        </p>
+      )}
 
       {/* Severity summary */}
       <div className="flex flex-wrap gap-2">
