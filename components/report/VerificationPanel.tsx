@@ -28,6 +28,9 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
         <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">veraPDF verification</h3>
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+          veraPDF is an independent, open-source checker for PDF/UA technical compliance.
+        </p>
         <p className="mt-2 text-sm text-[var(--ucsd-blue)]">Verification result not available yet.</p>
       </section>
     );
@@ -55,6 +58,13 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
           {verdictLabel}
         </span>
       </div>
+
+      <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+        veraPDF is an independent, open-source checker for PDF/UA technical compliance.
+      </p>
+      <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+        This is an external result, so it can differ from the internal score shown below.
+      </p>
 
       <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
         Profile: {verification.profile ?? 'not reported'}
