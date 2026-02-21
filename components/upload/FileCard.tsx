@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import type { FileEntry } from '@/stores/app-store';
 
+function isWorkingStatus(status: FileEntry['status']): boolean {
+  return status !== 'remediated' && status !== 'error';
+}
+
 function statusLabel(status: FileEntry['status']): string {
   if (status === 'queued') return 'Queued';
   if (status === 'parsing') return 'Reading your PDF';
@@ -30,7 +34,15 @@ function statusBadge(status: FileEntry['status']) {
   if (status === 'error') {
     return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">{statusLabel(status)}</span>;
   }
-  return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-blue)]">{statusLabel(status)}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-blue)]" role="status" aria-live="polite">
+      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" className="opacity-25" stroke="currentColor" strokeWidth="3" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      {statusLabel(status)}
+    </span>
+  );
 }
 
 function accentBorder(file: FileEntry) {
@@ -41,6 +53,7 @@ function accentBorder(file: FileEntry) {
 
 export function FileCard({ file }: { file: FileEntry }) {
   const isProcessed = file.status === 'remediated';
+  const isWorking = isWorkingStatus(file.status);
 
   return (
     <article className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${accentBorder(file)}`}>
@@ -50,7 +63,7 @@ export function FileCard({ file }: { file: FileEntry }) {
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
         <div
-          className="h-1.5 rounded-full bg-[var(--ucsd-blue)] transition-all duration-300"
+          className={`h-1.5 rounded-full bg-[var(--ucsd-blue)] transition-all duration-300 ${isWorking ? 'animate-pulse' : ''}`}
           style={{ width: `${file.progress}%` }}
         />
       </div>
