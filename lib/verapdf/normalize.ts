@@ -58,6 +58,61 @@ function extractSummary(record: JsonRecord | undefined): VerapdfSummary | undefi
   return summary;
 }
 
+function findComplianceValueDeep(root: unknown): boolean | undefined {
+  const visited = new Set<object>();
+
+  function walk(node: unknown): boolean | undefined {
+    if (!node || typeof node !== 'object') return undefined;
+    if (visited.has(node as object)) return undefined;
+    visited.add(node as object);
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const nested = walk(item);
+        if (nested !== undefined) return nested;
+      }
+      return undefined;
+    }
+
+    const record = node as JsonRecord;
+    const direct = asBoolean(getValue(record, ['isCompliant', '@isCompliant', 'compliant', '@compliant']));
+    if (direct !== undefined) return direct;
+
+    for (const value of Object.values(record)) {
+      const nested = walk(value);
+      if (nested !== undefined) return nested;
+    }
+
+    return undefined;
+  }
+
+  return walk(root);
+}
+
+function inferComplianceVerdict(summary?: VerapdfSummary, statement?: string): boolean | undefined {
+  if (typeof summary?.failedRules === 'number') {
+    return summary.failedRules === 0;
+  }
+  if (typeof summary?.failedChecks === 'number') {
+    return summary.failedChecks === 0;
+  }
+
+  if (!statement) return undefined;
+  const normalizedStatement = statement.toLowerCase();
+
+  if (normalizedStatement.includes('not compliant') || normalizedStatement.includes('non-compliant')) {
+    return false;
+  }
+  if (normalizedStatement.includes('compliant')) {
+    return true;
+  }
+  if (normalizedStatement.includes('failed') || normalizedStatement.includes('fails')) {
+    return false;
+  }
+
+  return undefined;
+}
+
 function findValidationReport(root: unknown): JsonRecord | undefined {
   const visited = new Set<object>();
 
@@ -105,11 +160,15 @@ function normalizeFromJson(payload: unknown): Partial<VerapdfResult> {
 
   const details = asRecord(validationReport.details);
   const summary = extractSummary(details) ?? extractSummary(validationReport);
+  const statement = asString(getValue(validationReport, ['statement', '@statement']));
+  let compliant = asBoolean(getValue(validationReport, ['isCompliant', '@isCompliant']));
+  if (compliant === undefined) compliant = findComplianceValueDeep(validationReport);
+  if (compliant === undefined) compliant = inferComplianceVerdict(summary, statement);
 
   return {
-    compliant: asBoolean(getValue(validationReport, ['isCompliant', '@isCompliant'])),
+    compliant,
     profile: asString(getValue(validationReport, ['profileName', '@profileName', 'validationProfile', '@validationProfile'])),
-    statement: asString(getValue(validationReport, ['statement', '@statement'])),
+    statement,
     summary
   };
 }
@@ -141,11 +200,14 @@ function normalizeFromXml(xml: string): Partial<VerapdfResult> {
   if (!validationReportAttributes) return {};
 
   const summary = extractSummary(extractTagAttributes(xml, 'details'));
+  const statement = asString(getValue(validationReportAttributes, ['statement']));
+  let compliant = asBoolean(getValue(validationReportAttributes, ['isCompliant', 'compliant']));
+  if (compliant === undefined) compliant = inferComplianceVerdict(summary, statement);
 
   return {
-    compliant: asBoolean(getValue(validationReportAttributes, ['isCompliant'])),
+    compliant,
     profile: asString(getValue(validationReportAttributes, ['profileName', 'validationProfile'])),
-    statement: asString(getValue(validationReportAttributes, ['statement'])),
+    statement,
     summary
   };
 }

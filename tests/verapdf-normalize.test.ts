@@ -59,4 +59,44 @@ describe('normalizeVerapdfPayload', () => {
     const result = normalizeVerapdfPayload('', 'application/json');
     expect(result.reason).toBe('veraPDF returned an empty report.');
   });
+
+  it('infers non-compliance from failed rule counts when explicit verdict is missing', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        profileName: 'PDF/UA-1 validation profile',
+        statement: 'PDF file is not compliant with Validation Profile requirements.',
+        details: {
+          passedRules: 98,
+          failedRules: 8,
+          passedChecks: 3804,
+          failedChecks: 738
+        }
+      }
+    });
+
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+
+    expect(result.compliant).toBe(false);
+    expect(result.summary?.failedRules).toBe(8);
+    expect(result.statement).toContain('not compliant');
+  });
+
+  it('infers compliance from zero failed rule counts when explicit verdict is missing', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        profileName: 'PDF/UA-1 validation profile',
+        details: {
+          passedRules: 108,
+          failedRules: 0,
+          passedChecks: 4120,
+          failedChecks: 0
+        }
+      }
+    });
+
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+
+    expect(result.compliant).toBe(true);
+    expect(result.summary?.failedRules).toBe(0);
+  });
 });
