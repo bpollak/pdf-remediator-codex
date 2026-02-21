@@ -9,6 +9,12 @@ const badgeClass: Record<'high' | 'medium' | 'low', string> = {
   low: 'bg-blue-100 text-blue-700'
 };
 
+const badgeLabel: Record<'high' | 'medium' | 'low', string> = {
+  high: 'High priority',
+  medium: 'Medium priority',
+  low: 'Follow-up'
+};
+
 export function NextStepsPanel({ fileId }: { fileId: string }) {
   const file = useAppStore((s) => s.files.find((entry) => entry.id === fileId));
   const remediatedFindings = file?.postRemediationAudit?.findings ?? [];
@@ -23,7 +29,10 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
       <div>
         <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">What To Do Next</h3>
         <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
-          Internal score reflects this app&apos;s ruleset. PDF/UA status comes from external veraPDF verification.
+          Use this checklist to finish manual fixes after automated remediation.
+        </p>
+        <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+          Internal score is this app&apos;s ruleset. veraPDF status is the external PDF/UA compliance check.
         </p>
       </div>
 
@@ -35,10 +44,11 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
                 {index + 1}. {step.title}
               </span>
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass[step.severity]}`}>
-                {step.severity}
+                {badgeLabel[step.severity]}
               </span>
             </div>
             <p className="mt-1 text-sm text-[var(--ucsd-blue)]">{step.description}</p>
+            {step.details ? <p className="mt-1 text-xs text-gray-500">{step.details}</p> : null}
           </li>
         ))}
       </ol>

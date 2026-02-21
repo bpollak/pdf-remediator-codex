@@ -27,7 +27,7 @@ describe('buildManualNextSteps', () => {
       }
     });
 
-    expect(steps[0]?.title).toContain('Review remaining PDF/UA failures');
+    expect(steps[0]?.title).toContain('Open the remediated PDF in Acrobat or PAC');
     expect(steps[0]?.severity).toBe('high');
   });
 
@@ -40,8 +40,8 @@ describe('buildManualNextSteps', () => {
       verapdfResult: { attempted: true, compliant: false }
     });
 
-    expect(steps.some((step) => step.title.includes('DOC-003'))).toBe(true);
-    expect(steps.some((step) => step.description.includes('Add PDF/UA metadata identifier'))).toBe(true);
+    expect(steps.some((step) => step.details?.includes('Rule DOC-003'))).toBe(true);
+    expect(steps.some((step) => step.description.includes('Do this: Add PDF/UA metadata identifier'))).toBe(true);
   });
 
   it('returns low-priority no-action step when nothing remains', () => {
@@ -50,7 +50,7 @@ describe('buildManualNextSteps', () => {
       verapdfResult: { attempted: true, compliant: true }
     });
 
-    expect(steps[0]?.title).toBe('No manual steps required');
+    expect(steps[0]?.title).toBe('No manual fixes required right now');
     expect(steps[0]?.severity).toBe('low');
   });
 });

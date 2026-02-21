@@ -6,6 +6,7 @@ export interface NextStepItem {
   title: string;
   description: string;
   severity: 'high' | 'medium' | 'low';
+  details?: string;
 }
 
 function severityWeight(severity: AuditFinding['severity']): number {
@@ -32,12 +33,78 @@ function uniqueBy<T>(items: T[], keyFn: (item: T) => string): T[] {
   return deduped;
 }
 
+function ensureSentence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function findingActionTitle(finding: AuditFinding): string {
+  switch (finding.ruleId) {
+    case 'DOC-001':
+      return 'Add PDF/UA document metadata';
+    case 'DOC-002':
+      return 'Add accessibility tags to the document';
+    case 'DOC-003':
+      return 'Set the document language';
+    case 'DOC-004':
+      return 'Run OCR and rebuild tags for scanned content';
+    case 'HDG-001':
+      return 'Fix heading levels so they do not skip';
+    case 'HDG-002':
+      return 'Add headings to organize the document';
+    case 'IMG-001':
+      return 'Write alt text for each meaningful image';
+    case 'IMG-002':
+      return 'Replace filename-like alt text';
+    case 'TBL-001':
+      return 'Fix table structure tags';
+    case 'TBL-002':
+      return 'Tag visual tables as real tables';
+    case 'LST-001':
+      return 'Convert list-looking text into tagged lists';
+    case 'LNK-001':
+      return 'Rewrite unclear link text';
+    case 'LNK-002':
+      return 'Add bookmarks for easier navigation';
+    case 'FRM-001':
+      return 'Add labels to form fields';
+    case 'FRM-002':
+      return 'Mark required fields programmatically';
+    case 'META-001':
+      return 'Add subject metadata';
+    case 'META-002':
+      return 'Set tab order to follow structure';
+    case 'CLR-001':
+      return 'Check and improve color contrast';
+    default:
+      return `Fix remaining ${finding.category.toLowerCase()} issue`;
+  }
+}
+
+function findingDescription(finding: AuditFinding): string {
+  const location: string[] = [];
+  if (typeof finding.location.page === 'number') {
+    location.push(`Page ${finding.location.page}`);
+  }
+  if (finding.location.element) {
+    location.push(`Element: ${finding.location.element}`);
+  }
+  const where = location.length > 0 ? ` Where: ${location.join(' • ')}.` : '';
+  return `Do this: ${ensureSentence(finding.recommendation)}${where}`;
+}
+
+function findingDetails(finding: AuditFinding): string {
+  const wcag = finding.wcagCriterion ? ` • WCAG ${finding.wcagCriterion}` : '';
+  return `Rule ${finding.ruleId}${wcag}`;
+}
+
 function stopReasonMessage(reason: RemediationStopReason | undefined): string | undefined {
   if (!reason) return undefined;
-  if (reason === 'no_improvement') return 'Automated passes stopped because failed veraPDF checks did not improve.';
-  if (reason === 'no_change') return 'Automated passes stopped because the output PDF stopped changing.';
-  if (reason === 'max_iterations') return 'Automated passes reached the configured maximum iterations.';
-  if (reason === 'service_unavailable') return 'Automated passes stopped because external veraPDF verification was unavailable.';
+  if (reason === 'no_improvement') return 'Automation stopped because failed external checks were not improving.';
+  if (reason === 'no_change') return 'Automation stopped because another pass produced the same PDF output.';
+  if (reason === 'max_iterations') return 'Automation stopped after reaching the maximum number of remediation passes.';
+  if (reason === 'service_unavailable') return 'Automation stopped because external veraPDF verification was unavailable.';
   return undefined;
 }
 
@@ -52,9 +119,15 @@ export function buildManualNextSteps(input: {
   if (verapdfResult?.compliant === false) {
     const failedRules = verapdfResult.summary?.failedRules;
     const failedChecks = verapdfResult.summary?.failedChecks;
+    const counts =
+      typeof failedRules === 'number' || typeof failedChecks === 'number'
+        ? ` (${typeof failedRules === 'number' ? `${failedRules} failed rules` : ''}${
+            typeof failedRules === 'number' && typeof failedChecks === 'number' ? ', ' : ''
+          }${typeof failedChecks === 'number' ? `${failedChecks} failed checks` : ''})`
+        : '';
     steps.push({
-      title: 'Review remaining PDF/UA failures in a desktop checker',
-      description: `veraPDF still reports non-compliance${typeof failedRules === 'number' ? ` (${failedRules} failed rules` : ''}${typeof failedChecks === 'number' ? `${typeof failedRules === 'number' ? ', ' : ' ('}${failedChecks} failed checks` : ''}${typeof failedRules === 'number' || typeof failedChecks === 'number' ? ')' : ''}. Open the remediated PDF in PAC or Acrobat Accessibility Checker and inspect the failed checks list.`,
+      title: 'Open the remediated PDF in Acrobat or PAC',
+      description: `veraPDF still reports PDF/UA failures${counts}. Review the failed checks and fix them in your source file or tags panel.`,
       severity: 'high'
     });
   }
@@ -69,31 +142,32 @@ export function buildManualNextSteps(input: {
 
   for (const finding of topFindings) {
     steps.push({
-      title: `${finding.ruleId}: ${finding.description}`,
-      description: `${finding.recommendation}${finding.location.page ? ` (Page ${finding.location.page})` : ''}`,
-      severity: toPriority(finding.severity)
+      title: findingActionTitle(finding),
+      description: findingDescription(finding),
+      severity: toPriority(finding.severity),
+      details: findingDetails(finding)
     });
   }
 
   const stopMessage = stopReasonMessage(remediationStopReason);
   if (stopMessage) {
     steps.push({
-      title: 'Re-run after manual fixes',
-      description: `${stopMessage} After manual edits, re-upload the updated PDF to run remediation and verification again.`,
+      title: 'Upload the updated PDF after manual edits',
+      description: `${stopMessage} Once you make changes, upload the revised file to run remediation and verification again.`,
       severity: 'medium'
     });
   }
 
   if (steps.length === 0) {
     steps.push({
-      title: 'No manual steps required',
-      description: 'No remaining internal findings were detected and external verification did not report an actionable failure.',
+      title: 'No manual fixes required right now',
+      description: 'No remaining internal findings were detected, and external verification did not report actionable failures.',
       severity: 'low'
     });
   } else {
     steps.push({
-      title: 'Final verification pass',
-      description: 'After manual updates, upload the revised PDF and confirm both internal score and veraPDF verification improve.',
+      title: 'Run one final verification before publishing',
+      description: 'After manual updates, upload the revised PDF and confirm both the internal score and veraPDF result improve.',
       severity: 'low'
     });
   }
