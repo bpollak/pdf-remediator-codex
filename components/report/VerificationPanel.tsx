@@ -43,7 +43,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   if (!verification) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">veraPDF verification</h3>
+        <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">External PDF/UA check (veraPDF)</h2>
         <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
           veraPDF is an independent, open-source checker for PDF/UA technical compliance.
         </p>
@@ -54,7 +54,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">veraPDF verification</h3>
+      <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">External PDF/UA check (veraPDF)</h2>
 
       <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
         veraPDF is an independent, open-source checker for PDF/UA technical compliance.
@@ -92,6 +92,11 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
             <dd>{metricValue(verification.summary.failedChecks)}</dd>
           </div>
         </dl>
+      ) : null}
+      {verification.summary ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+          Start with failed rules first, then resolve remaining failed checks.
+        </p>
       ) : null}
 
       {statement ? (

@@ -27,7 +27,7 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">What To Do Next</h3>
+        <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">What To Do Next</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
           Use this checklist to finish manual fixes after automated remediation.
         </p>

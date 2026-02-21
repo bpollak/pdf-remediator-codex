@@ -12,6 +12,16 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">2-Minute Quick Start</h2>
+        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
+          <li>Upload your PDF on the App page.</li>
+          <li>Wait for the updated file and open the compare results.</li>
+          <li>Download the remediated PDF and complete the manual checklist.</li>
+          <li>Re-upload your revised file to confirm improvements before publishing.</li>
+        </ol>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">What It Does</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and optional OCR and

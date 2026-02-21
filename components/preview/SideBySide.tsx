@@ -91,13 +91,15 @@ function PdfPreviewPane({
       <div>
         <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
         <p className="text-sm text-[var(--ucsd-blue)]">
-          {typeof score === 'number' ? `Compliance score: ${score}%` : 'Compliance score: unavailable'}
+          {typeof score === 'number' ? `Internal score: ${score}%` : 'Internal score: unavailable'}
         </p>
-        <p className="text-xs text-[var(--ucsd-blue)]">File size: {formatBytes(bytes.byteLength)}</p>
-        <p className="text-xs text-[var(--ucsd-blue)]">
-          SHA-256:{' '}
-          <span className="break-all font-mono text-[11px]">{sha256 ?? 'calculating...'}</span>
-        </p>
+        <details className="mt-1 text-xs text-[var(--ucsd-blue)]">
+          <summary className="cursor-pointer select-none">Advanced details</summary>
+          <p className="mt-1">File size: {formatBytes(bytes.byteLength)}</p>
+          <p>
+            SHA-256: <span className="break-all font-mono text-[11px]">{sha256 ?? 'calculating...'}</span>
+          </p>
+        </details>
       </div>
       <iframe
         src={blobUrl ?? undefined}

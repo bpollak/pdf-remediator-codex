@@ -1,14 +1,36 @@
 import Link from 'next/link';
 import type { FileEntry } from '@/stores/app-store';
 
-function statusBadge(status: string) {
+function statusLabel(status: FileEntry['status']): string {
+  if (status === 'queued') return 'Queued';
+  if (status === 'parsing') return 'Reading your PDF';
+  if (status === 'ocr') return 'Making scanned text searchable';
+  if (status === 'auditing') return 'Checking accessibility issues';
+  if (status === 'audited') return 'Preparing fixes';
+  if (status === 'remediating') return 'Applying fixes';
+  if (status === 'remediated') return 'Ready: review results';
+  return 'Needs attention';
+}
+
+function statusHint(status: FileEntry['status']): string | null {
+  if (status === 'queued') return 'Waiting to start.';
+  if (status === 'parsing') return 'Reading document text and structure.';
+  if (status === 'ocr') return 'Trying OCR because this looks like a scanned file.';
+  if (status === 'auditing') return 'Checking the original file for accessibility issues.';
+  if (status === 'audited') return 'Building a plan for automated fixes.';
+  if (status === 'remediating') return 'Creating your updated PDF.';
+  if (status === 'remediated') return 'Open results to review, download, and complete manual steps.';
+  return 'Something went wrong. Review the error and upload again.';
+}
+
+function statusBadge(status: FileEntry['status']) {
   if (status === 'remediated') {
-    return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">Remediated</span>;
+    return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">{statusLabel(status)}</span>;
   }
   if (status === 'error') {
-    return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Error</span>;
+    return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">{statusLabel(status)}</span>;
   }
-  return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-blue)] capitalize">{status}</span>;
+  return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-blue)]">{statusLabel(status)}</span>;
 }
 
 function accentBorder(file: FileEntry) {
@@ -32,6 +54,7 @@ export function FileCard({ file }: { file: FileEntry }) {
           style={{ width: `${file.progress}%` }}
         />
       </div>
+      <p className="mt-2 text-sm text-[var(--ucsd-blue)]">{statusHint(file.status)}</p>
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
       {isProcessed ? (
