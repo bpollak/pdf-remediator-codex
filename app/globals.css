@@ -161,12 +161,12 @@ h6 {
 .ucsd-title-logo-mobile {
   display: none;
   width: 128px;
-  height: 22px;
+  height: 24px;
   overflow: hidden;
   text-indent: -999em;
   white-space: nowrap;
   background: url('/images/ucsd-sprite-base2x.png') no-repeat transparent;
-  background-position: 0 -2px;
+  background-position: 0 -1px;
   background-size: 280px 67px;
   filter: brightness(0) invert(1);
 }
