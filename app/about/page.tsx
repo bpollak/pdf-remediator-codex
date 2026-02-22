@@ -65,17 +65,6 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What You Should Still Review Manually</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Heading order and document structure in long or complex files.</li>
-          <li>Table headers, merged cells, and reading order in complex tables.</li>
-          <li>Meaningful alt text for charts, diagrams, and instructional images.</li>
-          <li>Color contrast and visual-only cues that automated checks may miss.</li>
-          <li>Final usability with assistive technology before publishing.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Accessibility Features Applied</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>Adds and improves document tags so screen readers can better understand the PDF structure.</li>
@@ -87,6 +76,17 @@ export default function AboutPage() {
           <li>Adds searchable text support for scanned PDFs.</li>
           <li>Tries to improve reading order in some multi-column layouts.</li>
           <li>Checks the updated file again and shows a before/after comparison.</li>
+        </ul>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>What you should still do manually</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Heading order and document structure in long or complex files.</li>
+          <li>Table headers, merged cells, and reading order in complex tables.</li>
+          <li>Meaningful alt text for charts, diagrams, and instructional images.</li>
+          <li>Color contrast and visual-only cues that automated checks may miss.</li>
+          <li>Final usability with assistive technology before publishing.</li>
         </ul>
       </section>
 
