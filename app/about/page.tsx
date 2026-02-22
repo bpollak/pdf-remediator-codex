@@ -58,13 +58,13 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>Recent Improvements</h2>
+        <h2>What You Can Expect During Review</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Iterative veraPDF feedback loop with up to three automatic remediation attempts.</li>
-          <li>Best-result protection so the app does not replace output with a worse remediation score.</li>
-          <li>Clear processing status with active progress indicators while files are being fixed.</li>
-          <li>Plain-language veraPDF panel text and a clearer post-remediation &ldquo;What To Do Next&rdquo; checklist.</li>
-          <li>Improved compare/report workflow with easier before/after review and download actions.</li>
+          <li>The app may run multiple remediation passes to improve accessibility outcomes before presenting results.</li>
+          <li>If a newer pass performs worse, the tool keeps the strongest result instead of overwriting it.</li>
+          <li>You can follow progress in real time with clear status updates while processing is in progress.</li>
+          <li>Results are explained in plain language, including a practical &ldquo;What To Do Next&rdquo; checklist.</li>
+          <li>Before/after comparisons and download actions are grouped together to support quick review decisions.</li>
         </ul>
       </section>
 
