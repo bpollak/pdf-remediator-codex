@@ -40,7 +40,7 @@ function getReadinessState(file: FileEntry | undefined): {
   if (remainingInternal > 0 || failedRules > 0 || failedChecks > 0) {
     return {
       state: 'needs-fixes' as const,
-      message: 'Needs manual fixes before publishing. Start with high-priority items in "What To Do Next."'
+      message: 'Review the high-priority items in "What To Do Next" before publishing.'
     };
   }
 
@@ -59,7 +59,7 @@ const stateClasses: Record<ReadinessState, string> = {
 
 const stateLabel: Record<ReadinessState, string> = {
   ready: 'Publishing readiness: Ready for manual final review',
-  'needs-fixes': 'Publishing readiness: Needs manual fixes before publishing',
+  'needs-fixes': 'Publishing readiness: Review checklist before publishing',
   'verification-unavailable': 'Publishing readiness: External verification unavailable',
   processing: 'Publishing readiness: Processing'
 };
