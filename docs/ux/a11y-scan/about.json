@@ -1011,7 +1011,7 @@
               }
             ],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -1180,7 +1180,7 @@
             ],
             "none": [],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -1420,7 +1420,7 @@
               }
             ],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -1651,7 +1651,7 @@
             ],
             "none": [],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -1804,7 +1804,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -2047,7 +2047,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -2172,7 +2172,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<p class=\"mt-4 max-w-3xl text-lg leading-relaxed text-gray-700\">UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.</p>",
+            "html": "<p class=\"mt-4 max-w-3xl text-lg leading-relaxed text-gray-700\">PDF Remediator is a free, browser-first tool that runs rule-based accessibility checks aligned to WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.</p>",
             "target": [
               ".text-lg"
             ]
@@ -4182,7 +4182,7 @@
               }
             ],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -5262,7 +5262,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<div class=\"ucsd-layout-container ucsd-layout-title-row\"><a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a><a aria-label=\"Visit UC San Diego website\" class=\"ucsd-title-logo\" href=\"https://www.ucsd.edu\">UC San Diego</a></div>",
+            "html": "<div class=\"ucsd-layout-container ucsd-layout-title-row\"><a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a><a aria-label=\"Visit UC San Diego website\" class=\"ucsd-title-logo\" href=\"https://www.ucsd.edu\">UC San Diego</a></div>",
             "target": [
               ".ucsd-layout-title-row"
             ]
@@ -5282,7 +5282,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<a aria-label=\"UC San Diego Accessible PDF home\" class=\"ucsd-title-header\" href=\"/\">UC San Diego Accessible PDF</a>",
+            "html": "<a aria-label=\"PDF Remediator home\" class=\"ucsd-title-header\" href=\"/\">PDF Remediator</a>",
             "target": [
               ".ucsd-title-header"
             ]
@@ -5582,7 +5582,7 @@
             "all": [],
             "none": [],
             "impact": null,
-            "html": "<p class=\"mt-4 max-w-3xl text-lg leading-relaxed text-gray-700\">UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.</p>",
+            "html": "<p class=\"mt-4 max-w-3xl text-lg leading-relaxed text-gray-700\">PDF Remediator is a free, browser-first tool that runs rule-based accessibility checks aligned to WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.</p>",
             "target": [
               ".text-lg"
             ]

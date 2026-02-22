@@ -6,7 +6,7 @@ export default function AboutPage() {
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-          UC San Diego Accessible PDF helps you make documents easier to use with screen readers and keyboards. Upload
+          PDF Remediator helps you make documents easier to use with screen readers and keyboards. Upload
           a PDF, get an improved version, then follow a short checklist for anything that still needs manual edits.
         </p>
       </section>

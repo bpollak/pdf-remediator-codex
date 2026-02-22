@@ -4,8 +4,8 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
-  title: 'UC San Diego Accessible PDF',
-  description: 'UC San Diego Accessible PDF offers client-side PDF accessibility remediation and reporting.'
+  title: 'PDF Remediator',
+  description: 'PDF Remediator offers client-side PDF accessibility remediation and reporting.'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
