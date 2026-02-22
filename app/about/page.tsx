@@ -86,8 +86,9 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Privacy</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Most processing happens in your browser. If OCR or veraPDF is enabled in your setup, the file may be sent to
-          those services during processing. Otherwise, files stay on your device and are cleared when you close the
+          Most processing happens in your browser. If OCR or veraPDF validation is enabled, your file may be sent to
+          those services during processing — both are hosted on UC San Diego servers and your document does not leave
+          the university&apos;s infrastructure. Otherwise, files stay on your device and are cleared when you close the
           page.
         </p>
       </section>
