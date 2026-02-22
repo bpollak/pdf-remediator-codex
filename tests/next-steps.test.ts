@@ -42,6 +42,7 @@ describe('buildManualNextSteps', () => {
 
     expect(steps.some((step) => step.details?.includes('Rule DOC-003'))).toBe(true);
     expect(steps.some((step) => step.description.includes('Do this: Add PDF/UA metadata identifier'))).toBe(true);
+    expect(steps.some((step) => step.description.includes('How to fix it: In Acrobat: File → Properties → Advanced'))).toBe(true);
   });
 
   it('returns low-priority no-action step when nothing remains', () => {
