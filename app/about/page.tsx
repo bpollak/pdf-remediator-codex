@@ -6,8 +6,8 @@ export default function AboutPage() {
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-          UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to
-          WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.
+          UC San Diego Accessible PDF is a free, browser-first tool that checks your PDF for common accessibility
+          problems, applies automatic fixes, and tells you what still needs manual review.
         </p>
       </section>
 
@@ -15,46 +15,57 @@ export default function AboutPage() {
         <h2>2-Minute Quick Start</h2>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>Upload your PDF on the App page.</li>
-          <li>Wait for the updated file and open the compare results.</li>
-          <li>Download the remediated PDF and complete the manual checklist.</li>
-          <li>Re-upload your revised file to confirm improvements before publishing.</li>
+          <li>Wait while the app checks and fixes the file.</li>
+          <li>Open the compare results and review the &ldquo;What To Do Next&rdquo; checklist.</li>
+          <li>Download the updated PDF and complete any remaining manual fixes.</li>
+          <li>Re-upload the revised file to confirm improvements before publishing.</li>
         </ol>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>What It Does</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and optional OCR and
-          verification services can be configured:
+          After upload, the app runs a step-by-step workflow. Most processing happens in your browser:
         </p>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>
-            <strong>Parse</strong> &mdash; Extracts text, links, form fields, bookmarks/outlines, existing tags, and
-            metadata from the PDF.
+            <strong>Analyze</strong> &mdash; Reads document text, structure, links, forms, headings, and metadata.
           </li>
           <li>
-            <strong>OCR</strong> &mdash; For likely scanned or image-only files, the app first tries a configured OCR
-            API and falls back to local in-browser OCR when needed.
+            <strong>OCR when needed</strong> &mdash; If the file appears scanned, the app makes text searchable using a
+            configured OCR service or local in-browser fallback.
           </li>
           <li>
-            <strong>Audit</strong> &mdash; Evaluates the document against accessibility rules covering structure, headings,
-            images, tables, lists, links, color/visual checks, forms, and metadata/navigation. Findings map to specific
-            WCAG criteria used by this ruleset.
+            <strong>Audit</strong> &mdash; Checks for common accessibility issues across structure, headings, images,
+            tables, lists, links, forms, and metadata.
           </li>
           <li>
-            <strong>Remediate</strong> &mdash; Generates a remediated PDF with injected structure tags, document
-            language, PDF/UA metadata, normalized link text, generated form labels, outlines, and heuristic
-            heading/list/table structure.
+            <strong>Auto-fix</strong> &mdash; Applies supported fixes and creates an updated PDF.
           </li>
           <li>
-            <strong>Re-audit</strong> &mdash; Runs the same rules against the remediated document so you can see exactly
-            what improved.
+            <strong>Re-check and compare</strong> &mdash; Re-runs checks on the updated file and shows before/after
+            results side by side.
           </li>
           <li>
-            <strong>Verify (optional)</strong> &mdash; If configured, sends the remediated PDF through <code>/api/verapdf</code>{' '}
-            to a veraPDF REST backend for an external PDF/UA compliance check.
+            <strong>PDF/UA verification (optional)</strong> &mdash; If configured, sends the updated PDF to veraPDF for
+            an independent PDF/UA check.
+          </li>
+          <li>
+            <strong>Guided next steps</strong> &mdash; Provides a prioritized checklist so staff know what to fix
+            manually before publishing.
           </li>
         </ol>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>Recent Improvements</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Iterative veraPDF feedback loop with up to three automatic remediation attempts.</li>
+          <li>Best-result protection so the app does not replace output with a worse remediation score.</li>
+          <li>Clear processing status with active progress indicators while files are being fixed.</li>
+          <li>Plain-language veraPDF panel text and a clearer post-remediation &ldquo;What To Do Next&rdquo; checklist.</li>
+          <li>Improved compare/report workflow with easier before/after review and download actions.</li>
+        </ul>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
@@ -75,11 +86,9 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Privacy</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Processing is browser-first. If a file appears scanned and <code>OCR_SERVICE_URL</code> is configured, the
-          file is sent through <code>/api/ocr</code> to your OCR backend. If no backend is available, local OCR fallback
-          runs in the browser. If <code>VERAPDF_SERVICE_URL</code> is configured, remediated output can be sent through{' '}
-          <code>/api/verapdf</code> for external verification. Outside configured OCR and verification requests, files stay
-          on your device and are discarded when you close the page.
+          Processing is browser-first. If your environment is configured for OCR or veraPDF verification, files may be
+          sent to those services during processing. Otherwise, files remain on your device and are cleared when you
+          close the page.
         </p>
       </section>
 
