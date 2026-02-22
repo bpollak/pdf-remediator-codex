@@ -3,6 +3,9 @@ import { ensurePdfJsWorkerConfigured } from './configure-worker';
 import type { ParsedPDF } from './types';
 import { decodeManifest } from '@/lib/remediate/manifest';
 
+const MAX_STRUCT_TREE_NODES = 20000;
+const MAX_OUTLINE_NODES = 20000;
+
 function cleanText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -38,22 +41,35 @@ async function resolveDestinationPage(doc: any, destination: unknown): Promise<n
   return undefined;
 }
 
-function collectStructTreeTags(node: any, page: number, tags: ParsedPDF['tags']) {
-  if (!node || typeof node !== 'object') return;
+function collectStructTreeTags(root: any, page: number, tags: ParsedPDF['tags']) {
+  if (!root || typeof root !== 'object') return;
 
-  const role = cleanText((node as { role?: unknown }).role);
-  if (role) {
-    tags.push({
-      type: role === 'Root' ? 'Document' : role,
-      page
-    });
-  }
+  const stack: unknown[] = [root];
+  const visited = new WeakSet<object>();
+  let processed = 0;
 
-  const children = (node as { children?: unknown }).children;
-  if (!Array.isArray(children)) return;
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (visited.has(node)) continue;
+    visited.add(node);
 
-  for (const child of children) {
-    collectStructTreeTags(child, page, tags);
+    processed += 1;
+    if (processed > MAX_STRUCT_TREE_NODES) break;
+
+    const role = cleanText((node as { role?: unknown }).role);
+    if (role) {
+      tags.push({
+        type: role === 'Root' ? 'Document' : role,
+        page
+      });
+    }
+
+    const children = (node as { children?: unknown }).children;
+    if (!Array.isArray(children)) continue;
+    for (let i = children.length - 1; i >= 0; i -= 1) {
+      stack.push(children[i]);
+    }
   }
 }
 
@@ -120,15 +136,29 @@ function dedupeOutlines(outlines: ParsedPDF['outlines']): ParsedPDF['outlines'] 
 async function flattenOutlines(nodes: any[] | null | undefined, doc: any, outlines: ParsedPDF['outlines']) {
   if (!nodes?.length) return;
 
-  for (const node of nodes) {
+  const stack: unknown[] = [...nodes].reverse();
+  const visited = new WeakSet<object>();
+  let processed = 0;
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (visited.has(node)) continue;
+    visited.add(node);
+
+    processed += 1;
+    if (processed > MAX_OUTLINE_NODES) break;
+
     const title = cleanText((node as { title?: unknown }).title);
     const page = await resolveDestinationPage(doc, (node as { dest?: unknown }).dest);
     if (title && page) {
       outlines.push({ title, page });
     }
 
-    if (Array.isArray((node as { items?: unknown }).items)) {
-      await flattenOutlines((node as { items: any[] }).items, doc, outlines);
+    const children = (node as { items?: unknown }).items;
+    if (!Array.isArray(children)) continue;
+    for (let i = children.length - 1; i >= 0; i -= 1) {
+      stack.push(children[i]);
     }
   }
 }
