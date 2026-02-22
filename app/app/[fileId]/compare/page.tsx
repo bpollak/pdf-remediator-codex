@@ -11,7 +11,7 @@ import { VerificationPanel } from '@/components/report/VerificationPanel';
 export default function ComparePage({ params }: { params: { fileId: string } }) {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-[var(--ucsd-navy)]">Before and after results: {params.fileId}</h1>
+      <h1 className="break-words text-2xl">Before and after results: {params.fileId}</h1>
       <PublishingReadinessBanner fileId={params.fileId} />
       <CompareActions fileId={params.fileId} />
       <SideBySide fileId={params.fileId} />
@@ -19,12 +19,12 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <NextStepsPanel fileId={params.fileId} />
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Original document report</h3>
+          <h3>Original document report</h3>
           <SummaryDashboard fileId={params.fileId} variant="original" />
           <IssueList fileId={params.fileId} variant="original" />
         </div>
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Remediated document report</h3>
+          <h3>Remediated document report</h3>
           <SummaryDashboard fileId={params.fileId} variant="remediated" />
           <IssueList fileId={params.fileId} variant="remediated" />
         </div>

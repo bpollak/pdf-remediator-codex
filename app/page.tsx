@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function LandingPage() {
   return (
     <section className="space-y-5 rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
-      <h1 className="text-3xl font-bold tracking-tight text-[var(--ucsd-navy)]">Make Your PDF More Accessible</h1>
+      <h1>Make Your PDF More Accessible</h1>
       <p className="max-w-3xl text-lg leading-relaxed text-[var(--ucsd-blue)]">
         Upload your PDF. We check common accessibility issues and generate an improved version in your browser.
       </p>

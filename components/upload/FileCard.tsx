@@ -58,7 +58,7 @@ export function FileCard({ file }: { file: FileEntry }) {
   return (
     <article className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${accentBorder(file)}`}>
       <div className="flex items-center justify-between">
-        <h3 className="truncate font-medium text-[var(--ucsd-navy)]">{file.name}</h3>
+        <h3 className="truncate text-base font-medium text-[var(--ucsd-navy)]">{file.name}</h3>
         {statusBadge(file.status)}
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">

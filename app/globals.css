@@ -2,17 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Teko-SemiBold';
+  src: url('https://cdn.ucsd.edu/cms/decorator-5/fonts/Teko-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --ucsd-navy: #182b49;
   --ucsd-blue: #00629b;
   --ucsd-gold: #c69214;
   --ucsd-yellow: #ffcd00;
   --ucsd-sand: #ffffff;
+  --ucsd-text: #333333;
 }
 
 body {
   background: var(--ucsd-sand);
+  color: var(--ucsd-text);
+  font-family: Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1,
+h2 {
+  font-family: 'Teko-SemiBold', Teko, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+}
+
+h1 {
+  color: var(--ucsd-blue);
+  font-size: 3.5em;
+}
+
+h2,
+.h2 {
   color: var(--ucsd-navy);
+  font-size: 2.2em;
+}
+
+@media (min-width: 768px) {
+  h2,
+  .h2 {
+    font-size: 2.5em;
+  }
+}
+
+h3,
+h4,
+h5,
+h6 {
+  color: var(--ucsd-text);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+h3 {
+  font-size: 23px;
+}
+
+h4 {
+  font-size: 18px;
+}
+
+h5 {
+  font-size: 14px;
+}
+
+h6 {
+  font-size: 12px;
 }
 
 .ucsd-layout-header {

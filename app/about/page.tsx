@@ -4,7 +4,7 @@ export default function AboutPage() {
   return (
     <div className="space-y-8">
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--ucsd-navy)]">About</h1>
+        <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-gray-700">
           UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to
           WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.
@@ -12,7 +12,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">2-Minute Quick Start</h2>
+        <h2>2-Minute Quick Start</h2>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
           <li>Upload your PDF on the App page.</li>
           <li>Wait for the updated file and open the compare results.</li>
@@ -22,7 +22,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">What It Does</h2>
+        <h2>What It Does</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and optional OCR and
           verification services can be configured:
@@ -58,7 +58,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Accessibility Features Applied</h2>
+        <h2>Accessibility Features Applied</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-gray-700">
           <li>StructTreeRoot and semantic tags (Document, Sect, H1&ndash;H6, P, L/LI, Table/TR/TH/TD)</li>
           <li>Document language and metadata updates, including PDF/UA identifier metadata</li>
@@ -73,7 +73,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Privacy</h2>
+        <h2>Privacy</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Processing is browser-first. If a file appears scanned and <code>OCR_SERVICE_URL</code> is configured, the
           file is sent through <code>/api/ocr</code> to your OCR backend. If no backend is available, local OCR fallback
@@ -84,7 +84,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2 className="text-2xl font-bold text-[var(--ucsd-navy)]">Limitations</h2>
+        <h2>Limitations</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
           Automated remediation addresses many common issues but does not provide full WCAG or PDF/UA certification.
           Several checks are heuristic or advisory (especially color contrast and complex layout interpretation), and
