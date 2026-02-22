@@ -49,21 +49,42 @@ function splitKeywords(value?: string): string[] {
 
 function flattenTagTree(nodes: TagNode[] | undefined): Array<{ type: string; page?: number; text?: string }> {
   if (!nodes?.length) return [];
-  const flat: Array<{ type: string; page?: number; text?: string }> = [];
 
-  for (const node of nodes) {
+  const flat: Array<{ type: string; page?: number; text?: string }> = [];
+  const stack = [...nodes].reverse();
+  const visited = new WeakSet<object>();
+
+  while (stack.length > 0 && flat.length < MAX_TAGS_IN_MANIFEST) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (visited.has(node)) continue;
+    visited.add(node);
+
     flat.push({
       type: node.type,
       page: node.page,
       text: truncateText(node.text)
     });
 
-    if (node.children?.length) {
-      flat.push(...flattenTagTree(node.children));
+    if (!node.children?.length) continue;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      const child = node.children[index];
+      if (child) stack.push(child);
     }
   }
 
   return flat;
+}
+
+function safeReadPdfMetadata(getter: () => string | undefined): string | undefined {
+  try {
+    const value = getter();
+    if (typeof value !== 'string') return undefined;
+    const normalized = value.trim();
+    return normalized || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function dedupeTags(
@@ -375,7 +396,7 @@ export async function buildRemediatedPdf(
   }
 
   const existingKeywords = new Set(
-    [...splitKeywords(pdf.getKeywords()), ...splitKeywords(parsed.metadata.Keywords)].filter(
+    [...splitKeywords(safeReadPdfMetadata(() => pdf.getKeywords())), ...splitKeywords(parsed.metadata.Keywords)].filter(
       (keyword) => !keyword.startsWith(MANIFEST_PREFIX)
     )
   );
@@ -385,9 +406,11 @@ export async function buildRemediatedPdf(
   const encodedManifest = encodeManifest(manifest);
   existingKeywords.add(encodedManifest);
 
-  const metadataTitle = parsed.title ?? pdf.getTitle() ?? 'Accessible remediated PDF';
-  const metadataAuthor = parsed.metadata.Author ?? pdf.getAuthor() ?? 'UC San Diego Accessible PDF';
-  const metadataSubject = parsed.metadata.Subject ?? pdf.getSubject() ?? 'Accessibility remediated document';
+  const metadataTitle = parsed.title ?? safeReadPdfMetadata(() => pdf.getTitle()) ?? 'Accessible remediated PDF';
+  const metadataAuthor =
+    parsed.metadata.Author ?? safeReadPdfMetadata(() => pdf.getAuthor()) ?? 'UC San Diego Accessible PDF';
+  const metadataSubject =
+    parsed.metadata.Subject ?? safeReadPdfMetadata(() => pdf.getSubject()) ?? 'Accessibility remediated document';
 
   pdf.setLanguage(chosenLanguage);
   pdf.setTitle(metadataTitle);

@@ -1,6 +1,7 @@
 import type { VerapdfResult, VerapdfSummary } from './types';
 
 type JsonRecord = Record<string, unknown>;
+const MAX_NORMALIZE_NODES = 100_000;
 
 function asRecord(value: unknown): JsonRecord | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
@@ -59,34 +60,39 @@ function extractSummary(record: JsonRecord | undefined): VerapdfSummary | undefi
 }
 
 function findComplianceValueDeep(root: unknown): boolean | undefined {
-  const visited = new Set<object>();
+  if (!root || typeof root !== 'object') return undefined;
 
-  function walk(node: unknown): boolean | undefined {
-    if (!node || typeof node !== 'object') return undefined;
-    if (visited.has(node as object)) return undefined;
+  const visited = new Set<object>();
+  const stack: unknown[] = [root];
+  let processed = 0;
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (visited.has(node as object)) continue;
     visited.add(node as object);
 
+    processed += 1;
+    if (processed > MAX_NORMALIZE_NODES) break;
+
     if (Array.isArray(node)) {
-      for (const item of node) {
-        const nested = walk(item);
-        if (nested !== undefined) return nested;
+      for (let index = node.length - 1; index >= 0; index -= 1) {
+        stack.push(node[index]);
       }
-      return undefined;
+      continue;
     }
 
     const record = node as JsonRecord;
     const direct = asBoolean(getValue(record, ['isCompliant', '@isCompliant', 'compliant', '@compliant']));
     if (direct !== undefined) return direct;
 
-    for (const value of Object.values(record)) {
-      const nested = walk(value);
-      if (nested !== undefined) return nested;
+    const values = Object.values(record);
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      stack.push(values[index]);
     }
-
-    return undefined;
   }
 
-  return walk(root);
+  return undefined;
 }
 
 function inferComplianceVerdict(summary?: VerapdfSummary, statement?: string): boolean | undefined {
@@ -114,19 +120,26 @@ function inferComplianceVerdict(summary?: VerapdfSummary, statement?: string): b
 }
 
 function findValidationReport(root: unknown): JsonRecord | undefined {
-  const visited = new Set<object>();
+  if (!root || typeof root !== 'object') return undefined;
 
-  function walk(node: unknown): JsonRecord | undefined {
-    if (!node || typeof node !== 'object') return undefined;
-    if (visited.has(node as object)) return undefined;
+  const visited = new Set<object>();
+  const stack: unknown[] = [root];
+  let processed = 0;
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (visited.has(node as object)) continue;
     visited.add(node as object);
 
+    processed += 1;
+    if (processed > MAX_NORMALIZE_NODES) break;
+
     if (Array.isArray(node)) {
-      for (const item of node) {
-        const match = walk(item);
-        if (match) return match;
+      for (let index = node.length - 1; index >= 0; index -= 1) {
+        stack.push(node[index]);
       }
-      return undefined;
+      continue;
     }
 
     const record = node as JsonRecord;
@@ -143,15 +156,13 @@ function findValidationReport(root: unknown): JsonRecord | undefined {
       return record;
     }
 
-    for (const value of Object.values(record)) {
-      const match = walk(value);
-      if (match) return match;
+    const values = Object.values(record);
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      stack.push(values[index]);
     }
-
-    return undefined;
   }
 
-  return walk(root);
+  return undefined;
 }
 
 function normalizeFromJson(payload: unknown): Partial<VerapdfResult> {

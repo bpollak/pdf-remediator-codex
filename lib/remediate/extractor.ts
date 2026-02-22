@@ -59,7 +59,10 @@ function reorderByColumns(parsed: ParsedPDF) {
 
   const result: typeof parsed.textItems = [];
   for (const [, items] of [...byPage.entries()].sort(([a], [b]) => a - b)) {
-    result.push(...detectAndReorderColumns(items, pageWidth));
+    const reordered = detectAndReorderColumns(items, pageWidth);
+    for (const item of reordered) {
+      result.push(item);
+    }
   }
   return result;
 }
