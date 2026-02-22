@@ -408,7 +408,7 @@ export async function buildRemediatedPdf(
 
   const metadataTitle = parsed.title ?? safeReadPdfMetadata(() => pdf.getTitle()) ?? 'Accessible remediated PDF';
   const metadataAuthor =
-    parsed.metadata.Author ?? safeReadPdfMetadata(() => pdf.getAuthor()) ?? 'UC San Diego Accessible PDF';
+    parsed.metadata.Author ?? safeReadPdfMetadata(() => pdf.getAuthor()) ?? 'PDF Remediator';
   const metadataSubject =
     parsed.metadata.Subject ?? safeReadPdfMetadata(() => pdf.getSubject()) ?? 'Accessibility remediated document';
 
@@ -416,8 +416,8 @@ export async function buildRemediatedPdf(
   pdf.setTitle(metadataTitle);
   pdf.setAuthor(metadataAuthor);
   pdf.setSubject(metadataSubject);
-  pdf.setCreator('UC San Diego Accessible PDF');
-  pdf.setProducer('UC San Diego Accessible PDF');
+  pdf.setCreator('PDF Remediator');
+  pdf.setProducer('PDF Remediator');
 
   if (strictMetadata) {
     // Display document title in viewers and keep metadata explicit for stricter validators.
