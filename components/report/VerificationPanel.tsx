@@ -44,10 +44,13 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
         <h2>PDF accessibility standard check (veraPDF)</h2>
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          veraPDF is an open-source tool that checks whether a PDF meets the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
-        </p>
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result is not available yet.</p>
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+        veraPDF is an open-source tool that checks whether a PDF meets the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
+      </p>
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+        When available, these results reflect the remediated PDF generated after automated fix attempts.
+      </p>
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result is not available yet.</p>
       </section>
     );
   }
@@ -58,6 +61,9 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         veraPDF is an open-source tool that checks whether a PDF meets the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
+      </p>
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+        These results are for the remediated PDF generated after automated fix attempts.
       </p>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
