@@ -9,11 +9,11 @@ function metricValue(value: number | undefined): string {
 
 function stopReasonLabel(reason: RemediationStopReason | undefined): string | null {
   if (!reason) return null;
-  if (reason === 'compliant') return 'Stopped: external verification reported no failed rules.';
-  if (reason === 'service_unavailable') return 'Stopped: external verification unavailable.';
-  if (reason === 'no_change') return 'Stopped: additional pass produced identical output.';
-  if (reason === 'no_improvement') return 'Stopped: no improvement in failed veraPDF checks.';
-  if (reason === 'max_iterations') return 'Stopped: reached max remediation iterations.';
+  if (reason === 'compliant') return 'Process stopped: no failed rules were reported.';
+  if (reason === 'service_unavailable') return 'Process stopped: veraPDF service is unavailable.';
+  if (reason === 'no_change') return 'Process stopped: another attempt produced the same file.';
+  if (reason === 'no_improvement') return 'Process stopped: failed checks did not improve.';
+  if (reason === 'max_iterations') return 'Process stopped: reached the maximum number of attempts.';
   return null;
 }
 
@@ -26,7 +26,7 @@ function neutralStatement(statement: string | undefined): string | null {
 function neutralReason(reason: string | undefined): string | null {
   if (!reason) return null;
   if (/compliance verdict/i.test(reason)) {
-    return 'veraPDF returned detailed check counts but did not return a verdict label.';
+    return 'veraPDF returned detailed counts but no final pass/fail label.';
   }
   return reason;
 }
@@ -43,33 +43,30 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   if (!verification) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <h2>External PDF/UA check (veraPDF)</h2>
+        <h2>PDF/UA verification (veraPDF)</h2>
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          veraPDF is an independent, open-source checker for PDF/UA technical compliance.
+          veraPDF is an open-source tool that checks whether a PDF meets PDF/UA accessibility requirements.
         </p>
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result not available yet.</p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result is not available yet.</p>
       </section>
     );
   }
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2>External PDF/UA check (veraPDF)</h2>
+      <h2>PDF/UA verification (veraPDF)</h2>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        veraPDF is an independent, open-source checker for PDF/UA technical compliance.
-      </p>
-      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        This external check can differ from the internal score because it uses a different ruleset.
+        veraPDF is an open-source tool that checks whether a PDF meets PDF/UA accessibility requirements.
       </p>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        Profile: {verification.profile ?? 'not reported'}
+        Standard checked: {verification.profile ?? 'not reported'}
       </p>
 
       {iterations.length > 0 ? (
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          Remediation passes: {iterations.length}
+          Automatic fix attempts: {iterations.length}
         </p>
       ) : null}
 
@@ -95,7 +92,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
       ) : null}
       {verification.summary ? (
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          Start with failed rules first, then resolve remaining failed checks.
+          Next step: fix failed rules first, then fix remaining failed checks.
         </p>
       ) : null}
 
