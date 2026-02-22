@@ -9,7 +9,7 @@ export function ensureSentence(text: string): string {
 export function findingActionTitle(finding: AuditFinding): string {
   switch (finding.ruleId) {
     case 'DOC-001':
-      return 'Add PDF/UA document metadata';
+      return 'Add PDF accessibility metadata (PDF/UA)';
     case 'DOC-002':
       return 'Add accessibility tags to the document';
     case 'DOC-003':

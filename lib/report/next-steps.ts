@@ -64,7 +64,7 @@ export function buildManualNextSteps(input: {
         : '';
     steps.push({
       title: 'Open the remediated PDF in Acrobat or PAC',
-      description: `veraPDF still reports PDF/UA failures${counts}. Start with failed rules first, then remaining failed checks. ${manualPathHint}`,
+      description: `veraPDF still reports failures against the PDF/UA standard${counts}. Start with failed rules first, then remaining failed checks. ${manualPathHint}`,
       severity: 'high'
     });
   }
