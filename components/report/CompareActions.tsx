@@ -22,8 +22,8 @@ export function CompareActions({ fileId }: { fileId: string }) {
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
-      <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+      <h2>Download Your Updated PDF</h2>
+      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
         Use this file for manual review and publishing once your remaining checklist items are complete.
       </p>
 

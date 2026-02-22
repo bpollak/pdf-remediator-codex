@@ -5,7 +5,7 @@ export default function AboutPage() {
     <div className="space-y-8">
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1>About</h1>
-        <p className="mt-4 max-w-3xl text-lg leading-relaxed text-gray-700">
+        <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
           UC San Diego Accessible PDF is a free, browser-first tool that runs rule-based accessibility checks aligned to
           WCAG&nbsp;2.1 AA criteria and applies automated remediation for common PDF issues.
         </p>
@@ -13,7 +13,7 @@ export default function AboutPage() {
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>2-Minute Quick Start</h2>
-        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
+        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>Upload your PDF on the App page.</li>
           <li>Wait for the updated file and open the compare results.</li>
           <li>Download the remediated PDF and complete the manual checklist.</li>
@@ -23,11 +23,11 @@ export default function AboutPage() {
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>What It Does</h2>
-        <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
           Upload a PDF and the tool runs a multi-step pipeline. Most steps run in your browser, and optional OCR and
           verification services can be configured:
         </p>
-        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-gray-700">
+        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>
             <strong>Parse</strong> &mdash; Extracts text, links, form fields, bookmarks/outlines, existing tags, and
             metadata from the PDF.
@@ -59,7 +59,7 @@ export default function AboutPage() {
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Accessibility Features Applied</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-gray-700">
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>StructTreeRoot and semantic tags (Document, Sect, H1&ndash;H6, P, L/LI, Table/TR/TH/TD)</li>
           <li>Document language and metadata updates, including PDF/UA identifier metadata</li>
           <li>Bookmarks/outlines preserved or generated from detected headings</li>
@@ -74,7 +74,7 @@ export default function AboutPage() {
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Privacy</h2>
-        <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
           Processing is browser-first. If a file appears scanned and <code>OCR_SERVICE_URL</code> is configured, the
           file is sent through <code>/api/ocr</code> to your OCR backend. If no backend is available, local OCR fallback
           runs in the browser. If <code>VERAPDF_SERVICE_URL</code> is configured, remediated output can be sent through{' '}
@@ -85,7 +85,7 @@ export default function AboutPage() {
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Limitations</h2>
-        <p className="mt-3 max-w-3xl leading-relaxed text-gray-700">
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
           Automated remediation addresses many common issues but does not provide full WCAG or PDF/UA certification.
           Several checks are heuristic or advisory (especially color contrast and complex layout interpretation), and
           some documents need manual fixes. veraPDF REST adds useful automated verification when configured, but you

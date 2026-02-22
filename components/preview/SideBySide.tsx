@@ -77,7 +77,7 @@ function PdfPreviewPane({
 
   if (!bytes) {
     return (
-      <div className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)]">
+      <div className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-text)]">
         <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
         <p className="mt-2">
           This preview is unavailable right now. Upload/process the file in this browser session, then open Compare again.
@@ -90,10 +90,10 @@ function PdfPreviewPane({
     <div className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
         <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
-        <p className="text-sm text-[var(--ucsd-blue)]">
+        <p className="text-sm text-[var(--ucsd-text)]">
           {typeof score === 'number' ? `Internal score: ${score}%` : 'Internal score: unavailable'}
         </p>
-        <details className="mt-1 text-xs text-[var(--ucsd-blue)]">
+        <details className="mt-1 text-xs text-[var(--ucsd-text)]">
           <summary className="cursor-pointer select-none">Advanced details</summary>
           <p className="mt-1">File size: {formatBytes(bytes.byteLength)}</p>
           <p>

@@ -30,7 +30,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
 
   if (!auditResult) {
     return (
-      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)] shadow-sm">
+      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-text)] shadow-sm">
         {variant === 'remediated' ? 'No remediated audit result yet.' : 'No audit result yet.'}
       </section>
     );
@@ -38,7 +38,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
 
   if (!auditResult.findings.length) {
     return (
-      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-blue)] shadow-sm">
+      <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-text)] shadow-sm">
         No issues identified.
       </section>
     );
@@ -61,7 +61,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
     <section className="space-y-6">
       {sortedCategories.map(([category, findings]) => (
         <div key={category}>
-          <h4 className="mb-2 flex items-baseline gap-2 text-base font-semibold text-[var(--ucsd-navy)]">
+          <h4 className="mb-2 flex items-baseline gap-2">
             {category}
             <span className="text-xs font-normal text-gray-400">
               {findings.length} {findings.length === 1 ? 'issue' : 'issues'}

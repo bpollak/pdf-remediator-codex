@@ -25,7 +25,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   if (!auditResult) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <p className="text-sm text-[var(--ucsd-blue)]">
+        <p className="text-sm text-[var(--ucsd-text)]">
           {variant === 'remediated' ? 'No remediated audit result yet.' : 'No audit result yet.'}
         </p>
       </section>
@@ -48,12 +48,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       {/* Score */}
       <ComplianceScore score={score} />
       {variant === 'remediated' && (
-        <p className="text-sm text-[var(--ucsd-blue)]">
+        <p className="text-sm text-[var(--ucsd-text)]">
           Internal score is based on this app&apos;s checks. Review the external verification panel for PDF/UA results.
         </p>
       )}
       {variant === 'remediated' && verapdfResult?.compliant === false && (
-        <p className="text-sm text-[var(--ucsd-blue)]">
+        <p className="text-sm text-[var(--ucsd-text)]">
           Internal fixes improved this file, but external verification still found issues to resolve manually.
         </p>
       )}

@@ -43,38 +43,38 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   if (!verification) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">External PDF/UA check (veraPDF)</h2>
-        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+        <h2>External PDF/UA check (veraPDF)</h2>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           veraPDF is an independent, open-source checker for PDF/UA technical compliance.
         </p>
-        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">Verification result not available yet.</p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result not available yet.</p>
       </section>
     );
   }
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">External PDF/UA check (veraPDF)</h2>
+      <h2>External PDF/UA check (veraPDF)</h2>
 
-      <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         veraPDF is an independent, open-source checker for PDF/UA technical compliance.
       </p>
-      <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
         This external check can differ from the internal score because it uses a different ruleset.
       </p>
 
-      <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         Profile: {verification.profile ?? 'not reported'}
       </p>
 
       {iterations.length > 0 ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           Remediation passes: {iterations.length}
         </p>
       ) : null}
 
       {verification.summary ? (
-        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-blue)] md:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-text)] md:grid-cols-4">
           <div>
             <dt className="text-xs uppercase tracking-wide text-gray-500">Passed rules</dt>
             <dd>{metricValue(verification.summary.passedRules)}</dd>
@@ -94,21 +94,21 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         </dl>
       ) : null}
       {verification.summary ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           Start with failed rules first, then resolve remaining failed checks.
         </p>
       ) : null}
 
       {statement ? (
-        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{statement}</p>
+        <p className="mt-3 text-sm text-[var(--ucsd-text)]">{statement}</p>
       ) : null}
 
       {reason ? (
-        <p className="mt-3 text-sm text-[var(--ucsd-blue)]">{reason}</p>
+        <p className="mt-3 text-sm text-[var(--ucsd-text)]">{reason}</p>
       ) : null}
 
       {stopReasonMessage ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-blue)]">{stopReasonMessage}</p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">{stopReasonMessage}</p>
       ) : null}
     </section>
   );

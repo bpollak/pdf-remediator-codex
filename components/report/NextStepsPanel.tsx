@@ -27,11 +27,11 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2 className="text-base font-semibold text-[var(--ucsd-navy)]">What To Do Next</h2>
-        <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+        <h2>What To Do Next</h2>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
           Use this checklist to finish manual fixes after automated remediation.
         </p>
-        <p className="mt-1 text-sm text-[var(--ucsd-blue)]">
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
           Internal score is this app&apos;s ruleset. veraPDF status is an external, independent PDF/UA check.
         </p>
       </div>
@@ -47,7 +47,7 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
                 {badgeLabel[step.severity]}
               </span>
             </div>
-            <p className="mt-1 text-sm text-[var(--ucsd-blue)]">{step.description}</p>
+            <p className="mt-1 text-sm text-[var(--ucsd-text)]">{step.description}</p>
             {step.details ? <p className="mt-1 text-xs text-gray-500">{step.details}</p> : null}
           </li>
         ))}

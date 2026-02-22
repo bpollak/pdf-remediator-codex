@@ -6,7 +6,7 @@ import { FileCard } from './FileCard';
 export function FileQueue() {
   const files = useAppStore((s) => s.files);
 
-  if (files.length === 0) return <p className="text-[var(--ucsd-blue)]">No files yet. Upload PDFs to begin.</p>;
+  if (files.length === 0) return <p className="text-[var(--ucsd-text)]">No files yet. Upload PDFs to begin.</p>;
 
   return (
     <div className="space-y-3">

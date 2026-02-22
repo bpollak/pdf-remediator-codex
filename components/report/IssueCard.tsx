@@ -19,7 +19,7 @@ export function IssueCard({ finding }: { finding: AuditFinding }) {
       <p className="font-medium text-[var(--ucsd-navy)]">
         {findingActionTitle(finding)}
       </p>
-      <p className="mt-1 text-[var(--ucsd-navy)]">
+      <p className="mt-1 text-[var(--ucsd-text)]">
         <span className="font-medium">What we found:</span> {finding.description}
       </p>
       {finding.recommendation && (

@@ -11,7 +11,7 @@ import { VerificationPanel } from '@/components/report/VerificationPanel';
 export default function ComparePage({ params }: { params: { fileId: string } }) {
   return (
     <div className="space-y-6">
-      <h1 className="break-words text-2xl">Before and after results: {params.fileId}</h1>
+      <h1 className="break-words">Before and after results: {params.fileId}</h1>
       <PublishingReadinessBanner fileId={params.fileId} />
       <CompareActions fileId={params.fileId} />
       <SideBySide fileId={params.fileId} />
