@@ -80,7 +80,7 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What you should still do manually</h2>
+        <h2>What You Should Still Review Manually</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>Heading order and document structure in long or complex files.</li>
           <li>Table headers, merged cells, and reading order in complex tables.</li>
