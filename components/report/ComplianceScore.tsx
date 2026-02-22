@@ -10,7 +10,7 @@ export function ComplianceScore({ score }: { score: number }) {
 
   return (
     <div>
-      <p className={`text-3xl font-bold ${color}`}>{score}% internal score</p>
+      <p className={`text-3xl font-bold ${color}`}>{score}% Accessibility Score</p>
       <p className={`text-sm font-medium ${color}`}>{label}</p>
     </div>
   );

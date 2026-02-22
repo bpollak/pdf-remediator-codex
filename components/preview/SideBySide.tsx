@@ -91,7 +91,7 @@ function PdfPreviewPane({
       <div>
         <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
         <p className="text-sm text-[var(--ucsd-text)]">
-          {typeof score === 'number' ? `Internal score: ${score}%` : 'Internal score: unavailable'}
+          {typeof score === 'number' ? `Accessibility Score: ${score}%` : 'Accessibility Score: unavailable'}
         </p>
         <details className="mt-1 text-xs text-[var(--ucsd-text)]">
           <summary className="cursor-pointer select-none">Advanced details</summary>
