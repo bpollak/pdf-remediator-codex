@@ -14,7 +14,7 @@ export function Header() {
         </div>
       </section>
       <nav aria-label="Primary" className="ucsd-layout-navbar">
-        <div className="ucsd-layout-container">
+        <div className="ucsd-layout-container ucsd-navbar-row">
           <ul className="ucsd-navbar-list">
             <li>
               <Link className="ucsd-navbar-link" href="/">
@@ -32,6 +32,9 @@ export function Header() {
               </Link>
             </li>
           </ul>
+          <a aria-label="Visit UC San Diego website" className="ucsd-title-logo-mobile" href="https://www.ucsd.edu">
+            UC San Diego
+          </a>
         </div>
       </nav>
     </header>

@@ -145,11 +145,30 @@ h6 {
   margin-bottom: 0;
 }
 
+.ucsd-navbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .ucsd-navbar-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
+}
+
+.ucsd-title-logo-mobile {
+  display: none;
+  width: 128px;
+  height: 22px;
+  overflow: hidden;
+  text-indent: -999em;
+  white-space: nowrap;
+  background: url('/images/ucsd-sprite-base2x.png') no-repeat transparent;
+  background-position: 0 -2px;
+  background-size: 280px 67px;
+  filter: brightness(0) invert(1);
 }
 
 .ucsd-navbar-link {
@@ -198,14 +217,27 @@ h6 {
 
   .ucsd-title-header {
     margin-top: 0;
-    max-width: calc(100% - 245px);
+    max-width: 100%;
+    font-size: 1.9rem;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
   }
 
   .ucsd-title-logo {
+    display: none;
+  }
+
+  .ucsd-layout-navbar {
+    min-height: 64px;
+  }
+
+  .ucsd-navbar-link {
+    padding: 20px 10px;
+  }
+
+  .ucsd-title-logo-mobile {
     display: block;
-    position: absolute;
-    right: 0;
-    top: 0;
+    flex: 0 0 auto;
   }
 }
 
@@ -215,8 +247,21 @@ h6 {
   }
 
   .ucsd-title-header {
-    font-size: 20px;
+    font-size: 1.5rem;
+    letter-spacing: 0.05em;
     margin-top: 0;
+  }
+
+  .ucsd-navbar-link {
+    padding: 20px 10px;
+    font-size: 15px;
+  }
+
+  .ucsd-title-logo-mobile {
+    width: 112px;
+    height: 19px;
+    background-size: 245px 59px;
+    background-position: 0 -2px;
   }
 }
 
