@@ -6,39 +6,46 @@ export default function AboutPage() {
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-          UC San Diego Accessible PDF is a free tool you use in your web browser. It checks your PDF for common
-          accessibility problems, fixes what it can automatically, and shows you what to fix by hand.
+          UC San Diego Accessible PDF helps you make documents easier to use with screen readers and keyboards. Upload
+          a PDF, get an improved version, then follow a short checklist for anything that still needs manual edits.
         </p>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>2-Minute Quick Start</h2>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
-          <li>Upload your PDF on the App page.</li>
-          <li>Wait while the app reviews the file and makes automatic fixes.</li>
-          <li>Open the compare results and review the &ldquo;What To Do Next&rdquo; checklist.</li>
-          <li>Download the updated PDF and complete any remaining manual fixes.</li>
-          <li>Re-upload the revised file to confirm improvements before publishing.</li>
+          <li>Go to the App page and upload your PDF.</li>
+          <li>Wait for the review to finish (usually under a few minutes, depending on file size).</li>
+          <li>Download the remediated PDF.</li>
+          <li>Use the &ldquo;What To Do Next&rdquo; checklist to complete remaining manual fixes.</li>
+          <li>Re-upload the revised PDF for a final validation check before publishing.</li>
         </ol>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What It Does</h2>
+        <h2>What This Tool Is Best For</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Fast first-pass remediation of common PDF accessibility issues.</li>
+          <li>Identifying where manual edits are still required before publication.</li>
+          <li>Comparing before/after results so teams can quickly review progress.</li>
+        </ul>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>What Happens After You Upload</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          After you upload a file, the app follows a simple step-by-step process. Most of the work happens in your
-          browser:
+          The app runs a step-by-step workflow and shows progress as each phase completes:
         </p>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>
-            <strong>Read the file</strong> &mdash; Looks at the text, headings, links, forms, and file details.
+            <strong>Read the file</strong> &mdash; Reviews text, headings, links, forms, and metadata.
           </li>
           <li>
-            <strong>Read scanned pages</strong> &mdash; If your PDF is a scan, the app tries to turn images of text into
-            searchable text.
+            <strong>Read scanned pages</strong> &mdash; If the PDF is image-based, OCR is used to add searchable text.
           </li>
           <li>
-            <strong>Check for issues</strong> &mdash; Looks for common accessibility problems in headings, images,
-            tables, lists, links, forms, and other parts of the file.
+            <strong>Check for issues</strong> &mdash; Looks for common problems in headings, images, tables, lists,
+            links, and form fields.
           </li>
           <li>
             <strong>Fix what it can</strong> &mdash; Makes supported automatic fixes and builds an updated PDF.
@@ -48,23 +55,23 @@ export default function AboutPage() {
             results side by side.
           </li>
           <li>
-            <strong>Optional standards check</strong> &mdash; If your setup includes veraPDF, the app can run an extra
-            standards check on the updated file.
+            <strong>Optional standards check</strong> &mdash; If veraPDF is enabled in your environment, the app runs an
+            additional standards check.
           </li>
           <li>
-            <strong>Next steps</strong> &mdash; Gives you a clear checklist of what to fix manually before publishing.
+            <strong>Next steps</strong> &mdash; Produces a practical checklist of remaining manual fixes.
           </li>
         </ol>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What You Can Expect During Review</h2>
+        <h2>What You Should Still Review Manually</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>The app may run more than one fixing pass to get better results before it shows you the final output.</li>
-          <li>If a newer pass is worse, the app keeps the better version.</li>
-          <li>You can watch progress in real time with clear status updates.</li>
-          <li>Results are explained in plain language, including a practical &ldquo;What To Do Next&rdquo; checklist.</li>
-          <li>Before/after comparisons and download actions are grouped together to support quick review decisions.</li>
+          <li>Heading order and document structure in long or complex files.</li>
+          <li>Table headers, merged cells, and reading order in complex tables.</li>
+          <li>Meaningful alt text for charts, diagrams, and instructional images.</li>
+          <li>Color contrast and visual-only cues that automated checks may miss.</li>
+          <li>Final usability with assistive technology before publishing.</li>
         </ul>
       </section>
 
