@@ -1,4 +1,66 @@
-# LinkedIn VoiceOver Script: PDF Accessibility Remediator
+# LinkedIn VoiceOver Scripts: PDF Accessibility Remediator
+
+---
+
+## VERSION 2 — 45-Second Demo Script
+*(~115 words · synced to on-screen actions)*
+
+---
+
+**[0:00–0:05 — drag PDF into the upload zone]**
+
+I'm dropping a PDF into our accessibility remediator.
+It immediately starts auditing the document against 25 accessibility rules — all mapped to WCAG 2.1 AA.
+
+---
+
+**[0:06–0:16 — audit score and violations list appear]**
+
+Here's the result. This document scored a 32 out of 100.
+It has no structural tagging — meaning a screen reader can't distinguish a heading from a paragraph.
+It has images with no alt text, and missing language metadata.
+Each violation is flagged by severity and tells you exactly what's wrong.
+
+---
+
+**[0:17–0:28 — remediation runs, progress indicator, finishes]**
+
+Now watch the remediation.
+
+The tool automatically injects a semantic structure into the PDF — headings, paragraphs, lists, tables — the underlying architecture that assistive technology depends on.
+It adds metadata, sets the document language, and if the document is scanned, it runs OCR to make the text readable.
+
+---
+
+**[0:29–0:38 — side-by-side before/after, score jumps]**
+
+Score went from 32 to 71 — automatically.
+
+Left is the original, right is the remediated file. You can download it directly.
+
+---
+
+**[0:39–0:45 — manual action items list]**
+
+But here's what's honest about this tool:
+it tells you what it *couldn't* fix — missing alt text, ambiguous link text — and exactly what to do next.
+
+Automation handles the structure. Humans handle the meaning.
+
+---
+
+## DELIVERY NOTES (45-sec version)
+
+- **Word count:** ~115 words — keep your pace natural, not rushed. 45 seconds is tight but comfortable at a conversational clip.
+- **Don't narrate the obvious.** If the score is visibly jumping on screen, let the viewer see it for a beat before you say it.
+- **"Automation handles the structure. Humans handle the meaning."** — Land this line. Pause briefly before it. It's the thesis of the whole demo.
+- **Screen recording tip:** Pre-upload the PDF so it's ready to drag in the moment you start recording. Avoid any dead air waiting for the tool to load.
+
+---
+
+---
+
+## VERSION 1 — Full-Length Script (~2:30–3:00)
 
 **Target audience:** Broad professional audience — accessibility advocates, higher ed IT, web/document managers, compliance officers, and curious technologists.
 **Format:** Screen recording demo with voiceover narration
