@@ -15,6 +15,18 @@ function hashToHex(hash: ArrayBuffer): string {
     .join('');
 }
 
+function scoreValue(score: number | undefined): string {
+  return typeof score === 'number' ? `${score}%` : 'Unavailable';
+}
+
+function scoreTone(score: number | undefined): string {
+  if (typeof score !== 'number') return 'text-gray-500';
+  if (score >= 90) return 'text-green-700';
+  if (score >= 70) return 'text-[var(--ucsd-blue)]';
+  if (score >= 40) return 'text-amber-700';
+  return 'text-red-700';
+}
+
 function PdfPreviewPane({
   title,
   bytes,
@@ -78,7 +90,11 @@ function PdfPreviewPane({
   if (!bytes) {
     return (
       <div className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-text)]">
-        <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
+        <p className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">{title}</p>
+        <div className="mt-3 rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Accessibility Score</p>
+          <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(score)}`}>{scoreValue(score)}</p>
+        </div>
         <p className="mt-2">
           This preview is unavailable right now. Upload/process the file in this browser session, then open Compare again.
         </p>
@@ -89,10 +105,11 @@ function PdfPreviewPane({
   return (
     <div className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <p className="font-medium text-[var(--ucsd-navy)]">{title}</p>
-        <p className="text-sm text-[var(--ucsd-text)]">
-          {typeof score === 'number' ? `Accessibility Score: ${score}%` : 'Accessibility Score: unavailable'}
-        </p>
+        <p className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">{title}</p>
+        <div className="mt-3 rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Accessibility Score</p>
+          <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(score)}`}>{scoreValue(score)}</p>
+        </div>
         <details className="mt-1 text-xs text-[var(--ucsd-text)]">
           <summary className="cursor-pointer select-none">Advanced details</summary>
           <p className="mt-1">File size: {formatBytes(bytes.byteLength)}</p>
