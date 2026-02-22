@@ -7,46 +7,29 @@
 
 ---
 
-**[0:00–0:05 — drag PDF into the upload zone]**
+This is seven pages of scanned university letters — accreditation correspondence with official letterheads, seals, and handwritten signatures. It looks fine on screen. A screen reader sees a blank document.
 
-This is seven pages of scanned university letters — accreditation correspondence with official letterheads, seals, and handwritten signatures.
-It looks fine on screen. A screen reader sees a blank document.
+Here's what the audit finds. Every page is image-only — no selectable text, nothing assistive technology can parse. No structural tags, no language, no title. Each violation is listed by severity and mapped to its WCAG rule.
 
----
+Now watch. The tool runs OCR in the browser — pulling the printed text off each scanned page and embedding it as a real, readable text layer in the PDF. Structure, language metadata, and bookmarks go in at the same time.
 
-**[0:06–0:16 — audit score and violations list appear]**
-
-Here's what the audit finds.
-
-Every page is image-only — no selectable text, nothing assistive technology can parse.
-No structural tags, no language, no title.
-Each violation is listed by severity and mapped to its WCAG rule.
-
----
-
-**[0:17–0:28 — remediation runs, OCR progress visible, finishes]**
-
-Now watch.
-
-The tool runs OCR in the browser — pulling the printed text off each scanned page and embedding it as a real, readable text layer in the PDF.
-Structure, language metadata, and bookmarks go in at the same time.
-
----
-
-**[0:29–0:38 — side-by-side before/after, score jumps]**
-
-Score: [BEFORE] to [AFTER] — automatic.
-
-The remediated file now has real text. A screen reader can navigate it.
-Download it directly from here.
-
----
-
-**[0:39–0:45 — manual action items list]**
+Score: [BEFORE] to [AFTER] — automatic. The remediated file now has real text. A screen reader can navigate it. Download it directly from here.
 
 What's left for a human: alt text for the university seals and the handwritten signatures — things OCR can't describe.
 
 The body of the document? Done.
+
+---
+
+## SCREEN SYNC GUIDE
+
+| Timestamp | What's on screen |
+|-----------|-----------------|
+| 0:00–0:05 | Drag PDF into the upload zone |
+| 0:06–0:16 | Audit score and violations list appear |
+| 0:17–0:28 | Remediation runs, OCR progress visible, finishes |
+| 0:29–0:38 | Side-by-side before/after, score jumps |
+| 0:39–0:45 | Manual action items list |
 
 ---
 
@@ -70,83 +53,33 @@ The body of the document? Done.
 
 ---
 
-## SCRIPT
-
----
-
-**[OPENING — over a screen showing an inaccessible PDF being uploaded]**
-
-Every day, organizations publish PDFs that millions of people with disabilities simply can't use.
-
-Screen readers can't parse them. They have no logical structure. Images have no descriptions. Scanned pages are just pictures — invisible to assistive technology.
-
-Making those documents accessible has traditionally meant hours of manual work in Adobe Acrobat — per document. That's not scalable.
-
----
-
-**[CUT TO — the tool loading in the browser, a PDF being dropped into the upload zone]**
+Every day, organizations publish PDFs that millions of people with disabilities simply can't use. Screen readers can't parse them. They have no logical structure. Images have no descriptions. Scanned pages are just pictures — invisible to assistive technology. Making those documents accessible has traditionally meant hours of manual work in Adobe Acrobat — per document. That's not scalable.
 
 So we built a browser-based PDF accessibility remediator — and I want to walk you through exactly what it does, and — just as importantly — what it doesn't do.
 
-You start by uploading your PDF. The tool immediately begins analyzing it against more than 25 accessibility rules, each mapped to the WCAG 2.1 AA standard that governs digital accessibility compliance.
+You start by uploading your PDF. The tool immediately begins analyzing it against more than 25 accessibility rules, each mapped to the WCAG 2.1 AA standard that governs digital accessibility compliance. Within seconds, you get a score. It starts at 100 and is deducted based on the severity of what it finds. Critical issues — like a document that has no structural tagging at all — drop the score significantly. So does detecting a scanned document where all the text is actually just an image. Minor issues like missing metadata cost fewer points. The scoring is designed to reflect real-world impact on users who depend on assistive technology, not just a checkbox count.
+
+Now here's where the automation kicks in. The tool runs a remediation pipeline that makes a series of targeted, structural fixes to the PDF itself. It injects a semantic tag tree — the behind-the-scenes structure that tells screen readers what's a heading, what's a paragraph, what's a list, what's a table. It adds PDF/UA metadata, sets the document language, and generates bookmarks for long documents so users can navigate them. For scanned documents — pages that are just images of text — it runs optical character recognition and embeds a searchable text layer directly into the PDF. There's a cloud-based OCR service as the primary path, and a fallback that runs entirely in the browser if the service is unavailable. If an external PDF validator is configured, the tool can run the remediation up to three times in a loop, checking its own output each pass and selecting the version that shows the most measurable improvement.
+
+The result is a side-by-side view. Original on the left, remediated on the right. You can see the score change — typically a significant jump. You can download the remediated file directly. And you get a SHA-256 hash of both versions so you have a verifiable record of what changed.
+
+And this is the part I want to be direct about. Automation gets you a long way — we typically see 60 to 70 percent of accessibility violations resolved automatically. But there is a ceiling. The tool cannot write meaningful alt text for your images. It doesn't know what a chart is showing, or what a photo represents. It can flag that alt text is missing or looks like a filename — and it does — but a human needs to write it. It can flag links that say "click here" or "read more," but it can't rewrite them in context. Complex table header relationships, reading order in multi-column layouts, color contrast decisions that require design changes — these still require human judgment. So the tool generates a prioritized list of what's left to do: the manual fixes most likely to move the needle toward full compliance, ordered by impact.
+
+Accessibility remediation is not a fully solvable problem with today's automation. But most of the tedious, structural, rule-based work can be handled programmatically — and that's exactly what this tool does. It handles the 70 percent so your team can focus their time on the 30 percent that actually requires human understanding. If your organization publishes PDFs — and most do — I'd love to connect and talk about how this fits into a broader accessibility workflow.
 
 ---
 
-**[CUT TO — the audit results appearing, showing a score and list of violations]**
+## SCREEN SYNC GUIDE
 
-Within seconds, you get a score. It starts at 100 and is deducted based on the severity of what it finds.
-
-Critical issues — like a document that has no structural tagging at all — drop the score significantly. So does detecting a scanned document where all the text is actually just an image. Minor issues like missing metadata cost fewer points.
-
-The scoring is designed to reflect real-world impact on users who depend on assistive technology, not just a checkbox count.
-
----
-
-**[CUT TO — remediation running, progress indicators]**
-
-Now here's where the automation kicks in.
-
-The tool runs a remediation pipeline that makes a series of targeted, structural fixes to the PDF itself.
-
-It injects a semantic tag tree — the behind-the-scenes structure that tells screen readers what's a heading, what's a paragraph, what's a list, what's a table. It adds PDF/UA metadata, sets the document language, and generates bookmarks for long documents so users can navigate them.
-
-For scanned documents — pages that are just images of text — it runs optical character recognition and embeds a searchable text layer directly into the PDF. There's a cloud-based OCR service as the primary path, and a fallback that runs entirely in the browser if the service is unavailable.
-
-If an external PDF validator is configured, the tool can run the remediation up to three times in a loop, checking its own output each pass and selecting the version that shows the most measurable improvement.
-
----
-
-**[CUT TO — side-by-side comparison of original vs. remediated, before/after scores]**
-
-The result is a side-by-side view. Original on the left, remediated on the right.
-
-You can see the score change — typically a significant jump. You can download the remediated file directly. And you get a SHA-256 hash of both versions so you have a verifiable record of what changed.
-
----
-
-**[CUT TO — the "What To Do Next" section with manual action items highlighted]**
-
-And this is the part I want to be direct about.
-
-Automation gets you a long way — we typically see 60 to 70 percent of accessibility violations resolved automatically. But there is a ceiling.
-
-The tool cannot write meaningful alt text for your images. It doesn't know what a chart is showing, or what a photo represents. It can flag that alt text is missing or looks like a filename — and it does — but a human needs to write it.
-
-It can flag links that say "click here" or "read more," but it can't rewrite them in context.
-
-Complex table header relationships, reading order in multi-column layouts, color contrast decisions that require design changes — these still require human judgment.
-
-So the tool generates a prioritized list of what's left to do: the manual fixes most likely to move the needle toward full compliance, ordered by impact.
-
----
-
-**[CUT TO — speaking to camera or closing slide]**
-
-Accessibility remediation is not a fully solvable problem with today's automation. But most of the tedious, structural, rule-based work can be handled programmatically — and that's exactly what this tool does.
-
-It handles the 70 percent so your team can focus their time on the 30 percent that actually requires human understanding.
-
-If your organization publishes PDFs — and most do — I'd love to connect and talk about how this fits into a broader accessibility workflow.
+| Timestamp | What's on screen |
+|-----------|-----------------|
+| Opening | Inaccessible PDF being uploaded |
+| Cut 1 | Tool loading in browser, PDF dropped into upload zone |
+| Cut 2 | Audit results appearing, score and violations list |
+| Cut 3 | Remediation running, progress indicators |
+| Cut 4 | Side-by-side comparison, before/after scores |
+| Cut 5 | "What To Do Next" section with manual action items |
+| Closing | Speaking to camera or closing slide |
 
 ---
 
