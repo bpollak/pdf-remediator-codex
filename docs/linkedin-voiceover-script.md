@@ -3,58 +3,60 @@
 ---
 
 ## VERSION 2 — 45-Second Demo Script
-*(~115 words · synced to on-screen actions)*
+*(~115 words · synced to on-screen actions · tailored for a scanned letter)*
 
 ---
 
 **[0:00–0:05 — drag PDF into the upload zone]**
 
-I'm dropping a PDF into our accessibility remediator.
-It immediately starts auditing the document against 25 accessibility rules — all mapped to WCAG 2.1 AA.
+This is a scanned letter — the kind of PDF that looks fine on screen but is completely invisible to a screen reader.
+I'm uploading it now.
 
 ---
 
 **[0:06–0:16 — audit score and violations list appear]**
 
-Here's the result. This document scored a 32 out of 100.
-It has no structural tagging — meaning a screen reader can't distinguish a heading from a paragraph.
-It has images with no alt text, and missing language metadata.
-Each violation is flagged by severity and tells you exactly what's wrong.
+Here's what the audit finds.
+
+The entire document is image-only text — no selectable characters, nothing a screen reader can parse.
+No structural tags. No language. No title metadata.
+Every one of those violations is spelled out with its severity and its WCAG rule.
 
 ---
 
-**[0:17–0:28 — remediation runs, progress indicator, finishes]**
+**[0:17–0:28 — remediation runs, OCR progress visible, finishes]**
 
-Now watch the remediation.
+Now watch what happens.
 
-The tool automatically injects a semantic structure into the PDF — headings, paragraphs, lists, tables — the underlying architecture that assistive technology depends on.
-It adds metadata, sets the document language, and if the document is scanned, it runs OCR to make the text readable.
+The tool runs OCR directly in the browser — extracting the text from the scan and embedding it into the PDF as a real, readable text layer.
+It also injects document structure, sets the language, and adds metadata.
 
 ---
 
 **[0:29–0:38 — side-by-side before/after, score jumps]**
 
-Score went from 32 to 71 — automatically.
+That score jump — automatic.
 
-Left is the original, right is the remediated file. You can download it directly.
+The remediated file on the right now has actual text. A screen reader can read it.
+You can download it directly from here.
 
 ---
 
 **[0:39–0:45 — manual action items list]**
 
-But here's what's honest about this tool:
-it tells you what it *couldn't* fix — missing alt text, ambiguous link text — and exactly what to do next.
+And the tool tells you what's left to do manually — in this case, adding a meaningful document title.
 
-Automation handles the structure. Humans handle the meaning.
+The hard part — making the text exist — is done.
 
 ---
 
 ## DELIVERY NOTES (45-sec version)
 
-- **Word count:** ~115 words — keep your pace natural, not rushed. 45 seconds is tight but comfortable at a conversational clip.
-- **Don't narrate the obvious.** If the score is visibly jumping on screen, let the viewer see it for a beat before you say it.
-- **"Automation handles the structure. Humans handle the meaning."** — Land this line. Pause briefly before it. It's the thesis of the whole demo.
-- **Screen recording tip:** Pre-upload the PDF so it's ready to drag in the moment you start recording. Avoid any dead air waiting for the tool to load.
+- **Fill in the real scores** once you've run the document: replace "that score jump" with the actual before/after numbers (e.g., "Score went from 18 to 74").
+- **Word count:** ~115 words — natural conversational pace, not rushed.
+- **Let the OCR progress bar breathe.** Don't talk over it — the viewer should see it working. Time your narration to finish just as it completes.
+- **"The hard part — making the text exist — is done."** This is the landing line for a scanned doc demo. Pause before it.
+- **Screen recording tip:** Pre-load the file in the drop zone so you start recording the moment you drop it in.
 
 ---
 
