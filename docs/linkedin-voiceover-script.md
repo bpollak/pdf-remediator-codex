@@ -3,14 +3,14 @@
 ---
 
 ## VERSION 2 — 45-Second Demo Script
-*(~115 words · synced to on-screen actions · tailored for a scanned letter)*
+*(~115 words · synced to on-screen actions · uses Naac_appLetter-scanned.pdf)*
 
 ---
 
 **[0:00–0:05 — drag PDF into the upload zone]**
 
-This is a scanned letter — the kind of PDF that looks fine on screen but is completely invisible to a screen reader.
-I'm uploading it now.
+This is seven pages of scanned university letters — accreditation correspondence with official letterheads, seals, and handwritten signatures.
+It looks fine on screen. A screen reader sees a blank document.
 
 ---
 
@@ -18,45 +18,45 @@ I'm uploading it now.
 
 Here's what the audit finds.
 
-The entire document is image-only text — no selectable characters, nothing a screen reader can parse.
-No structural tags. No language. No title metadata.
-Every one of those violations is spelled out with its severity and its WCAG rule.
+Every page is image-only — no selectable text, nothing assistive technology can parse.
+No structural tags, no language, no title.
+Each violation is listed by severity and mapped to its WCAG rule.
 
 ---
 
 **[0:17–0:28 — remediation runs, OCR progress visible, finishes]**
 
-Now watch what happens.
+Now watch.
 
-The tool runs OCR directly in the browser — extracting the text from the scan and embedding it into the PDF as a real, readable text layer.
-It also injects document structure, sets the language, and adds metadata.
+The tool runs OCR in the browser — pulling the printed text off each scanned page and embedding it as a real, readable text layer in the PDF.
+Structure, language metadata, and bookmarks go in at the same time.
 
 ---
 
 **[0:29–0:38 — side-by-side before/after, score jumps]**
 
-That score jump — automatic.
+Score: [BEFORE] to [AFTER] — automatic.
 
-The remediated file on the right now has actual text. A screen reader can read it.
-You can download it directly from here.
+The remediated file now has real text. A screen reader can navigate it.
+Download it directly from here.
 
 ---
 
 **[0:39–0:45 — manual action items list]**
 
-And the tool tells you what's left to do manually — in this case, adding a meaningful document title.
+What's left for a human: alt text for the university seals and the handwritten signatures — things OCR can't describe.
 
-The hard part — making the text exist — is done.
+The body of the document? Done.
 
 ---
 
 ## DELIVERY NOTES (45-sec version)
 
-- **Fill in the real scores** once you've run the document: replace "that score jump" with the actual before/after numbers (e.g., "Score went from 18 to 74").
-- **Word count:** ~115 words — natural conversational pace, not rushed.
-- **Let the OCR progress bar breathe.** Don't talk over it — the viewer should see it working. Time your narration to finish just as it completes.
-- **"The hard part — making the text exist — is done."** This is the landing line for a scanned doc demo. Pause before it.
-- **Screen recording tip:** Pre-load the file in the drop zone so you start recording the moment you drop it in.
+- **Fill in [BEFORE] and [AFTER]** with the real scores after running it through the tool. For a fully scanned 7-page PDF, expect a very low starting score (likely 10–25) and a significant jump after OCR.
+- **Word count:** ~115 words — natural conversational pace fits 45 seconds comfortably.
+- **Let the OCR progress bar breathe.** Seven pages takes a moment. Don't talk over it — let the viewer watch it work.
+- **"The body of the document? Done."** is the landing line. Short pause before it.
+- **Screen recording tip:** Have the file ready to drag in the instant recording starts. No dead air.
 
 ---
 
