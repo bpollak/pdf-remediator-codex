@@ -2,11 +2,17 @@
 
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { IssueList } from '@/components/report/IssueList';
+import { useAppStore } from '@/stores/app-store';
 
 export default function FileReportPage({ params }: { params: { fileId: string } }) {
+  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+
   return (
     <div className="space-y-6">
-      <h1 className="break-words">Accessibility report: {params.fileId}</h1>
+      <div className="space-y-1">
+        <h1 className="break-words">Accessibility Report</h1>
+        <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
+      </div>
       <SummaryDashboard fileId={params.fileId} />
       <IssueList fileId={params.fileId} />
     </div>

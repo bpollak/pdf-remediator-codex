@@ -7,11 +7,17 @@ import { NextStepsPanel } from '@/components/report/NextStepsPanel';
 import { PublishingReadinessBanner } from '@/components/report/PublishingReadinessBanner';
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { VerificationPanel } from '@/components/report/VerificationPanel';
+import { useAppStore } from '@/stores/app-store';
 
 export default function ComparePage({ params }: { params: { fileId: string } }) {
+  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+
   return (
     <div className="space-y-6">
-      <h1 className="break-words">Before and after results: {params.fileId}</h1>
+      <div className="space-y-1">
+        <h1 className="break-words">Before and After Accessibility Report</h1>
+        <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
+      </div>
       <SideBySide fileId={params.fileId} />
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
