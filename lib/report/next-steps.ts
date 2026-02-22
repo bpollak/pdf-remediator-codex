@@ -104,7 +104,7 @@ export function buildManualNextSteps(input: {
   } else {
     steps.push({
       title: 'Run one final verification before publishing',
-      description: 'After manual updates, upload the revised PDF and confirm both the internal score and veraPDF result improve.',
+      description: 'After manual updates, upload the revised PDF and confirm both the Accessibility Score and veraPDF result improve.',
       severity: 'low'
     });
   }

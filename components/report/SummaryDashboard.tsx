@@ -49,7 +49,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       <ComplianceScore score={score} />
       {variant === 'remediated' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Internal score is based on this app&apos;s checks. Review the external verification panel for the PDF/UA standard result (PDF/UA means &quot;Universal Accessibility&quot;).
+          Accessibility Score is based on this app&apos;s checks. Review the external verification panel for the PDF/UA standard result (PDF/UA means &quot;Universal Accessibility&quot;).
         </p>
       )}
       {variant === 'remediated' && verapdfResult?.compliant === false && (
