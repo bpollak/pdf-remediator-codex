@@ -71,7 +71,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
       ) : null}
 
       {verification.summary ? (
-        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-text)] md:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-text)]">
           <div>
             <dt className="text-xs uppercase tracking-wide text-gray-500">Passed rules</dt>
             <dd>{metricValue(verification.summary.passedRules)}</dd>
@@ -80,20 +80,10 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
             <dt className="text-xs uppercase tracking-wide text-gray-500">Failed rules</dt>
             <dd>{metricValue(verification.summary.failedRules)}</dd>
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Passed checks</dt>
-            <dd>{metricValue(verification.summary.passedChecks)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Failed checks</dt>
-            <dd>{metricValue(verification.summary.failedChecks)}</dd>
-          </div>
         </dl>
       ) : null}
       {verification.summary ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          Next step: fix failed rules first, then fix remaining failed checks.
-        </p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Next step: prioritize failed rules.</p>
       ) : null}
 
       {statement ? (
