@@ -1,8 +1,36 @@
-export async function validatePdfFile(file: File): Promise<boolean> {
-  if (file.size > 50 * 1024 * 1024) return false;
-  if (!file.name.toLowerCase().endsWith('.pdf')) return false;
-  const bytes = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-  return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const HEADER_SCAN_BYTES = 1024;
+
+export interface PdfFileValidationResult {
+  ok: boolean;
+  reason?: string;
+}
+
+function hasPdfHeader(bytes: Uint8Array): boolean {
+  const signature = new TextDecoder().decode(bytes);
+  return signature.includes('%PDF-');
+}
+
+export async function validatePdfFile(file: File): Promise<PdfFileValidationResult> {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return { ok: false, reason: 'File is larger than 50 MB.' };
+  }
+
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    return { ok: false, reason: 'File extension must be .pdf.' };
+  }
+
+  try {
+    const scanSize = Math.min(file.size, HEADER_SCAN_BYTES);
+    const bytes = new Uint8Array(await file.slice(0, scanSize).arrayBuffer());
+    if (!hasPdfHeader(bytes)) {
+      return { ok: false, reason: 'File content does not look like a valid PDF.' };
+    }
+  } catch {
+    return { ok: false, reason: 'Could not read the selected file.' };
+  }
+
+  return { ok: true };
 }
 
 export function formatBytes(size: number): string {
