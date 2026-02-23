@@ -1,5 +1,5 @@
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
-const HEADER_SCAN_BYTES = 1024;
+const HEADER_SCAN_BYTES = 16 * 1024;
 
 export interface PdfFileValidationResult {
   ok: boolean;
@@ -9,6 +9,11 @@ export interface PdfFileValidationResult {
 function hasPdfHeader(bytes: Uint8Array): boolean {
   const signature = new TextDecoder().decode(bytes);
   return signature.includes('%PDF-');
+}
+
+function isPdfMimeType(type: string | undefined): boolean {
+  if (!type) return false;
+  return type === 'application/pdf' || type === 'application/x-pdf';
 }
 
 export async function validatePdfFile(file: File): Promise<PdfFileValidationResult> {
@@ -24,7 +29,11 @@ export async function validatePdfFile(file: File): Promise<PdfFileValidationResu
     const scanSize = Math.min(file.size, HEADER_SCAN_BYTES);
     const bytes = new Uint8Array(await file.slice(0, scanSize).arrayBuffer());
     if (!hasPdfHeader(bytes)) {
-      return { ok: false, reason: 'File content does not look like a valid PDF.' };
+      // Some PDFs include a long preamble before %PDF-. Accept trusted MIME types
+      // and defer stricter parsing to the processing pipeline.
+      if (!isPdfMimeType(file.type)) {
+        return { ok: false, reason: 'File content does not look like a valid PDF.' };
+      }
     }
   } catch {
     return { ok: false, reason: 'Could not read the selected file.' };
