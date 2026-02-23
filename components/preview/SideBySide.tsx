@@ -121,6 +121,7 @@ function PdfPreviewPane({
       <iframe
         src={blobUrl ?? undefined}
         title={title}
+        sandbox="allow-same-origin"
         className="h-[70vh] w-full rounded border border-[rgba(24,43,73,0.2)]"
       />
       <a

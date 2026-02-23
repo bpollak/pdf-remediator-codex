@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const DEFAULT_OCR_TIMEOUT_MS = 240_000;
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.OCR_TIMEOUT_MS);
@@ -13,6 +16,14 @@ function getConfiguredTimeoutMs(): number {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+    );
+  }
   const serviceUrl = process.env.OCR_SERVICE_URL;
   if (!serviceUrl) {
     return NextResponse.json(
@@ -65,7 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: `OCR backend failed with status ${upstream.status}.`,
-          detail: message.slice(0, 500)
+          ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
         },
         { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 }
       );
@@ -90,7 +101,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to contact OCR backend.',
-        detail: error instanceof Error ? error.message : 'Unknown error'
+        ...(process.env.NODE_ENV === 'development'
+          ? { detail: error instanceof Error ? error.message : 'Unknown error' }
+          : {})
       },
       { status: 502 }
     );

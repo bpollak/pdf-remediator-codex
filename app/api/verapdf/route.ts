@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeVerapdfPayload } from '@/lib/verapdf/normalize';
+import { rateLimit } from '@/lib/rate-limit';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,8 @@ export const maxDuration = 300;
 const DEFAULT_VERAPDF_TIMEOUT_MS = 120_000;
 const DEFAULT_VERAPDF_PROFILE = 'ua1';
 const DEFAULT_LOCAL_VERAPDF_URL = 'http://127.0.0.1:8081';
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.VERAPDF_TIMEOUT_MS);
@@ -124,14 +127,22 @@ export async function GET() {
       configured: true,
       reachable,
       source: resolved.source,
-      profile,
-      serviceUrl
+      profile
     },
     { status: reachable ? 200 : 503 }
   );
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+    );
+  }
+
   const resolved = resolveServiceUrl();
   const serviceUrl = resolved.url;
   if (!serviceUrl) {
@@ -194,7 +205,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: `veraPDF backend failed with status ${upstream.status}.`,
-          detail: message.slice(0, 500)
+          ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
         },
         { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 }
       );
@@ -230,7 +241,9 @@ export async function POST(request: NextRequest) {
           resolved.source === 'dev-default'
             ? 'Failed to contact local veraPDF backend at http://127.0.0.1:8081. Start it with docker compose -f docker-compose.verapdf.yml up -d.'
             : 'Failed to contact veraPDF backend.',
-        detail: error instanceof Error ? error.message : 'Unknown error'
+        ...(process.env.NODE_ENV === 'development'
+          ? { detail: error instanceof Error ? error.message : 'Unknown error' }
+          : {})
       },
       { status: 502 }
     );
