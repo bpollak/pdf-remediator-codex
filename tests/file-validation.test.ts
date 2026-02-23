@@ -33,6 +33,19 @@ describe('PDF upload validation', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('accepts delayed-header PDFs when MIME type is missing', async () => {
+    const bytes = fixture('fixtures/accessible.pdf');
+    const preamble = new Uint8Array(8 * 1024).fill(0x20);
+    const delayedHeaderBytes = new Uint8Array(preamble.length + bytes.length);
+    delayedHeaderBytes.set(preamble, 0);
+    delayedHeaderBytes.set(bytes, preamble.length);
+
+    const file = new File([delayedHeaderBytes], 'delayed-header-no-mime.pdf');
+    const result = await validatePdfFile(file);
+
+    expect(result.ok).toBe(true);
+  });
+
   it('rejects non-PDF files masquerading as .pdf when MIME type is not PDF', async () => {
     const textBytes = new TextEncoder().encode('hello world');
     const file = new File([textBytes], 'not-a-pdf.pdf', { type: 'text/plain' });

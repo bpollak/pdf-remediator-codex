@@ -12,8 +12,13 @@ function hasPdfHeader(bytes: Uint8Array): boolean {
 }
 
 function isPdfMimeType(type: string | undefined): boolean {
-  if (!type) return false;
-  return type === 'application/pdf' || type === 'application/x-pdf';
+  if (!type) return true;
+  const normalized = type.toLowerCase();
+  return (
+    normalized === 'application/pdf' ||
+    normalized === 'application/x-pdf' ||
+    normalized === 'application/octet-stream'
+  );
 }
 
 export async function validatePdfFile(file: File): Promise<PdfFileValidationResult> {
