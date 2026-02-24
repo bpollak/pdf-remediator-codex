@@ -36,6 +36,7 @@ export function QueueProcessor() {
   const processing = useRef(new Set<string>());
 
   useEffect(() => {
+    if (processing.current.size > 0) return;
     const next = files.find((file) => file.status === 'queued' && !processing.current.has(file.id));
     if (!next) return;
 
