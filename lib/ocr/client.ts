@@ -3,13 +3,24 @@ import { mapToTesseractLang } from './language';
 const OCR_API_PATH = '/api/ocr';
 const CLIENT_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 2;
-const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+const RETRYABLE_STATUSES = new Set([502, 504]);
+const SERVICE_UNAVAILABLE_COOLDOWN_MS = 5 * 60_000;
+const SERVICE_UNAVAILABLE_STATUSES = new Set([404, 501, 503]);
+let serviceUnavailableUntil = 0;
 
 function summarizeError(status: number): string {
   if (status === 404 || status === 501 || status === 503) return 'OCR service unavailable';
   if (status === 413) return 'OCR input exceeds deployment upload limits';
   if (status === 504) return 'OCR request timed out';
   return `OCR request failed (${status})`;
+}
+
+function isServiceUnavailable(status: number): boolean {
+  return SERVICE_UNAVAILABLE_STATUSES.has(status);
+}
+
+function markServiceUnavailable(): void {
+  serviceUnavailableUntil = Date.now() + SERVICE_UNAVAILABLE_COOLDOWN_MS;
 }
 
 function delay(ms: number): Promise<void> {
@@ -30,7 +41,15 @@ async function attemptOcrFetch(formData: FormData, signal: AbortSignal): Promise
   });
 }
 
+export function __resetOcrApiCircuitForTests() {
+  serviceUnavailableUntil = 0;
+}
+
 export async function runOcrViaApi(bytes: ArrayBuffer, fileName: string, language?: string): Promise<OcrResult> {
+  if (Date.now() < serviceUnavailableUntil) {
+    return { attempted: false, reason: 'OCR service unavailable' };
+  }
+
   const formData = new FormData();
   formData.append('file', new File([bytes], fileName, { type: 'application/pdf' }));
   formData.append('language', mapToTesseractLang(language));
@@ -50,6 +69,10 @@ export async function runOcrViaApi(bytes: ArrayBuffer, fileName: string, languag
 
       if (!response.ok) {
         lastReason = summarizeError(response.status);
+        if (isServiceUnavailable(response.status)) {
+          markServiceUnavailable();
+          return { attempted: true, reason: lastReason };
+        }
         if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_RETRIES) {
           continue; // retry on transient errors
         }
