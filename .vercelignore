@@ -1,0 +1,8 @@
+.git
+.gitignore
+.next
+node_modules
+.claude
+test-results
+public/linkedin-post.mov
+public/linkedin-post-1.2x.mov
