@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { buildEvidencePack } from '@/lib/report/evidence-pack';
 import { useAppStore } from '@/stores/app-store';
 
 export function CompareActions({ fileId }: { fileId: string }) {
@@ -19,6 +20,18 @@ export function CompareActions({ fileId }: { fileId: string }) {
   }, [blobUrl]);
 
   const downloadName = file ? `remediated-${file.name}` : 'remediated.pdf';
+
+  function downloadEvidencePack() {
+    if (!file) return;
+    const payload = buildEvidencePack(file);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${file.name.replace(/\.pdf$/i, '')}-qa-evidence-pack.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
@@ -47,6 +60,13 @@ export function CompareActions({ fileId }: { fileId: string }) {
         >
           Open remediated PDF
         </a>
+        <button
+          type="button"
+          onClick={downloadEvidencePack}
+          className="inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2 text-sm font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
+        >
+          Download QA evidence pack (JSON)
+        </button>
       </div>
     </section>
   );

@@ -22,7 +22,8 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
     remediatedFindings,
     verapdfResult: file?.verapdfResult,
     remediationStopReason: file?.remediationStopReason,
-    remediationMode: file?.remediationMode
+    remediationMode: file?.remediationMode,
+    sourceType: file?.sourceType
   });
 
   return (

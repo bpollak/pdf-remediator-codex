@@ -15,6 +15,9 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     highlights: [
       'Added score guardrails so critical structural risks cannot be reported as fully accessible.',
       'Added explicit remediation mode labeling: content-bound vs analysis-only.',
+      'Added source-type assessment to flag checker/report artifacts vs source content PDFs.',
+      'Added Structural Integrity, Alt Text, and Manual Structure workspaces on compare view.',
+      'Added QA Evidence Pack export for audit-ready before/after reporting.',
       'Moved to compact immutable remediation metadata to reduce second-pass drift.',
       'Hardened table and image heuristics to reduce synthetic structures and better flag true image elements.',
       'Expanded regression coverage with PDF Accessibility agent fixture checks.'

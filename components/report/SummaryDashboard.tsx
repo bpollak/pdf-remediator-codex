@@ -68,6 +68,11 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
           Structural remediation mode is analysis-only for this file. Content-bound tagging was not guaranteed and should be completed manually.
         </p>
       )}
+      {variant === 'remediated' && file?.sourceType === 'checker-report-artifact' && (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Source assessment indicates this is likely a checker/report artifact, not a source content PDF.
+        </p>
+      )}
       {variant === 'remediated' && verapdfResult?.compliant === false && (
         <p className="text-sm text-[var(--ucsd-text)]">
           Internal fixes improved this file, but external verification still found issues to resolve manually.

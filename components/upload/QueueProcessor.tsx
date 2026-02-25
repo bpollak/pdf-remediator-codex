@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { runAudit } from '@/lib/audit/engine';
 import type { AuditResult } from '@/lib/audit/types';
 import { parsePdfBytes } from '@/lib/pdf/parser';
+import { classifyPdfSource } from '@/lib/pdf/source-type';
 import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { runOcrViaApi } from '@/lib/ocr/client';
 import { isLikelyScannedPdf } from '@/lib/ocr/detection';
@@ -27,6 +28,7 @@ interface RemediationIterationArtifact {
   internalScore: number;
   failureScore?: number;
   remediationMode: RemediationMode;
+  remediatedParsedData: ParsedPDF;
   verapdfResult: VerapdfResult;
   remediatedBytes: ArrayBuffer;
   postRemediationAudit: AuditResult;
@@ -54,6 +56,7 @@ export function QueueProcessor() {
         updateFile(next.id, { status: 'parsing', progress: 10 });
         const uploadedBytes = next.uploadedBytes.slice(0);
         const originalParsedData = await parsePdfBytes(uploadedBytes.slice(0));
+        const sourceAssessment = classifyPdfSource(next.name, originalParsedData);
         let remediationSourceBytes = uploadedBytes.slice(0);
         let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
@@ -92,6 +95,10 @@ export function QueueProcessor() {
           status: 'auditing',
           progress: 45,
           parsedData: originalParsedData,
+          sourceType: sourceAssessment.type,
+          sourceTypeConfidence: sourceAssessment.confidence,
+          sourceTypeReasons: sourceAssessment.reasons,
+          sourceTypeSuggestedAction: sourceAssessment.suggestedAction,
           ocrAttempted,
           ocrApplied,
           ocrReason
@@ -144,10 +151,11 @@ export function QueueProcessor() {
             iteration,
             internalScore: postRemediationAudit.score,
             failureScore,
-            remediationMode: remediationModeForParsed(remediatedParsedData),
-            verapdfResult,
-            remediatedBytes: remediatedBytes.slice(0),
-            postRemediationAudit
+              remediationMode: remediationModeForParsed(remediatedParsedData),
+              remediatedParsedData,
+              verapdfResult,
+              remediatedBytes: remediatedBytes.slice(0),
+              postRemediationAudit
           });
 
           const loopDecision = decideRemediationLoop({
@@ -188,6 +196,7 @@ export function QueueProcessor() {
           ocrApplied,
           ocrReason,
           remediatedBytes: selectedArtifact.remediatedBytes,
+          remediatedParsedData: selectedArtifact.remediatedParsedData,
           postRemediationAudit: selectedArtifact.postRemediationAudit,
           remediationMode: selectedArtifact.remediationMode,
           verapdfResult: selectedArtifact.verapdfResult,

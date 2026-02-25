@@ -2,6 +2,7 @@ import type { AuditFinding } from '@/lib/audit/types';
 import type { RemediationMode } from '@/lib/pdf/types';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import type { SourceType } from '@/lib/pdf/source-type';
 import { findingActionTitle, findingDescription, findingDetails } from './finding-copy';
 
 export interface NextStepItem {
@@ -49,11 +50,21 @@ export function buildManualNextSteps(input: {
   verapdfResult?: VerapdfResult;
   remediationStopReason?: RemediationStopReason;
   remediationMode?: RemediationMode;
+  sourceType?: SourceType;
 }): NextStepItem[] {
-  const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode } = input;
+  const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode, sourceType } = input;
   const steps: NextStepItem[] = [];
   const manualPathHint =
     'If you use Acrobat, fix issues in Tags and Accessibility Checker. If you edit in Word or PowerPoint, update the source file, export a new PDF, then re-upload.';
+
+  if (sourceType === 'checker-report-artifact') {
+    steps.push({
+      title: 'Use the source content PDF (not checker report exports)',
+      description:
+        'This file is likely a checker/report artifact. Upload the original source document to generate publishable remediation output and meaningful accessibility scoring.',
+      severity: 'high'
+    });
+  }
 
   if (remediationMode === 'analysis-only') {
     steps.push({

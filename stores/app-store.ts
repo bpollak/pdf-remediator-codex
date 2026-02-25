@@ -6,6 +6,7 @@ import type { AuditResult } from '@/lib/audit/types';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import type { RemediationIterationSummary, RemediationStopReason } from '@/lib/remediate/loop';
 import type { RemediationMode } from '@/lib/pdf/types';
+import type { SourceType, SourceTypeConfidence } from '@/lib/pdf/source-type';
 
 export interface FileEntry {
   id: string;
@@ -18,10 +19,15 @@ export interface FileEntry {
   ocrApplied?: boolean;
   ocrReason?: string;
   parsedData?: ParsedPDF;
+  remediatedParsedData?: ParsedPDF;
   auditResult?: AuditResult;
   remediatedBytes?: ArrayBuffer;
   postRemediationAudit?: AuditResult;
   remediationMode?: RemediationMode;
+  sourceType?: SourceType;
+  sourceTypeConfidence?: SourceTypeConfidence;
+  sourceTypeReasons?: string[];
+  sourceTypeSuggestedAction?: string;
   verapdfResult?: VerapdfResult;
   remediationIterations?: RemediationIterationSummary[];
   remediationStopReason?: RemediationStopReason;

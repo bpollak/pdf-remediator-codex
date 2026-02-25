@@ -53,6 +53,12 @@ Run the PDF accessibility regression agent checks (structure binding, two-pass s
 npm run test:pdf-agent
 ```
 
+Run the stricter release gate suite before deployment:
+
+```bash
+npm run test:release-gate
+```
+
 Agent definition and evaluation scope:
 
 - `docs/qa/pdf-accessibility-agent.md`
@@ -61,6 +67,16 @@ Current remediation policy:
 
 - If content-bound structure cannot be guaranteed, output is marked `analysis-only` and manual structural tagging is required.
 - Remediated Automated Check Score cannot display `100%` unless internal critical findings are clear and external veraPDF verification is compliant.
+- Files that look like checker/report artifacts are flagged as non-source inputs so users can switch to the original content PDF.
+
+### Manual review workspaces
+
+On the compare page, the app now includes:
+
+- `Structural Integrity` panel (source-type assessment + StructTree/MCID/ParentTree trust signals).
+- `Alt Text Workspace` (draft/export alt-text worksheet JSON/CSV).
+- `Manual Structure Workspace` (heading/bookmark suggestions + table-confidence review + exportable plan).
+- `QA Evidence Pack` export for before/after findings, structure metrics, and verification results.
 
 ### Vercel deployment
 

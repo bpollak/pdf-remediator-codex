@@ -21,6 +21,14 @@ function getReadinessState(file: FileEntry | undefined): {
     };
   }
 
+  if (file.sourceType === 'checker-report-artifact') {
+    return {
+      state: 'needs-fixes' as const,
+      message:
+        'This file appears to be a checker/report artifact. Use the original source document for remediation before publishing decisions.'
+    };
+  }
+
   const remainingInternal = file.postRemediationAudit?.findings.length ?? 0;
   const failedRules = file.verapdfResult?.summary?.failedRules ?? 0;
   const failedChecks = file.verapdfResult?.summary?.failedChecks ?? 0;

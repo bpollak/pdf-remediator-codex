@@ -18,6 +18,9 @@ function statusLabel(status: FileEntry['status']): string {
 
 function statusHint(file: FileEntry): string | null {
   const { status } = file;
+  if (file.sourceType === 'checker-report-artifact') {
+    return 'This file looks like a checker/report artifact. Upload the source PDF for publishable remediation output.';
+  }
   if (status === 'queued') return 'Waiting to start.';
   if (status === 'parsing') return 'Reading document text and structure.';
   if (status === 'ocr') return 'Trying OCR because this looks like a scanned file.';
@@ -72,6 +75,11 @@ export function FileCard({ file }: { file: FileEntry }) {
         />
       </div>
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">{statusHint(file)}</p>
+      {file.sourceType && (
+        <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+          Source type: {file.sourceType.replace(/-/g, ' ')} ({file.sourceTypeConfidence ?? 'n/a'} confidence)
+        </p>
+      )}
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
       {isProcessed ? (
