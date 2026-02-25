@@ -168,12 +168,61 @@ export function detectListItems(parsed: ParsedPDF): Array<{ text: string; page: 
 }
 
 export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page: number }> {
-  return parsed.textItems
+  const normalized = parsed.textItems
     .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
     .filter((item) => item.text.length > 0 && !LIST_ITEM_PATTERN.test(item.text))
-    .sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x)
-    .slice(0, 600)
-    .map((item) => ({ text: item.text, page: item.page }));
+    .sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
+
+  const paragraphs: Array<{ text: string; page: number }> = [];
+  const MAX_PARAGRAPH_LENGTH = 900;
+  const X_ALIGNMENT_TOLERANCE = 28;
+  const MAX_LINE_GAP = 28;
+
+  let currentPage: number | null = null;
+  let currentText = '';
+  let previousItem: (typeof normalized)[number] | null = null;
+
+  function flushParagraph() {
+    const text = currentText.replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    if (currentPage === null) return;
+    paragraphs.push({ text, page: currentPage });
+  }
+
+  for (const item of normalized) {
+    if (!previousItem) {
+      currentPage = item.page;
+      currentText = item.text;
+      previousItem = item;
+      continue;
+    }
+
+    const samePage = item.page === previousItem.page;
+    const yGap = previousItem.y - item.y;
+    const sameColumn = Math.abs(item.x - previousItem.x) <= X_ALIGNMENT_TOLERANCE;
+    const similarFont = Math.abs(item.fontSize - previousItem.fontSize) <= 2;
+    const shouldMerge =
+      samePage &&
+      sameColumn &&
+      similarFont &&
+      yGap >= -1 &&
+      yGap <= MAX_LINE_GAP &&
+      currentText.length + item.text.length + 1 <= MAX_PARAGRAPH_LENGTH;
+
+    if (!shouldMerge) {
+      flushParagraph();
+      currentPage = item.page;
+      currentText = item.text;
+      previousItem = item;
+      continue;
+    }
+
+    currentText = `${currentText} ${item.text}`;
+    previousItem = item;
+  }
+
+  flushParagraph();
+  return paragraphs.slice(0, 400);
 }
 
 /**
@@ -183,15 +232,28 @@ export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page:
 export function detectTables(parsed: ParsedPDF): DetectedTable[] {
   const tables: DetectedTable[] = [];
   const Y_TOLERANCE = 3;
+  const X_TOLERANCE = 15;
+  const COLUMN_MATCH_TOLERANCE = 22;
   const MIN_COLUMNS = 2;
-  const MIN_ROWS = 2;
+  const MIN_ROWS = 3;
+  const MAX_COLUMNS = 8;
+  const MAX_AVG_CELL_LENGTH = 45;
+  const LONG_CELL_LENGTH = 80;
+  const MAX_LONG_CELL_RATIO = 0.35;
+  const MIN_ALIGNED_ROW_RATIO = 0.75;
 
   for (let page = 1; page <= parsed.pageCount; page++) {
+    const pageImageCount = parsed.images.filter((image) => image.page === page).length;
     const pageItems = parsed.textItems
-      .filter((item) => item.page === page && item.text.trim().length > 0)
+      .filter((item) => item.page === page)
+      .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
+      .filter((item) => item.text.length > 0 && item.text.length <= 120)
       .sort((a, b) => b.y - a.y || a.x - b.x);
 
     if (pageItems.length < MIN_ROWS * MIN_COLUMNS) continue;
+    // Infographic-like pages often contain many image draws and sparse/non-tabular text.
+    // Avoid synthesizing table tags on those layouts.
+    if (pageImageCount >= 4 && pageItems.length < 120) continue;
 
     // Cluster items into rows by y-coordinate
     const rowBuckets = new Map<number, TextItem[]>();
@@ -219,16 +281,46 @@ export function detectTables(parsed: ParsedPDF): DetectedTable[] {
 
     // Validate column alignment: items across rows should share x-positions
     const allXPositions = multiItemRows.flatMap(([, items]) => items.map((i) => Math.round(i.x)));
-    const xClusters = clusterValues(allXPositions, 15);
+    const xClusters = clusterValues(allXPositions, X_TOLERANCE);
 
-    if (xClusters.length < MIN_COLUMNS) continue;
+    if (xClusters.length < MIN_COLUMNS || xClusters.length > MAX_COLUMNS) continue;
+
+    const alignedRows = multiItemRows
+      .map(([y, items]) => {
+        const withCluster = items
+          .map((item) => ({ item, cluster: nearestClusterIndex(item.x, xClusters, COLUMN_MATCH_TOLERANCE) }))
+          .filter((entry) => entry.cluster >= 0)
+          .sort((a, b) => a.item.x - b.item.x);
+        const distinctClusters = new Set(withCluster.map((entry) => entry.cluster));
+        return {
+          y,
+          cells: withCluster.map((entry) => entry.item),
+          distinctClusterCount: distinctClusters.size
+        };
+      })
+      .filter((row) => row.distinctClusterCount >= MIN_COLUMNS);
+
+    if (alignedRows.length < MIN_ROWS) continue;
+    if (alignedRows.length / multiItemRows.length < MIN_ALIGNED_ROW_RATIO) continue;
+
+    const allCellText = alignedRows.flatMap((row) => row.cells.map((cell) => cell.text));
+    const avgCellLength = allCellText.reduce((sum, text) => sum + text.length, 0) / Math.max(1, allCellText.length);
+    const longCellCount = allCellText.filter((text) => text.length >= LONG_CELL_LENGTH).length;
+    const longCellRatio = longCellCount / Math.max(1, allCellText.length);
+    if (avgCellLength > MAX_AVG_CELL_LENGTH || longCellRatio > MAX_LONG_CELL_RATIO) continue;
+
+    const firstRowCells = alignedRows[0]!.cells;
+    const hasHeaderSignal =
+      firstRowCells.some((cell) => cell.bold || /bold|black|demi|semi/i.test(cell.fontName)) ||
+      firstRowCells.every((cell) => cell.text.length <= 40);
+    if (!hasHeaderSignal) continue;
 
     // Build the table structure
-    const rows = multiItemRows.map(([, items], rowIndex) => {
-      const sortedCells = items
+    const rows = alignedRows.map((row, rowIndex) => {
+      const sortedCells = row.cells
         .sort((a, b) => a.x - b.x)
         .map((item) => ({
-          text: item.text.replace(/\s+/g, ' ').trim(),
+          text: item.text,
           x: item.x,
           y: item.y,
           isHeader: rowIndex === 0 || !!(item.bold || /bold/i.test(item.fontName)),
@@ -240,6 +332,22 @@ export function detectTables(parsed: ParsedPDF): DetectedTable[] {
   }
 
   return tables;
+}
+
+function nearestClusterIndex(value: number, clusters: number[], tolerance: number): number {
+  if (!clusters.length) return -1;
+  let bestIndex = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < clusters.length; index += 1) {
+    const distance = Math.abs(value - clusters[index]!);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+
+  return bestDistance <= tolerance ? bestIndex : -1;
 }
 
 /** Simple 1D clustering: group values within `tolerance` of each other. */

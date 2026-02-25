@@ -16,6 +16,8 @@ export function findingActionTitle(finding: AuditFinding): string {
       return 'Set the document language';
     case 'DOC-004':
       return 'Run OCR and rebuild tags for scanned content';
+    case 'DOC-005':
+      return 'Bind tags to real page content before publishing';
     case 'HDG-001':
       return 'Fix heading levels so they do not skip';
     case 'HDG-002':
@@ -78,6 +80,8 @@ function manualFixHint(ruleId: string): string | undefined {
       return 'Set the primary language in document properties and confirm non-default language spans are tagged.';
     case 'DOC-004':
       return 'Run OCR on scanned pages first, then regenerate tags and reading order before saving.';
+    case 'DOC-005':
+      return 'In Acrobat Tags, ensure each StructElem expands to marked content and validate ParentTree/MCID associations.';
     case 'HDG-001':
     case 'HDG-002':
       return 'Apply real heading tags (H1/H2/H3) in sequence and keep one clear H1 near the document start.';

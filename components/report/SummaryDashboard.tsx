@@ -3,6 +3,7 @@
 import { useAppStore } from '@/stores/app-store';
 import { ComplianceScore } from './ComplianceScore';
 import { ALL_CATEGORIES, type Category } from '@/lib/audit/types';
+import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -32,7 +33,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
     );
   }
 
-  const { findings, score } = auditResult;
+  const { findings } = auditResult;
+  const displayedScore = computeDisplayedAutomatedScore({
+    auditResult,
+    variant,
+    verapdfResult
+  });
 
   const criticalCount = findings.filter((f) => f.severity === 'critical').length;
   const majorCount = findings.filter((f) => f.severity === 'major').length;
@@ -46,10 +52,20 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   return (
     <section className="space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       {/* Score */}
-      <ComplianceScore score={score} />
+      <ComplianceScore score={displayedScore ?? auditResult.score} />
       {variant === 'remediated' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Accessibility Score is based on this app&apos;s checks. Review the external verification panel for the PDF/UA standard result (PDF/UA means &quot;Universal Accessibility&quot;).
+          Automated Check Score is based on this app&apos;s checks. Review the external verification panel for the PDF/UA standard result (PDF/UA means &quot;Universal Accessibility&quot;).
+        </p>
+      )}
+      {variant === 'remediated' && displayedScore !== undefined && displayedScore < auditResult.score && (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Perfect automated scoring requires both zero internal critical findings and a compliant external PDF/UA verification result.
+        </p>
+      )}
+      {variant === 'remediated' && file?.remediationMode === 'analysis-only' && (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Structural remediation mode is analysis-only for this file. Content-bound tagging was not guaranteed and should be completed manually.
         </p>
       )}
       {variant === 'remediated' && verapdfResult?.compliant === false && (

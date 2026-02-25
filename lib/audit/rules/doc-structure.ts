@@ -65,5 +65,25 @@ export const docStructureRules: AuditRule[] = [
             autoFixable: true
           }]
         : []
+  },
+  {
+    id: 'DOC-005',
+    evaluate: ({ parsed }) => {
+      const summary = parsed.structureBinding;
+      if (!parsed.hasStructTree || !summary) return [];
+      if (summary.structElemCount === 0) return [];
+      if (summary.hasContentBinding) return [];
+
+      return [{
+        ruleId: 'DOC-005',
+        category: 'Document Structure',
+        severity: 'critical',
+        description: 'Tag tree exists but is not bound to marked content (/MCID or ParentTree entries).',
+        wcagCriterion: '1.3.1 Info and Relationships',
+        location: { element: 'StructTreeRoot' },
+        recommendation: 'Bind structure tags to content items before claiming tagged accessibility output.',
+        autoFixable: false
+      }];
+    }
   }
 ];

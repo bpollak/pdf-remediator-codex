@@ -45,6 +45,23 @@ npm run a11y:scan
 
 Reports are saved to `docs/ux/a11y-scan/`.
 
+### PDF accessibility regression agent
+
+Run the PDF accessibility regression agent checks (structure binding, two-pass stability, and fixture regressions):
+
+```bash
+npm run test:pdf-agent
+```
+
+Agent definition and evaluation scope:
+
+- `docs/qa/pdf-accessibility-agent.md`
+
+Current remediation policy:
+
+- If content-bound structure cannot be guaranteed, output is marked `analysis-only` and manual structural tagging is required.
+- Remediated Automated Check Score cannot display `100%` unless internal critical findings are clear and external veraPDF verification is compliant.
+
 ### Vercel deployment
 
 Vercel cannot run Docker Compose in-serverless runtime. For production, host veraPDF REST externally and set:

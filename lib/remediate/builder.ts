@@ -1,21 +1,51 @@
-import { PDFDocument, PDFName, StandardFonts, rgb } from 'pdf-lib';
-import type { ParsedPDF } from '@/lib/pdf/types';
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  PDFNull,
+  PDFNumber,
+  PDFOperator,
+  PDFOperatorNames,
+  StandardFonts,
+  TextRenderingMode,
+  beginText,
+  endMarkedContent,
+  endText,
+  popGraphicsState,
+  pushGraphicsState,
+  setFontAndSize,
+  setTextMatrix,
+  setTextRenderingMode,
+  showText,
+  rgb
+} from 'pdf-lib';
+import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { extractRemediationPlan } from './extractor';
 import { mapFontName } from './font-mapper';
-import { buildTagTree, type TagNode } from './tagger';
+import { buildTagTree } from './tagger';
 import { injectStructTree } from './struct-tree';
 import { encodeManifest, MANIFEST_PREFIX } from './manifest';
-import { LIST_ITEM_PATTERN } from '@/lib/utils/patterns';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 
-const MAX_TAGS_IN_MANIFEST = 1200;
-const MAX_TEXT_LENGTH = 160;
-const MAX_LINKS_IN_MANIFEST = 300;
-const MAX_IMAGES_IN_MANIFEST = 300;
-const MAX_FORMS_IN_MANIFEST = 300;
 const MAX_OCR_TEXT_LAYER_ITEMS = 20000;
+const MAX_TAGGED_TEXT_ITEMS = 1200;
+const MAX_TAGGED_TEXT_LENGTH = 500;
 
-const genericLinkTextPattern = /^(click here|read more|learn more|more|https?:\/\/)/i;
+interface TaggedTextLayerItem {
+  role: string;
+  page: number;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
+interface TaggedBinding {
+  role: string;
+  page: number;
+  mcid: number;
+}
 
 function sanitizeTextForFont(font: Awaited<ReturnType<PDFDocument['embedFont']>>, text: string): string {
   let sanitized = '';
@@ -32,48 +62,12 @@ function sanitizeTextForFont(font: Awaited<ReturnType<PDFDocument['embedFont']>>
   return sanitized;
 }
 
-function truncateText(value: string | undefined, maxLength = MAX_TEXT_LENGTH): string | undefined {
-  if (!value) return undefined;
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) return undefined;
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
-}
-
 function splitKeywords(value?: string): string[] {
   if (!value) return [];
   return value
-    .split(/[;,]/)
+    .split(/[;,\s]+/)
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function flattenTagTree(nodes: TagNode[] | undefined): Array<{ type: string; page?: number; text?: string }> {
-  if (!nodes?.length) return [];
-
-  const flat: Array<{ type: string; page?: number; text?: string }> = [];
-  const stack = [...nodes].reverse();
-  const visited = new WeakSet<object>();
-
-  while (stack.length > 0 && flat.length < MAX_TAGS_IN_MANIFEST) {
-    const node = stack.pop();
-    if (!node || typeof node !== 'object') continue;
-    if (visited.has(node)) continue;
-    visited.add(node);
-
-    flat.push({
-      type: node.type,
-      page: node.page,
-      text: truncateText(node.text)
-    });
-
-    if (!node.children?.length) continue;
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      const child = node.children[index];
-      if (child) stack.push(child);
-    }
-  }
-
-  return flat;
 }
 
 function safeReadPdfMetadata(getter: () => string | undefined): string | undefined {
@@ -87,187 +81,16 @@ function safeReadPdfMetadata(getter: () => string | undefined): string | undefin
   }
 }
 
-function dedupeTags(
-  tags: Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string }>
-): Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string }> {
-  const deduped: Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string }> = [];
-  const seen = new Set<string>();
-
-  for (const tag of tags) {
-    if (!tag.type) continue;
-    const normalizedTag = {
-      ...tag,
-      text: truncateText(tag.text),
-      alt: truncateText(tag.alt),
-      scope: truncateText(tag.scope, 40)
-    };
-    const key = `${normalizedTag.type}|${normalizedTag.page ?? ''}|${normalizedTag.text ?? ''}|${normalizedTag.alt ?? ''}|${normalizedTag.scope ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(normalizedTag);
-    if (deduped.length >= MAX_TAGS_IN_MANIFEST) break;
-  }
-
-  return deduped;
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
-type CandidateTextItem = { text: string; x: number; y: number };
-
-function buildPageTextIndex(parsed: ParsedPDF): Map<number, CandidateTextItem[]> {
-  const index = new Map<number, CandidateTextItem[]>();
-  for (const item of parsed.textItems) {
-    const text = item.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 8 || LIST_ITEM_PATTERN.test(text)) continue;
-    let bucket = index.get(item.page);
-    if (!bucket) { bucket = []; index.set(item.page, bucket); }
-    bucket.push({ text, x: item.x, y: item.y });
-  }
-  return index;
+function shortMatchKey(value: string): string {
+  return normalizeText(value).toLowerCase().slice(0, 40);
 }
 
-const CAPTION_PATTERN = /^(fig(ure)?|table|image|photo|chart|graph|diagram|illustration)\s*\.?\s*\d*/i;
-const SMALL_IMAGE_THRESHOLD = 50;
-
-function inferImageAltText(
-  pageTextIndex: Map<number, CandidateTextItem[]>,
-  image: ParsedPDF['images'][number]
-): string {
-  // Very small images are likely decorative icons
-  if (image.width < SMALL_IMAGE_THRESHOLD && image.height < SMALL_IMAGE_THRESHOLD) {
-    return 'Decorative image';
-  }
-
-  const candidates = pageTextIndex.get(image.page);
-  if (!candidates || candidates.length === 0) return `Illustration on page ${image.page}`;
-
-  // Prefer caption-like text below the image
-  const captionCandidates = candidates.filter((item) => {
-    const isBelow = item.y < image.y && Math.abs(item.y - image.y) < 60;
-    return isBelow && CAPTION_PATTERN.test(item.text);
-  });
-
-  if (captionCandidates.length > 0) {
-    // Pick the closest caption below the image
-    captionCandidates.sort((a, b) => Math.abs(a.y - image.y) - Math.abs(b.y - image.y));
-    return truncateText(captionCandidates[0]!.text, 120) ?? `Illustration on page ${image.page}`;
-  }
-
-  // Also check for caption-like text regardless of position
-  const anyCaptions = candidates.filter((item) => CAPTION_PATTERN.test(item.text));
-  if (anyCaptions.length > 0) {
-    anyCaptions.sort(
-      (a, b) =>
-        (Math.abs(a.y - image.y) + Math.abs(a.x - image.x) * 0.15) -
-        (Math.abs(b.y - image.y) + Math.abs(b.x - image.x) * 0.15)
-    );
-    return truncateText(anyCaptions[0]!.text, 120) ?? `Illustration on page ${image.page}`;
-  }
-
-  // Fall back to proximity but prefer shorter text (more likely a label)
-  let bestText = '';
-  let bestScore = Infinity;
-  for (const item of candidates) {
-    const distance = Math.abs(item.y - image.y) + Math.abs(item.x - image.x) * 0.15;
-    // Penalize very long text (likely a paragraph, not a caption)
-    const lengthPenalty = item.text.length > 80 ? 50 : 0;
-    const score = distance + lengthPenalty;
-    if (score < bestScore) {
-      bestScore = score;
-      bestText = item.text;
-    }
-  }
-
-  if (bestText) return truncateText(bestText, 120) ?? `Illustration on page ${image.page}`;
-  return `Illustration on page ${image.page}`;
-}
-
-function normalizeLinks(links: ParsedPDF['links']): ParsedPDF['links'] {
-  return links.slice(0, MAX_LINKS_IN_MANIFEST).map((link) => {
-    const rawText = link.text?.replace(/\s+/g, ' ').trim() ?? '';
-    if (rawText && !genericLinkTextPattern.test(rawText)) return { ...link, text: truncateText(rawText, 140) ?? rawText };
-
-    try {
-      const parsedUrl = new URL(link.url);
-      const segment = parsedUrl.pathname.split('/').filter(Boolean).pop();
-      const suffix = segment ? ` ${segment.replace(/[-_]+/g, ' ')}` : '';
-      return {
-        ...link,
-        text: truncateText(`Visit ${parsedUrl.hostname}${suffix}`, 140) ?? 'Visit linked page'
-      };
-    } catch {
-      return {
-        ...link,
-        text: 'Visit linked page'
-      };
-    }
-  });
-}
-
-function normalizeForms(forms: ParsedPDF['forms']): ParsedPDF['forms'] {
-  return forms.slice(0, MAX_FORMS_IN_MANIFEST).map((form) => ({
-    ...form,
-    name: truncateText(form.name, 120) ?? form.name,
-    label:
-      truncateText(form.label, 120) ??
-      truncateText(
-        form.name
-          .replace(/[-_]+/g, ' ')
-          .replace(/\b\w/g, (char) => char.toUpperCase()),
-        120
-      )
-  }));
-}
-
-function normalizeImages(parsed: ParsedPDF): ParsedPDF['images'] {
-  const pageTextIndex = buildPageTextIndex(parsed);
-  return parsed.images.slice(0, MAX_IMAGES_IN_MANIFEST).map((image) => {
-    if (image.decorative) return image;
-    // Mark very small images as decorative
-    if (image.width < SMALL_IMAGE_THRESHOLD && image.height < SMALL_IMAGE_THRESHOLD) {
-      return { ...image, decorative: true, alt: '' };
-    }
-    if (image.alt?.trim()) return { ...image, alt: truncateText(image.alt, 120) };
-    return {
-      ...image,
-      alt: inferImageAltText(pageTextIndex, image)
-    };
-  });
-}
-
-function buildSemanticTags(parsed: ParsedPDF, plan: ReturnType<typeof extractRemediationPlan>): ParsedPDF['tags'] {
-  const sourceTags = plan.sourceTags.filter(
-    (tag) => !/^H[1-6]$/.test(tag.type) && !['Document', 'L', 'LI', 'Lbl', 'LBody'].includes(tag.type)
-  );
-
-  const headingTags = plan.headings.map((heading) => ({
-    type: `H${heading.level}`,
-    page: heading.page,
-    text: truncateText(heading.text)
-  }));
-
-  // Group consecutive list items under single L nodes (mirrors tagger.ts grouping)
-  const listTags: Array<{ type: string; page?: number; text?: string }> = [];
-  let prevListPage = -Infinity;
-  for (const item of plan.listItems) {
-    const marker = item.text.split(/\s+/, 1)[0] ?? '';
-    if (Math.abs(item.page - prevListPage) > 1 || listTags.length === 0) {
-      listTags.push({ type: 'L', page: item.page });
-    }
-    listTags.push(
-      { type: 'LI', page: item.page },
-      { type: 'Lbl', page: item.page, text: truncateText(marker, 20) },
-      { type: 'LBody', page: item.page, text: truncateText(item.text) }
-    );
-    prevListPage = item.page;
-  }
-
-  const tagTree = buildTagTree(plan);
-  const treeTags = flattenTagTree(tagTree.children);
-
-  return dedupeTags([{ type: 'Document' }, ...sourceTags, ...headingTags, ...listTags, ...treeTags]).slice(
-    0,
-    MAX_TAGS_IN_MANIFEST
-  );
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
 }
 
 function parseColor(color?: string) {
@@ -279,14 +102,115 @@ function parseColor(color?: string) {
   return rgb(r, g, b);
 }
 
-async function embedInvisibleOcrTextLayer(pdf: PDFDocument, parsed: ParsedPDF) {
-  const ocrTextItems = parsed.textItems.filter((item) => item.fontName === 'OCR').slice(0, MAX_OCR_TEXT_LAYER_ITEMS);
-  if (!ocrTextItems.length) return;
+function resolveTaggedLayerItems(
+  parsed: ParsedPDF,
+  plan: ReturnType<typeof extractRemediationPlan>,
+  ocrOnly: boolean
+): TaggedTextLayerItem[] {
+  const items: TaggedTextLayerItem[] = [];
+  const seen = new Set<string>();
+  const pageAnchors = new Map<number, typeof parsed.textItems>();
+  const fallbackCursor = new Map<number, number>();
+
+  for (const textItem of parsed.textItems) {
+    let bucket = pageAnchors.get(textItem.page);
+    if (!bucket) {
+      bucket = [];
+      pageAnchors.set(textItem.page, bucket);
+    }
+    bucket.push(textItem);
+  }
+
+  function locateAnchor(page: number, text: string) {
+    const anchors = pageAnchors.get(page) ?? [];
+    const key = shortMatchKey(text);
+    if (!key) return undefined;
+
+    return anchors.find((anchor) => {
+      const anchorKey = shortMatchKey(anchor.text);
+      return Boolean(anchorKey && (anchorKey.includes(key) || key.includes(anchorKey)));
+    });
+  }
+
+  function pushItem(role: string, page: number, rawText: string, x?: number, y?: number, fontSize?: number) {
+    const text = normalizeText(rawText).slice(0, MAX_TAGGED_TEXT_LENGTH);
+    if (!text) return;
+    if (page < 1 || page > parsed.pageCount) return;
+
+    const dedupeKey = `${role}|${page}|${shortMatchKey(text)}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+
+    const fallbackY = fallbackCursor.get(page) ?? 760;
+    fallbackCursor.set(page, fallbackY - 12);
+
+    items.push({
+      role,
+      page,
+      text,
+      x: typeof x === 'number' ? x : 36,
+      y: typeof y === 'number' ? y : fallbackY,
+      fontSize: typeof fontSize === 'number' ? fontSize : 11
+    });
+  }
+
+  if (ocrOnly) {
+    for (const item of parsed.textItems.filter((textItem) => textItem.fontName === 'OCR').slice(0, MAX_OCR_TEXT_LAYER_ITEMS)) {
+      pushItem('P', item.page, item.text, item.x, item.y, item.fontSize);
+      if (items.length >= MAX_TAGGED_TEXT_ITEMS) break;
+    }
+    return items;
+  }
+
+  for (const heading of plan.headings) {
+    const anchor = locateAnchor(heading.page, heading.text);
+    const role = `H${Math.max(1, Math.min(6, heading.level))}`;
+    pushItem(role, heading.page, heading.text, anchor?.x, anchor?.y, anchor?.fontSize);
+    if (items.length >= MAX_TAGGED_TEXT_ITEMS) return items;
+  }
+
+  for (const paragraph of plan.paragraphs) {
+    const anchor = locateAnchor(paragraph.page, paragraph.text);
+    pushItem('P', paragraph.page, paragraph.text, anchor?.x, anchor?.y, anchor?.fontSize);
+    if (items.length >= MAX_TAGGED_TEXT_ITEMS) return items;
+  }
+
+  if (items.length < 80) {
+    for (const item of parsed.textItems.slice(0, MAX_TAGGED_TEXT_ITEMS)) {
+      pushItem('P', item.page, item.text, item.x, item.y, item.fontSize);
+      if (items.length >= MAX_TAGGED_TEXT_ITEMS) break;
+    }
+  }
+
+  return items;
+}
+
+function beginMarkedContentSequence(tag: string, mcid: number, context: PDFDocument['context']): PDFOperator {
+  const props = context.obj({ MCID: PDFNumber.of(mcid) }) as PDFDict;
+  return PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of(tag), props as any]);
+}
+
+async function embedTaggedInvisibleTextLayer(
+  pdf: PDFDocument,
+  items: TaggedTextLayerItem[]
+): Promise<TaggedBinding[]> {
+  if (!items.length) return [];
 
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = pdf.getPages();
+  const fontKeyByPage = new Map<number, PDFName>();
+  const nextMcidByPage = new Map<number, number>();
+  const bindings: TaggedBinding[] = [];
 
-  for (const item of ocrTextItems) {
+  function fontResourceForPage(pageNumber: number, page: (typeof pages)[number]): PDFName {
+    const existing = fontKeyByPage.get(pageNumber);
+    if (existing) return existing;
+    const key = (page as any).node.newFontDictionary('F', font.ref) as PDFName;
+    fontKeyByPage.set(pageNumber, key);
+    return key;
+  }
+
+  for (const item of items) {
     const page = pages[item.page - 1];
     if (!page) continue;
 
@@ -295,24 +219,151 @@ async function embedInvisibleOcrTextLayer(pdf: PDFDocument, parsed: ParsedPDF) {
 
     const pageWidth = page.getWidth();
     const pageHeight = page.getHeight();
-    const x = Math.min(Math.max(item.x, 0), Math.max(0, pageWidth - 1));
-    const y = Math.min(Math.max(item.y, 0), Math.max(0, pageHeight - 1));
+    const x = clamp(item.x, 0, Math.max(0, pageWidth - 1));
+    const y = clamp(item.y, 0, Math.max(0, pageHeight - 1));
+    const size = Math.max(6, Math.min(item.fontSize, 72));
+    const fontKey = fontResourceForPage(item.page, page);
+    const mcid = nextMcidByPage.get(item.page) ?? 0;
+    nextMcidByPage.set(item.page, mcid + 1);
 
-    page.drawText(safeText, {
-      x,
-      y,
-      size: Math.max(6, Math.min(item.fontSize, 72)),
-      font,
-      color: rgb(0, 0, 0),
-      opacity: 0
+    page.pushOperators(
+      pushGraphicsState(),
+      beginMarkedContentSequence('Span', mcid, pdf.context),
+      beginText(),
+      setTextRenderingMode(TextRenderingMode.Invisible),
+      setFontAndSize(fontKey, size),
+      setTextMatrix(1, 0, 0, 1, x, y),
+      showText(font.encodeText(safeText)),
+      endText(),
+      endMarkedContent(),
+      popGraphicsState()
+    );
+
+    bindings.push({
+      role: item.role,
+      page: item.page,
+      mcid
     });
   }
+
+  return bindings;
+}
+
+function injectBoundStructTreeFromBindings(pdf: PDFDocument, bindings: TaggedBinding[]): boolean {
+  if (bindings.length === 0) return false;
+
+  const context = pdf.context;
+  const pages = pdf.getPages();
+
+  const markInfoDict = context.obj({ Marked: true });
+  const markInfoRef = context.register(markInfoDict);
+  pdf.catalog.set(PDFName.of('MarkInfo'), markInfoRef);
+
+  const structTreeRootDict = context.obj({ Type: 'StructTreeRoot' });
+  const structTreeRootRef = context.register(structTreeRootDict);
+
+  const roleMapDict = context.obj({
+    Document: 'Document',
+    Sect: 'Sect',
+    H1: 'H1',
+    H2: 'H2',
+    H3: 'H3',
+    H4: 'H4',
+    H5: 'H5',
+    H6: 'H6',
+    P: 'P',
+    Span: 'Span',
+    L: 'L',
+    LI: 'LI',
+    Lbl: 'Lbl',
+    LBody: 'LBody',
+    Table: 'Table',
+    TR: 'TR',
+    TH: 'TH',
+    TD: 'TD',
+    Figure: 'Figure'
+  });
+  structTreeRootDict.set(PDFName.of('RoleMap'), roleMapDict);
+
+  const documentElemDict = context.obj({
+    Type: 'StructElem',
+    S: 'Document'
+  });
+  documentElemDict.set(PDFName.of('P'), structTreeRootRef);
+  const documentElemRef = context.register(documentElemDict);
+
+  const children = PDFArray.withContext(context);
+  const parentEntriesByPage = new Map<number, Array<{ mcid: number; ref: ReturnType<typeof context.register> }>>();
+
+  for (const binding of bindings) {
+    const pageRef = pages[binding.page - 1]?.ref;
+    if (!pageRef) continue;
+
+    const role = /^H[1-6]$/.test(binding.role) ? binding.role : 'P';
+    const elemDict = context.obj({
+      Type: 'StructElem',
+      S: role
+    });
+    elemDict.set(PDFName.of('P'), documentElemRef);
+    elemDict.set(PDFName.of('Pg'), pageRef);
+    elemDict.set(PDFName.of('K'), PDFNumber.of(binding.mcid));
+
+    const elemRef = context.register(elemDict);
+    children.push(elemRef);
+
+    let pageEntries = parentEntriesByPage.get(binding.page);
+    if (!pageEntries) {
+      pageEntries = [];
+      parentEntriesByPage.set(binding.page, pageEntries);
+    }
+    pageEntries.push({ mcid: binding.mcid, ref: elemRef });
+  }
+
+  if (children.size() === 0) return false;
+  documentElemDict.set(PDFName.of('K'), children);
+  structTreeRootDict.set(PDFName.of('K'), documentElemRef);
+
+  const nums = PDFArray.withContext(context);
+  let maxStructParents = -1;
+
+  for (const [pageNumber, entries] of [...parentEntriesByPage.entries()].sort((a, b) => a[0] - b[0])) {
+    const page = pages[pageNumber - 1];
+    if (!page) continue;
+
+    const structParents = pageNumber - 1;
+    maxStructParents = Math.max(maxStructParents, structParents);
+    page.node.set(PDFName.of('StructParents'), PDFNumber.of(structParents));
+    page.node.set(PDFName.of('Tabs'), PDFName.of('S'));
+
+    const maxMcid = entries.reduce((max, entry) => Math.max(max, entry.mcid), -1);
+    const parentArray = PDFArray.withContext(context);
+    for (let index = 0; index <= maxMcid; index += 1) {
+      parentArray.push(PDFNull);
+    }
+    for (const entry of entries) {
+      parentArray.set(entry.mcid, entry.ref);
+    }
+
+    const parentArrayRef = context.register(parentArray);
+    nums.push(PDFNumber.of(structParents));
+    nums.push(parentArrayRef);
+  }
+
+  const parentTreeDict = context.obj({ Nums: nums });
+  const parentTreeRef = context.register(parentTreeDict);
+  structTreeRootDict.set(PDFName.of('ParentTree'), parentTreeRef);
+  structTreeRootDict.set(PDFName.of('ParentTreeNextKey'), PDFNumber.of(maxStructParents + 1));
+
+  pdf.catalog.set(PDFName.of('StructTreeRoot'), structTreeRootRef);
+  return true;
 }
 
 export interface BuildRemediatedPdfOptions {
   addInvisibleTextLayer?: boolean;
   strictPdfUa?: boolean;
   verapdfFeedback?: VerapdfResult;
+  injectBoundTextLayer?: boolean;
+  injectUnboundStructTree?: boolean;
 }
 
 function shouldForceStrictMetadata(options: BuildRemediatedPdfOptions): boolean {
@@ -337,28 +388,24 @@ export async function buildRemediatedPdf(
   const chosenLanguage = language || parsed.language || 'en-US';
   const strictMetadata = shouldForceStrictMetadata(options);
   const plan = extractRemediationPlan(parsed);
-  const tags = buildSemanticTags(parsed, plan);
-  const outlines =
-    plan.outlines.length > 0
-      ? plan.outlines.map((outline) => ({
-          ...outline,
-          title: truncateText(outline.title, 140) ?? outline.title
-        }))
-      : plan.headings.slice(0, 40).map((heading) => ({ title: heading.text, page: heading.page }));
-
-  const normalizedLinks = normalizeLinks(parsed.links);
-  const normalizedForms = normalizeForms(parsed.forms);
-  const normalizedImages = normalizeImages(parsed);
+  const sourcePdfUaPart = parsed.metadata['pdfuaid:part']?.trim();
+  const hasBoundStructure = Boolean(parsed.structureBinding?.hasContentBinding);
+  const remediationMode: RemediationMode =
+    parsed.remediationMode === 'analysis-only'
+      ? 'analysis-only'
+      : hasBoundStructure
+        ? 'content-bound'
+        : 'analysis-only';
 
   const manifest = {
-    hasStructTree: true,
+    version: 3,
     language: chosenLanguage,
-    tags,
-    outlines: outlines.slice(0, 120),
-    forms: normalizedForms,
-    images: normalizedImages,
-    links: normalizedLinks,
-    pdfUaPart: '1'
+    remediationMode,
+    ...(sourcePdfUaPart
+      ? { pdfUaPart: sourcePdfUaPart }
+      : hasBoundStructure
+        ? { pdfUaPart: '1' }
+        : {})
   };
 
   const pdf =
@@ -392,12 +439,24 @@ export async function buildRemediatedPdf(
   }
 
   if (sourceBytes && options.addInvisibleTextLayer) {
-    await embedInvisibleOcrTextLayer(pdf, parsed);
+    const taggedItems = resolveTaggedLayerItems(parsed, plan, true);
+    const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
+    if (bindings.length > 0) {
+      injectBoundStructTreeFromBindings(pdf, bindings);
+    }
+  }
+
+  if (!hasBoundStructure && options.injectBoundTextLayer !== false && !options.addInvisibleTextLayer) {
+    const taggedItems = resolveTaggedLayerItems(parsed, plan, false);
+    const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
+    if (bindings.length > 0) {
+      injectBoundStructTreeFromBindings(pdf, bindings);
+    }
   }
 
   const existingKeywords = new Set(
     [...splitKeywords(safeReadPdfMetadata(() => pdf.getKeywords())), ...splitKeywords(parsed.metadata.Keywords)].filter(
-      (keyword) => !keyword.startsWith(MANIFEST_PREFIX)
+      (keyword) => !keyword.includes(MANIFEST_PREFIX)
     )
   );
   existingKeywords.add('accessible');
@@ -428,9 +487,11 @@ export async function buildRemediatedPdf(
 
   pdf.setKeywords([...existingKeywords]);
 
-  // Inject real StructTreeRoot, MarkInfo, RoleMap, and per-page Tabs
-  const tagTree = buildTagTree(plan);
-  injectStructTree(pdf, tagTree);
+  // Legacy opt-in path for unbound StructElem generation (kept for experiments only).
+  if (options.injectUnboundStructTree) {
+    const tagTree = buildTagTree(plan);
+    injectStructTree(pdf, tagTree);
+  }
 
   return pdf.save();
 }

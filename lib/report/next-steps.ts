@@ -1,4 +1,5 @@
 import type { AuditFinding } from '@/lib/audit/types';
+import type { RemediationMode } from '@/lib/pdf/types';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import { findingActionTitle, findingDescription, findingDetails } from './finding-copy';
@@ -47,11 +48,21 @@ export function buildManualNextSteps(input: {
   remediatedFindings: AuditFinding[];
   verapdfResult?: VerapdfResult;
   remediationStopReason?: RemediationStopReason;
+  remediationMode?: RemediationMode;
 }): NextStepItem[] {
-  const { remediatedFindings, verapdfResult, remediationStopReason } = input;
+  const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode } = input;
   const steps: NextStepItem[] = [];
   const manualPathHint =
     'If you use Acrobat, fix issues in Tags and Accessibility Checker. If you edit in Word or PowerPoint, update the source file, export a new PDF, then re-upload.';
+
+  if (remediationMode === 'analysis-only') {
+    steps.push({
+      title: 'Complete structural tagging manually in Acrobat or PAC',
+      description:
+        'This output is marked analysis-only because content-bound PDF tags were not guaranteed. Complete MCID/ParentTree-backed tagging manually before publishing.',
+      severity: 'high'
+    });
+  }
 
   if (verapdfResult?.compliant === false) {
     const failedRules = verapdfResult.summary?.failedRules;
@@ -104,7 +115,7 @@ export function buildManualNextSteps(input: {
   } else {
     steps.push({
       title: 'Run one final verification before publishing',
-      description: 'After manual updates, upload the revised PDF and confirm both the Accessibility Score and veraPDF result improve.',
+      description: 'After manual updates, upload the revised PDF and confirm both the Automated Check Score and veraPDF result improve.',
       severity: 'low'
     });
   }

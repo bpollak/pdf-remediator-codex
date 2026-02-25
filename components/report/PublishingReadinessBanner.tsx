@@ -44,6 +44,14 @@ function getReadinessState(file: FileEntry | undefined): {
     };
   }
 
+  if (file.remediationMode === 'analysis-only') {
+    return {
+      state: 'needs-fixes' as const,
+      message:
+        'Automation completed in analysis-only mode. Manual structural tagging and desktop checker validation are required before publishing.'
+    };
+  }
+
   return {
     state: 'ready' as const,
     message: 'Ready for manual final review. Download the updated PDF and perform your normal spot-check before publishing.'

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:pdf-agent": "vitest run tests/pdf-accessibility-agent.regression.test.ts",
     "test:coverage": "vitest run --coverage",
     "a11y:scan": "bash ./scripts/run-a11y-scan.sh",
     "verapdf:up": "bash ./scripts/verapdf-local.sh up",

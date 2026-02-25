@@ -1,54 +1,64 @@
-import type { ParsedPDF } from '@/lib/pdf/types';
+import type { RemediationMode } from '@/lib/pdf/types';
 
 export const MANIFEST_PREFIX = 'AccessiblePDFManifest=';
 
 export interface RemediationManifest {
-  hasStructTree: boolean;
+  version?: number;
   language?: string;
-  tags: ParsedPDF['tags'];
-  outlines: ParsedPDF['outlines'];
-  forms: ParsedPDF['forms'];
-  images: ParsedPDF['images'];
-  links: ParsedPDF['links'];
   pdfUaPart?: string;
+  remediationMode?: RemediationMode;
 }
 
 export function encodeManifest(manifest: RemediationManifest): string {
   return `${MANIFEST_PREFIX}${encodeURIComponent(JSON.stringify(manifest))}`;
 }
 
-function isArrayOrUndefined(value: unknown): boolean {
-  return value === undefined || Array.isArray(value);
+function extractEncodedManifest(value: string): string | null {
+  const start = value.indexOf(MANIFEST_PREFIX);
+  if (start < 0) return null;
+  const markerStart = start + MANIFEST_PREFIX.length;
+  let markerEnd = value.length;
+  for (let index = markerStart; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === ';' || char === ',' || /\s/.test(char)) {
+      markerEnd = index;
+      break;
+    }
+  }
+  const encoded = value.slice(markerStart, markerEnd).trim();
+  return encoded || null;
 }
 
 export function decodeManifest(value?: string): RemediationManifest | null {
   if (!value || !value.includes(MANIFEST_PREFIX)) return null;
-
-  const marker = value.slice(value.indexOf(MANIFEST_PREFIX) + MANIFEST_PREFIX.length);
-  const encoded = marker.split(/[;,]/, 1)[0] ?? '';
+  const encoded = extractEncodedManifest(value);
   if (!encoded) return null;
 
   try {
     const parsed = JSON.parse(decodeURIComponent(encoded));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    if (typeof parsed.hasStructTree !== 'boolean') return null;
-    if (!Array.isArray(parsed.tags)) return null;
-    if (!isArrayOrUndefined(parsed.outlines)) return null;
-    if (!isArrayOrUndefined(parsed.forms)) return null;
-    if (!isArrayOrUndefined(parsed.images)) return null;
-    if (!isArrayOrUndefined(parsed.links)) return null;
     if (parsed.language !== undefined && typeof parsed.language !== 'string') return null;
     if (parsed.pdfUaPart !== undefined && typeof parsed.pdfUaPart !== 'string') return null;
+    if (parsed.version !== undefined && typeof parsed.version !== 'number') return null;
+    if (parsed.remediationMode !== undefined && parsed.remediationMode !== 'analysis-only' && parsed.remediationMode !== 'content-bound') {
+      return null;
+    }
+
+    const hasSignal =
+      typeof parsed.language === 'string' ||
+      typeof parsed.pdfUaPart === 'string' ||
+      typeof parsed.version === 'number' ||
+      parsed.remediationMode === 'analysis-only' ||
+      parsed.remediationMode === 'content-bound';
+    if (!hasSignal) return null;
 
     const manifest: RemediationManifest = {
-      hasStructTree: parsed.hasStructTree,
-      tags: parsed.tags,
-      outlines: Array.isArray(parsed.outlines) ? parsed.outlines : [],
-      forms: Array.isArray(parsed.forms) ? parsed.forms : [],
-      images: Array.isArray(parsed.images) ? parsed.images : [],
-      links: Array.isArray(parsed.links) ? parsed.links : [],
+      ...(typeof parsed.version === 'number' ? { version: parsed.version } : {}),
       ...(typeof parsed.language === 'string' ? { language: parsed.language } : {}),
-      ...(typeof parsed.pdfUaPart === 'string' ? { pdfUaPart: parsed.pdfUaPart } : {})
+      ...(typeof parsed.pdfUaPart === 'string' ? { pdfUaPart: parsed.pdfUaPart } : {}),
+      ...(parsed.remediationMode === 'analysis-only' || parsed.remediationMode === 'content-bound'
+        ? { remediationMode: parsed.remediationMode }
+        : {})
     };
 
     return manifest;

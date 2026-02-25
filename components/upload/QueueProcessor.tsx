@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { runAudit } from '@/lib/audit/engine';
 import type { AuditResult } from '@/lib/audit/types';
 import { parsePdfBytes } from '@/lib/pdf/parser';
+import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { runOcrViaApi } from '@/lib/ocr/client';
 import { isLikelyScannedPdf } from '@/lib/ocr/detection';
 import { runLocalOcr } from '@/lib/ocr/local';
@@ -25,9 +26,15 @@ interface RemediationIterationArtifact {
   iteration: number;
   internalScore: number;
   failureScore?: number;
+  remediationMode: RemediationMode;
   verapdfResult: VerapdfResult;
   remediatedBytes: ArrayBuffer;
   postRemediationAudit: AuditResult;
+}
+
+function remediationModeForParsed(parsed: ParsedPDF): RemediationMode {
+  if (parsed.remediationMode) return parsed.remediationMode;
+  return parsed.structureBinding?.hasContentBinding ? 'content-bound' : 'analysis-only';
 }
 
 export function QueueProcessor() {
@@ -137,6 +144,7 @@ export function QueueProcessor() {
             iteration,
             internalScore: postRemediationAudit.score,
             failureScore,
+            remediationMode: remediationModeForParsed(remediatedParsedData),
             verapdfResult,
             remediatedBytes: remediatedBytes.slice(0),
             postRemediationAudit
@@ -181,6 +189,7 @@ export function QueueProcessor() {
           ocrReason,
           remediatedBytes: selectedArtifact.remediatedBytes,
           postRemediationAudit: selectedArtifact.postRemediationAudit,
+          remediationMode: selectedArtifact.remediationMode,
           verapdfResult: selectedArtifact.verapdfResult,
           remediationIterations,
           remediationStopReason

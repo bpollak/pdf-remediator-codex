@@ -28,6 +28,7 @@ const SEVERITY_WEIGHT: Record<Severity, number> = {
 const SCORE_CAPS: Record<string, number> = {
   'DOC-004': 15,  // scanned / image-only — nearly unusable
   'DOC-002': 40,  // no StructTreeRoot — no semantic structure at all
+  'DOC-005': 35,  // unbound structure tree — tags are not connected to content
 };
 
 export function computeComplianceScore(_totalRules: number, findings: AuditFinding[]): number {

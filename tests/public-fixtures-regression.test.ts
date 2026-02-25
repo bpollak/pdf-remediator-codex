@@ -47,7 +47,7 @@ describe('public fixture regression checks', () => {
 
   for (const fixtureName of allFixtures) {
     it(
-      `${fixtureName} produces a distinct remediated PDF with a non-regressing score`,
+      `${fixtureName} produces a distinct remediated PDF without synthetic unbound structure`,
       { timeout: 60000 },
       async () => {
         const sourceBytes = await loadPdfBytes(fixtureName);
@@ -64,9 +64,10 @@ describe('public fixture regression checks', () => {
         const remediatedAudit = runAudit(remediatedParsed);
 
         expect(Buffer.compare(toNodeBuffer(sourceBytes), toNodeBuffer(remediatedArrayBuffer))).not.toBe(0);
-        expect(remediatedParsed.hasStructTree).toBe(true);
-        expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-002')).toBe(false);
-        expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-004')).toBe(false);
+        if (remediatedParsed.hasStructTree) {
+          expect(remediatedParsed.structureBinding?.hasContentBinding).toBe(true);
+        }
+        expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-005')).toBe(false);
         expect(remediatedAudit.score).toBeGreaterThanOrEqual(originalAudit.score);
       }
     );

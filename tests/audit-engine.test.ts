@@ -55,4 +55,29 @@ describe('runAudit', () => {
     const result = runAudit(parsed);
     expect(result.score).toBeGreaterThan(70);
   });
+
+  it('caps score when structure exists but is unbound from content', () => {
+    const parsed = createBase();
+    parsed.hasStructTree = true;
+    parsed.language = 'en-US';
+    parsed.metadata = { Subject: 'Unbound tagged output' };
+    parsed.structureBinding = {
+      structElemCount: 200,
+      structElemWithPageRef: 200,
+      structElemWithMcid: 0,
+      structElemWithNumericK: 0,
+      structElemWithMcr: 0,
+      hasParentTree: false,
+      hasParentTreeEntries: false,
+      tableStructCount: 15,
+      rowStructCount: 120,
+      headerCellStructCount: 40,
+      dataCellStructCount: 300,
+      hasContentBinding: false
+    };
+
+    const result = runAudit(parsed);
+    expect(result.findings.some((finding) => finding.ruleId === 'DOC-005')).toBe(true);
+    expect(result.score).toBeLessThanOrEqual(35);
+  });
 });

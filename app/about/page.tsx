@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { RELEASE_NOTES } from '@/lib/content/release-notes';
 
 export default function AboutPage() {
   return (
@@ -6,9 +7,46 @@ export default function AboutPage() {
       <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
         <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-          PDF Remediator helps you make documents easier to use with screen readers and keyboards. Upload
-          a PDF, get an improved version, then follow a short checklist for anything that still needs manual edits.
+          PDF Remediator is an assisted accessibility remediation copilot. Upload a PDF to get an automated first pass,
+          clear remediation-mode labeling (<em>content-bound</em> vs <em>analysis-only</em>), and guided next steps
+          for final manual validation before publishing.
         </p>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>What&apos;s New In This Build</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Score guardrails now prevent inflated perfect scores when critical structural risks are still present.</li>
+          <li>Remediation mode is explicit: <em>content-bound</em> when bindings are verified, <em>analysis-only</em> when they are not.</li>
+          <li>Post-remediation audits now read structure directly from the PDF, reducing pass-to-pass metadata drift.</li>
+          <li>Table detection is more conservative on image-heavy, sparse-text pages to reduce synthetic table tags.</li>
+          <li>Image checks use PDF drawing operators to better detect real image elements that need alt text review.</li>
+        </ul>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>Release Notes</h2>
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
+          Updated with each deployment to summarize shipped enhancements and quality improvements.
+        </p>
+        <div className="mt-5 max-w-4xl space-y-4">
+          {RELEASE_NOTES.map((release) => (
+            <article key={release.id} className="rounded-md border border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-sm font-semibold text-[var(--ucsd-navy)]">
+                {release.versionLabel}{' '}
+                <span className="font-normal text-[var(--ucsd-text)]">({release.deployedOn})</span>
+              </p>
+              {release.summary ? (
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ucsd-text)]">{release.summary}</p>
+              ) : null}
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--ucsd-text)]">
+                {release.highlights.map((highlight) => (
+                  <li key={highlight}>{highlight}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
@@ -28,6 +66,7 @@ export default function AboutPage() {
           <li>Fast first-pass remediation of common PDF accessibility issues.</li>
           <li>Identifying where manual edits are still required before publication.</li>
           <li>Comparing before/after results so teams can quickly review progress.</li>
+          <li>Reducing remediation effort while keeping humans in control of final compliance decisions.</li>
         </ul>
       </section>
 
@@ -48,11 +87,15 @@ export default function AboutPage() {
             links, and form fields.
           </li>
           <li>
-            <strong>Fix what it can</strong> &mdash; Makes supported automatic fixes and builds an updated PDF.
+            <strong>Fix what it can safely</strong> &mdash; Applies supported automatic fixes and builds an updated PDF.
           </li>
           <li>
             <strong>Check again and compare</strong> &mdash; Runs the checks again and shows before/after
             results side by side.
+          </li>
+          <li>
+            <strong>Set remediation mode</strong> &mdash; Marks output as <em>content-bound</em> when structural bindings
+            are reliable, or <em>analysis-only</em> when manual structural tagging is still required.
           </li>
           <li>
             <strong>Optional standards check</strong> &mdash; If veraPDF is enabled in your environment, the app runs an
@@ -67,15 +110,28 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Accessibility Features Applied</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Adds and improves document tags so screen readers can better understand the PDF structure.</li>
+          <li>Preserves and evaluates document tag structure, then flags where manual tag repair is required.</li>
+          <li>Detects unbound structure conditions and prevents those files from being treated as fully remediated.</li>
           <li>Updates language and file details used by accessibility tools.</li>
           <li>Keeps or creates bookmarks from detected headings when possible.</li>
           <li>Rewrites vague link text (like &ldquo;click here&rdquo;) to clearer wording.</li>
           <li>Adds missing form labels based on field names when possible.</li>
-          <li>Tries to create image alt text when useful image details are available.</li>
+          <li>Detects real PDF image content from page rendering data and flags missing alt text.</li>
+          <li>Stores compact immutable remediation metadata to improve repeat-run consistency.</li>
           <li>Adds searchable text support for scanned PDFs.</li>
           <li>Tries to improve reading order in some multi-column layouts.</li>
           <li>Checks the updated file again and shows a before/after comparison.</li>
+        </ul>
+      </section>
+
+      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+        <h2>How To Interpret Results</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li><strong>Automated Check Score</strong> reflects this app&apos;s internal checks, not a legal/compliance guarantee.</li>
+          <li><strong>veraPDF status</strong> is an independent external PDF/UA technical verification when enabled.</li>
+          <li><strong>100%</strong> is only shown for remediated output when critical internal findings are clear and external verification is compliant.</li>
+          <li><strong>Unbound structure detection</strong> applies a strict score ceiling and routes output to analysis-only mode.</li>
+          <li><strong>Analysis-only mode</strong> means manual structural tagging remains required before release.</li>
         </ul>
       </section>
 
@@ -103,9 +159,10 @@ export default function AboutPage() {
         <h2>Limitations</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
           Automatic fixes can solve many common issues, but they do not guarantee full WCAG or PDF/UA compliance.
-          Some checks are best-effort only (especially color contrast and complex layouts), and many files still need
-          manual edits. If veraPDF is enabled, it adds another helpful check, but you should still review the file with
-          assistive technology and manual testing.
+          Some checks are best-effort only (especially color contrast, infographic layouts, and complex tables), and
+          many files still need manual edits. If content-bound structural tagging cannot be verified, the output is
+          treated as analysis-only. If veraPDF is enabled, it adds an independent technical check, but you should still
+          complete manual review with desktop tools and assistive technology before publishing.
         </p>
       </section>
 

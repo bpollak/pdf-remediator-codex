@@ -17,6 +17,16 @@ function finding(overrides: Partial<AuditFinding> = {}): AuditFinding {
 }
 
 describe('buildManualNextSteps', () => {
+  it('adds structural manual step when remediation mode is analysis-only', () => {
+    const steps = buildManualNextSteps({
+      remediatedFindings: [],
+      remediationMode: 'analysis-only'
+    });
+
+    expect(steps[0]?.title).toContain('Complete structural tagging manually');
+    expect(steps[0]?.severity).toBe('high');
+  });
+
   it('adds high-priority step when veraPDF is non-compliant', () => {
     const steps = buildManualNextSteps({
       remediatedFindings: [],

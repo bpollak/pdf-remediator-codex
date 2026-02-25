@@ -21,7 +21,8 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
   const steps = buildManualNextSteps({
     remediatedFindings,
     verapdfResult: file?.verapdfResult,
-    remediationStopReason: file?.remediationStopReason
+    remediationStopReason: file?.remediationStopReason,
+    remediationMode: file?.remediationMode
   });
 
   return (
@@ -32,7 +33,7 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
           Use this checklist to finish manual fixes after automated remediation.
         </p>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Accessibility Score is this app&apos;s ruleset. veraPDF status is an independent check against the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
+          Automated Check Score is this app&apos;s ruleset. veraPDF status is an independent check against the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
         </p>
       </div>
 

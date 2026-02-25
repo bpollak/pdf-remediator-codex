@@ -86,7 +86,7 @@ describe('buildRemediatedPdf', () => {
     expect(remediatedParsed.textItems.some((item) => /to whom so ever it may concern/i.test(item.text))).toBe(true);
   });
 
-  it('embeds remediation manifest so post-remediation audits reflect applied fixes', async () => {
+  it('embeds compact remediation manifest without synthetic tag-tree overclaims', async () => {
     const parsed: ParsedPDF = {
       pageCount: 5,
       metadata: {},
@@ -109,22 +109,55 @@ describe('buildRemediatedPdf', () => {
     const remediatedPdf = await PDFDocument.load(bytes);
     const manifest = decodeManifest(remediatedPdf.getKeywords() ?? undefined);
 
-    expect(manifest?.hasStructTree).toBe(true);
-    expect(manifest?.pdfUaPart).toBe('1');
-    expect(manifest?.forms[0]?.label).toBe('Email');
+    expect(manifest?.version).toBe(3);
+    expect(manifest?.pdfUaPart).toBeUndefined();
+    expect(manifest?.remediationMode).toBe('analysis-only');
+    expect((manifest as Record<string, unknown> | undefined)?.tags).toBeUndefined();
+    expect((manifest as Record<string, unknown> | undefined)?.forms).toBeUndefined();
+    expect((manifest as Record<string, unknown> | undefined)?.images).toBeUndefined();
+    expect((manifest as Record<string, unknown> | undefined)?.links).toBeUndefined();
+    expect((manifest as Record<string, unknown> | undefined)?.outlines).toBeUndefined();
 
-    const remediatedParsed: ParsedPDF = {
-      ...parsed,
-      metadata: { ...parsed.metadata, Subject: parsed.metadata.Subject, 'pdfuaid:part': manifest?.pdfUaPart },
-      language: manifest?.language,
-      hasStructTree: manifest?.hasStructTree ?? false,
-      tags: manifest?.tags ?? [],
-      outlines: manifest?.outlines ?? [],
-      forms: manifest?.forms ?? parsed.forms
+    const remediatedParsed = await parsePdfBytes(bytes.slice(0));
+    const remediatedAudit = runAudit(remediatedParsed);
+    const remediatedScore = remediatedAudit.score;
+
+    expect(remediatedParsed.remediationMode).toBe('analysis-only');
+    expect(remediatedParsed.hasStructTree).toBe(true);
+    expect(remediatedParsed.structureBinding?.hasContentBinding).toBe(true);
+    expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-002')).toBe(false);
+    expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-005')).toBe(false);
+    expect(remediatedScore).toBeGreaterThanOrEqual(originalScore);
+    expect(remediatedScore).toBeLessThan(100);
+  });
+
+  it('does not duplicate manifest metadata across remediation passes', async () => {
+    const sourcePdf = await PDFDocument.create();
+    sourcePdf.addPage([612, 792]).drawText('Manifest stability check', { x: 72, y: 700, size: 14 });
+    const sourceBytes = await sourcePdf.save();
+
+    const parsed: ParsedPDF = {
+      pageCount: 1,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [{ text: 'Manifest stability check', x: 72, y: 700, width: 180, height: 14, fontName: 'Helvetica', fontSize: 14, page: 1 }],
+      images: [],
+      links: [{ text: 'Policy details', url: 'https://example.com/policy', page: 1 }],
+      outlines: [],
+      forms: [{ name: 'email', required: true }]
     };
-    const remediatedScore = runAudit(remediatedParsed).score;
 
-    expect(remediatedScore).toBeGreaterThan(originalScore + 10);
+    const pass1 = await buildRemediatedPdf(parsed, 'en-US', sourceBytes);
+    const parsedPass1 = await parsePdfBytes(pass1.slice(0));
+    const keywordLengthPass1 = parsedPass1.metadata.Keywords?.length ?? 0;
+
+    const pass2 = await buildRemediatedPdf(parsedPass1, parsedPass1.language ?? 'en-US', pass1.slice(0));
+    const parsedPass2 = await parsePdfBytes(pass2.slice(0));
+    const keywordLengthPass2 = parsedPass2.metadata.Keywords?.length ?? 0;
+
+    expect(keywordLengthPass1).toBeGreaterThan(0);
+    expect(keywordLengthPass2).toBeLessThanOrEqual(keywordLengthPass1 + 128);
   });
 
 });

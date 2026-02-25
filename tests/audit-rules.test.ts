@@ -109,14 +109,38 @@ function partialParsed(): ParsedPDF {
   };
 }
 
+/**
+ * Structured but unbound PDF: has StructTreeRoot-like signals without
+ * marked-content bindings. Triggers DOC-005.
+ */
+function unboundStructuredParsed(): ParsedPDF {
+  const parsed = partialParsed();
+  parsed.structureBinding = {
+    structElemCount: 120,
+    structElemWithPageRef: 120,
+    structElemWithMcid: 0,
+    structElemWithNumericK: 0,
+    structElemWithMcr: 0,
+    hasParentTree: false,
+    hasParentTreeEntries: false,
+    tableStructCount: 4,
+    rowStructCount: 20,
+    headerCellStructCount: 6,
+    dataCellStructCount: 40,
+    hasContentBinding: false
+  };
+  return parsed;
+}
+
 /* ------------------------------------------------------------------ */
 /* Fixture → rule ID mapping (which fixture should trigger the rule)  */
 /* ------------------------------------------------------------------ */
 
-const failingFixtureByRuleId: Record<string, 'untagged' | 'partial'> = {
+const failingFixtureByRuleId: Record<string, 'untagged' | 'partial' | 'unbound'> = {
   'DOC-001': 'untagged',
   'DOC-002': 'untagged',
   'DOC-003': 'untagged',
+  'DOC-005': 'unbound',
   'HDG-001': 'partial',
   'HDG-002': 'untagged',
   'IMG-001': 'untagged',
@@ -131,8 +155,10 @@ const failingFixtureByRuleId: Record<string, 'untagged' | 'partial'> = {
   'META-002': 'untagged'
 };
 
-function fixture(name: 'untagged' | 'partial'): ParsedPDF {
-  return name === 'untagged' ? untaggedParsed() : partialParsed();
+function fixture(name: 'untagged' | 'partial' | 'unbound'): ParsedPDF {
+  if (name === 'untagged') return untaggedParsed();
+  if (name === 'unbound') return unboundStructuredParsed();
+  return partialParsed();
 }
 
 /* ------------------------------------------------------------------ */
