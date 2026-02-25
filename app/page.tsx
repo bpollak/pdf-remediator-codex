@@ -1,6 +1,40 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { SKIP_LANDING_PREFERENCE_KEY } from '@/lib/preferences/landing';
 
 export default function LandingPage() {
+  const router = useRouter();
+  const [skipLanding, setSkipLanding] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(SKIP_LANDING_PREFERENCE_KEY) === '1';
+    const forceShowLanding = new URLSearchParams(window.location.search).get('showLanding') === '1';
+    setSkipLanding(stored);
+
+    if (stored && !forceShowLanding) {
+      router.replace('/app');
+      return;
+    }
+    setReady(true);
+  }, [router]);
+
+  function onSkipLandingChange(checked: boolean) {
+    setSkipLanding(checked);
+    window.localStorage.setItem(SKIP_LANDING_PREFERENCE_KEY, checked ? '1' : '0');
+  }
+
+  if (!ready) {
+    return (
+      <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
+        <p className="text-sm text-[var(--ucsd-text)]">Loading...</p>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-5 rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
       <h1>Make Your PDF More Accessible</h1>
@@ -10,6 +44,14 @@ export default function LandingPage() {
       <p className="max-w-3xl text-base leading-relaxed text-[var(--ucsd-text)]">
         You will get three things: an updated PDF, a summary of what changed, and a clear list of manual follow-up steps.
       </p>
+      <label className="flex items-center gap-2 text-sm text-[var(--ucsd-text)]">
+        <input
+          type="checkbox"
+          checked={skipLanding}
+          onChange={(event) => onSkipLandingChange(event.target.checked)}
+        />
+        Skip this page next time and open the app directly
+      </label>
       <Link
         href="/app"
         className="inline-flex items-center gap-2 rounded-md bg-[var(--ucsd-blue)] px-5 py-2.5 text-base font-medium text-white transition hover:bg-[var(--ucsd-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)] focus-visible:ring-offset-2"
