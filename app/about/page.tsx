@@ -14,20 +14,10 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What&apos;s New In This Build</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Score guardrails now prevent inflated perfect scores when critical structural risks are still present.</li>
-          <li>Remediation mode is explicit: <em>content-bound</em> when bindings are verified, <em>analysis-only</em> when they are not.</li>
-          <li>Post-remediation audits now read structure directly from the PDF, reducing pass-to-pass metadata drift.</li>
-          <li>Table detection is more conservative on image-heavy, sparse-text pages to reduce synthetic table tags.</li>
-          <li>Image checks use PDF drawing operators to better detect real image elements that need alt text review.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Release Notes</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Updated with each deployment to summarize shipped enhancements and quality improvements.
+          Updated with each deployment to summarize shipped enhancements and quality improvements. The newest
+          entry reflects what is in the current build.
         </p>
         <div className="mt-5 max-w-4xl space-y-4">
           {RELEASE_NOTES.map((release) => (
