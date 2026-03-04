@@ -33,13 +33,15 @@ function PdfPreviewPane({
   bytes,
   fileName,
   score,
-  downloadLabel
+  downloadLabel,
+  actionTone = 'secondary'
 }: {
   title: string;
   bytes?: ArrayBuffer;
   fileName: string;
   score?: number;
   downloadLabel: string;
+  actionTone?: 'primary' | 'secondary';
 }) {
   const blobUrl = useMemo(() => {
     if (!bytes) return null;
@@ -129,7 +131,11 @@ function PdfPreviewPane({
         download={fileName}
         target="_blank"
         rel="noreferrer"
-        className="inline-block text-sm text-[var(--ucsd-blue)] hover:underline"
+        className={`inline-flex items-center rounded-md px-4 py-2 text-sm font-medium transition ${
+          actionTone === 'primary'
+            ? 'bg-[var(--ucsd-blue)] text-white hover:bg-[var(--ucsd-navy)]'
+            : 'border border-[rgba(24,43,73,0.25)] text-[var(--ucsd-text)] hover:bg-slate-50'
+        }`}
       >
         {downloadLabel}
       </a>
@@ -166,6 +172,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
         fileName={file?.name ?? 'original.pdf'}
         score={originalScore}
         downloadLabel="Open or download original PDF"
+        actionTone="secondary"
       />
       <PdfPreviewPane
         title="Remediated preview"
@@ -173,6 +180,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
         fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
         score={remediatedScore}
         downloadLabel="Open or download remediated PDF"
+        actionTone="primary"
       />
     </section>
   );

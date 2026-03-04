@@ -20,6 +20,7 @@ export function CompareActions({ fileId }: { fileId: string }) {
   }, [blobUrl]);
 
   const downloadName = file ? `remediated-${file.name}` : 'remediated.pdf';
+  const hasEvidencePack = Boolean(file);
 
   function downloadEvidencePack() {
     if (!file) return;
@@ -34,17 +35,18 @@ export function CompareActions({ fileId }: { fileId: string }) {
   }
 
   return (
-    <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2>Download Your Updated PDF</h2>
+    <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        Use this file for manual review and publishing once your remaining checklist items are complete.
+        Most teams can download this file now for manual review and publishing. Open the detailed report below only when
+        you need troubleshooting context.
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <a
           href={blobUrl ?? undefined}
           download={downloadName}
-          className={`inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white transition ${
+          className={`inline-flex items-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition ${
             blobUrl ? 'bg-[var(--ucsd-blue)] hover:bg-[var(--ucsd-navy)]' : 'pointer-events-none bg-gray-300'
           }`}
           aria-disabled={!blobUrl}
@@ -55,7 +57,11 @@ export function CompareActions({ fileId }: { fileId: string }) {
           href={blobUrl ?? undefined}
           target="_blank"
           rel="noreferrer"
-          className={`text-sm ${blobUrl ? 'text-[var(--ucsd-blue)] hover:underline' : 'pointer-events-none text-gray-400'}`}
+          className={`inline-flex items-center rounded-md border px-4 py-2.5 text-sm font-semibold transition ${
+            blobUrl
+              ? 'border-[rgba(24,43,73,0.35)] text-[var(--ucsd-navy)] hover:bg-white'
+              : 'pointer-events-none border-gray-300 text-gray-400'
+          }`}
           aria-disabled={!blobUrl}
         >
           Open remediated PDF
@@ -63,7 +69,12 @@ export function CompareActions({ fileId }: { fileId: string }) {
         <button
           type="button"
           onClick={downloadEvidencePack}
-          className="inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2 text-sm font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
+          disabled={!hasEvidencePack}
+          className={`inline-flex items-center rounded-md border px-4 py-2.5 text-sm font-medium transition ${
+            hasEvidencePack
+              ? 'border-[rgba(24,43,73,0.25)] text-[var(--ucsd-text)] hover:bg-white'
+              : 'cursor-not-allowed border-gray-300 text-gray-400'
+          }`}
         >
           Download QA evidence pack (JSON)
         </button>
