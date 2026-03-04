@@ -20,19 +20,6 @@ export function CompareActions({ fileId }: { fileId: string }) {
   }, [blobUrl]);
 
   const downloadName = file ? `remediated-${file.name}` : 'remediated.pdf';
-  const hasEvidencePack = Boolean(file);
-
-  function downloadEvidencePack() {
-    if (!file) return;
-    const payload = buildEvidencePack(file);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${file.name.replace(/\.pdf$/i, '')}-qa-evidence-pack.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
 
   return (
     <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
@@ -66,19 +53,45 @@ export function CompareActions({ fileId }: { fileId: string }) {
         >
           Open remediated PDF in new tab
         </a>
-        <button
-          type="button"
-          onClick={downloadEvidencePack}
-          disabled={!hasEvidencePack}
-          className={`inline-flex items-center rounded-md border px-4 py-2.5 text-sm font-medium transition ${
-            hasEvidencePack
-              ? 'border-[rgba(24,43,73,0.25)] text-[var(--ucsd-text)] hover:bg-white'
-              : 'cursor-not-allowed border-gray-300 text-gray-400'
-          }`}
-        >
-          Download QA evidence pack (JSON)
-        </button>
       </div>
+    </section>
+  );
+}
+
+export function EvidencePackAction({ fileId }: { fileId: string }) {
+  const file = useAppStore((s) => s.files.find((entry) => entry.id === fileId));
+  const hasEvidencePack = Boolean(file);
+
+  function downloadEvidencePack() {
+    if (!file) return;
+    const payload = buildEvidencePack(file);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${file.name.replace(/\.pdf$/i, '')}-qa-evidence-pack.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
+      <h3>QA evidence pack</h3>
+      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+        Download a JSON snapshot of findings, structure metrics, and verification outcomes for reporting and audits.
+      </p>
+      <button
+        type="button"
+        onClick={downloadEvidencePack}
+        disabled={!hasEvidencePack}
+        className={`mt-3 inline-flex items-center rounded-md border px-4 py-2.5 text-sm font-medium transition ${
+          hasEvidencePack
+            ? 'border-[rgba(24,43,73,0.25)] text-[var(--ucsd-text)] hover:bg-slate-50'
+            : 'cursor-not-allowed border-gray-300 text-gray-400'
+        }`}
+      >
+        Download QA evidence pack (JSON)
+      </button>
     </section>
   );
 }

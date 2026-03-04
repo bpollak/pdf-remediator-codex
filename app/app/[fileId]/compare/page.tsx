@@ -1,7 +1,7 @@
 'use client';
 
 import { SideBySide } from '@/components/preview/SideBySide';
-import { CompareActions } from '@/components/report/CompareActions';
+import { CompareActions, EvidencePackAction } from '@/components/report/CompareActions';
 import { IssueList } from '@/components/report/IssueList';
 import { ManualStructureWorkspace } from '@/components/report/ManualStructureWorkspace';
 import { NextStepsPanel } from '@/components/report/NextStepsPanel';
@@ -41,6 +41,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
           </p>
         </summary>
         <div className="space-y-6 border-t border-[rgba(24,43,73,0.15)] p-4 md:p-5">
+          <EvidencePackAction fileId={params.fileId} />
           <SideBySide fileId={params.fileId} />
           <StructuralIntegrityPanel fileId={params.fileId} />
           <AltTextWorkspace fileId={params.fileId} />
