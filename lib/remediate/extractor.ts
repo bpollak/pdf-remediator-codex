@@ -5,9 +5,7 @@ import {
   detectParagraphs,
   detectTables,
   detectArtifacts,
-  detectAndReorderColumns,
-  type DetectedTable,
-  type ArtifactItem,
+  detectAndReorderColumns
 } from './heuristics';
 
 export function extractRemediationPlan(parsed: ParsedPDF) {

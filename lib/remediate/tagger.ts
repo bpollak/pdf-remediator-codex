@@ -1,5 +1,5 @@
 import { extractRemediationPlan } from './extractor';
-import type { DetectedTable, ArtifactItem } from './heuristics';
+import type { DetectedTable } from './heuristics';
 
 export interface TagNode {
   type: string;
@@ -54,15 +54,6 @@ function buildTableNodes(tables: DetectedTable[]): TagNode[] {
       })),
     })),
   }));
-}
-
-/** Build a set of artifact position keys for fast lookup. */
-function buildArtifactSet(artifacts: ArtifactItem[]): Set<string> {
-  const set = new Set<string>();
-  for (const a of artifacts) {
-    set.add(`${a.page}|${Math.round(a.x)}|${Math.round(a.y)}`);
-  }
-  return set;
 }
 
 /** Nest flat nodes into Sect elements based on heading hierarchy.

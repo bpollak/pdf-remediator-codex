@@ -1,4 +1,4 @@
-import { getDocument } from 'pdfjs-dist';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { ParsedPDF, TextItem } from '@/lib/pdf/types';
 import { ensurePdfJsWorkerConfigured } from '@/lib/pdf/configure-worker';
 import { mapToTesseractLang } from './language';
@@ -15,6 +15,12 @@ interface OcrLineLike {
   text?: string;
   confidence?: number;
   bbox?: { x0?: number; y0?: number; x1?: number; y1?: number };
+}
+
+interface OcrRecognitionLike {
+  data?: {
+    lines?: OcrLineLike[];
+  };
 }
 
 function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: number, viewportScale: number): TextItem | null {
@@ -83,8 +89,8 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
         if (!context) continue;
 
         await page.render({ canvasContext: context, viewport }).promise;
-        const recognition = await worker.recognize(canvas);
-        const lines = ((recognition as any)?.data?.lines ?? []) as OcrLineLike[];
+        const recognition = (await worker.recognize(canvas)) as OcrRecognitionLike;
+        const lines = recognition.data?.lines ?? [];
 
         for (const line of lines) {
           const item = ocrLineToTextItem(line, pageNumber, viewport.height, LOCAL_OCR_SCALE);

@@ -1,4 +1,4 @@
-import { GlobalWorkerOptions } from 'pdfjs-dist';
+import { GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 let workerConfigured = false;
 

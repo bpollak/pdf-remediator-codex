@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFArray, PDFDict, PDFNumber } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFArray } from 'pdf-lib';
 import type { TagNode } from './tagger';
 
 /**

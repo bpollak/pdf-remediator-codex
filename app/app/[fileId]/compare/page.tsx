@@ -23,17 +23,21 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       </div>
       <CompareActions fileId={params.fileId} />
       <PublishingReadinessBanner fileId={params.fileId} />
-      <details className="group rounded border border-[rgba(24,43,73,0.2)] bg-white shadow-sm">
-        <summary className="cursor-pointer list-none px-4 py-3 md:px-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-base font-semibold text-[var(--ucsd-navy)]">
-              Detailed report and remediation workspaces (optional)
+      <details className="group rounded border-2 border-[var(--ucsd-blue)] bg-[rgba(0,98,155,0.06)] shadow-sm">
+        <summary className="cursor-pointer list-none px-4 py-4 md:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xl font-semibold leading-tight text-[var(--ucsd-navy)]">
+              Detailed report and remediation workspaces
             </span>
-            <span className="text-xs font-medium text-[var(--ucsd-blue)] group-open:hidden">Show details</span>
-            <span className="hidden text-xs font-medium text-[var(--ucsd-blue)] group-open:inline">Hide details</span>
+            <span className="inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-semibold text-white animate-pulse group-open:hidden">
+              Click to show full details
+            </span>
+            <span className="hidden items-center rounded-md border border-[rgba(24,43,73,0.35)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ucsd-navy)] group-open:inline-flex">
+              Click to hide full details
+            </span>
           </div>
-          <p className="mt-1 pr-4 text-sm text-[var(--ucsd-text)]">
-            Open this section when you need diagnostics, manual checklists, or QA evidence context.
+          <p className="mt-2 pr-4 text-sm font-medium text-[var(--ucsd-text)]">
+            Click this drawer to review diagnostics, manual checklists, side-by-side previews, and QA evidence context.
           </p>
         </summary>
         <div className="space-y-6 border-t border-[rgba(24,43,73,0.15)] p-4 md:p-5">

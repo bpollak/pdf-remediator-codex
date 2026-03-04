@@ -1,4 +1,4 @@
-import { getDocument } from 'pdfjs-dist';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { ensurePdfJsWorkerConfigured } from './configure-worker';
 
 export async function renderFirstPageToCanvas(bytes: ArrayBuffer, canvas: HTMLCanvasElement) {

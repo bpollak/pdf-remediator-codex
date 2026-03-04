@@ -28,6 +28,8 @@ export function Footer() {
           </div>
           <div className="ucsd-site-footer-right">
             <a href="https://ucsd.edu/">
+              {/* UCSD provides this footer image as a fixed external asset. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt="UCSD homepage"
                 className="ucsd-site-footer-logo"

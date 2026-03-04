@@ -47,6 +47,12 @@ interface TaggedBinding {
   mcid: number;
 }
 
+interface PdfPageWithFontDictionary {
+  node: {
+    newFontDictionary: (prefix: string, ref: unknown) => PDFName;
+  };
+}
+
 function sanitizeTextForFont(font: Awaited<ReturnType<PDFDocument['embedFont']>>, text: string): string {
   let sanitized = '';
 
@@ -187,7 +193,7 @@ function resolveTaggedLayerItems(
 
 function beginMarkedContentSequence(tag: string, mcid: number, context: PDFDocument['context']): PDFOperator {
   const props = context.obj({ MCID: PDFNumber.of(mcid) }) as PDFDict;
-  return PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of(tag), props as any]);
+  return PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of(tag), props as unknown as PDFName]);
 }
 
 async function embedTaggedInvisibleTextLayer(
@@ -205,7 +211,7 @@ async function embedTaggedInvisibleTextLayer(
   function fontResourceForPage(pageNumber: number, page: (typeof pages)[number]): PDFName {
     const existing = fontKeyByPage.get(pageNumber);
     if (existing) return existing;
-    const key = (page as any).node.newFontDictionary('F', font.ref) as PDFName;
+    const key = (page as unknown as PdfPageWithFontDictionary).node.newFontDictionary('F', font.ref);
     fontKeyByPage.set(pageNumber, key);
     return key;
   }

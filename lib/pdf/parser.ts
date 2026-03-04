@@ -1,4 +1,4 @@
-import { OPS, getDocument } from 'pdfjs-dist';
+import { OPS, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber } from 'pdf-lib';
 import { ensurePdfJsWorkerConfigured } from './configure-worker';
 import type { ParsedPDF } from './types';
