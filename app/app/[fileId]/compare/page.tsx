@@ -29,15 +29,15 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
             <span className="text-xl font-semibold leading-tight text-[var(--ucsd-navy)]">
               Detailed report and remediation workspaces
             </span>
-            <span className="inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-semibold text-white animate-pulse group-open:hidden">
-              Click to show full details
+            <span className="inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-semibold text-white group-open:hidden">
+              Show full report details
             </span>
             <span className="hidden items-center rounded-md border border-[rgba(24,43,73,0.35)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ucsd-navy)] group-open:inline-flex">
-              Click to hide full details
+              Hide full report details
             </span>
           </div>
           <p className="mt-2 pr-4 text-sm font-medium text-[var(--ucsd-text)]">
-            Click this drawer to review diagnostics, manual checklists, side-by-side previews, and QA evidence context.
+            Review diagnostics, manual checklists, side-by-side previews, and QA evidence context in this section.
           </p>
         </summary>
         <div className="space-y-6 border-t border-[rgba(24,43,73,0.15)] p-4 md:p-5">

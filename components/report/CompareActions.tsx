@@ -64,7 +64,7 @@ export function CompareActions({ fileId }: { fileId: string }) {
           }`}
           aria-disabled={!blobUrl}
         >
-          Open remediated PDF
+          Open remediated PDF in new tab
         </a>
         <button
           type="button"

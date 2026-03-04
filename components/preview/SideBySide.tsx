@@ -129,8 +129,6 @@ function PdfPreviewPane({
       <a
         href={blobUrl ?? undefined}
         download={fileName}
-        target="_blank"
-        rel="noreferrer"
         className={`inline-flex items-center rounded-md px-4 py-2 text-sm font-medium transition ${
           actionTone === 'primary'
             ? 'bg-[var(--ucsd-blue)] text-white hover:bg-[var(--ucsd-navy)]'
@@ -171,7 +169,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
         bytes={file?.uploadedBytes}
         fileName={file?.name ?? 'original.pdf'}
         score={originalScore}
-        downloadLabel="Open or download original PDF"
+        downloadLabel="Download original PDF"
         actionTone="secondary"
       />
       <PdfPreviewPane
@@ -179,7 +177,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
         bytes={file?.remediatedBytes}
         fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
         score={remediatedScore}
-        downloadLabel="Open or download remediated PDF"
+        downloadLabel="Download remediated PDF"
         actionTone="primary"
       />
     </section>
