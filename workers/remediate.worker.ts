@@ -18,7 +18,11 @@ self.onmessage = async (event: MessageEvent<RemediateWorkerRequest>) => {
     const result = await remediatePdf(msg.parsed, msg.language, msg.sourceBytes, msg.options);
     const bytes =
       result instanceof Uint8Array
-        ? result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength)
+        ? (() => {
+            const copy = new Uint8Array(result.byteLength);
+            copy.set(result);
+            return copy.buffer;
+          })()
         : result;
 
     (self as DedicatedWorkerGlobalScope).postMessage(
