@@ -96,7 +96,14 @@ export async function loadPersistedFiles(): Promise<FileEntry[]> {
       })
     );
 
-    return hydratedFiles.filter((file): file is FileEntry => Boolean(file));
+    const files: FileEntry[] = [];
+    for (const file of hydratedFiles) {
+      if (file) {
+        files.push(file);
+      }
+    }
+
+    return files;
   } finally {
     database.close();
   }
