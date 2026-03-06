@@ -535,10 +535,7 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
   const structureBindingPromise = inspectStructureBinding(bytes.slice(0));
   ensurePdfJsWorkerConfigured();
-  const loadingTask = getDocument({
-    data: bytes,
-    disableWorker: typeof window === 'undefined'
-  });
+  const loadingTask = getDocument({ data: bytes });
   const doc = await loadingTask.promise;
 
   try {
