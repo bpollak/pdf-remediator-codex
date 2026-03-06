@@ -139,10 +139,16 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>Privacy</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Most processing happens in your browser. If OCR or veraPDF is enabled in your setup, the file may be sent to
-          those services during processing. Otherwise, files stay on your device and are cleared when you close the
-          page.
+          This app is browser-first: uploaded PDFs are processed in your browser session by default, and the app does
+          not store files in an app database.
         </p>
+        <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Files stay in browser memory during your session and are cleared when you refresh or close the page.</li>
+          <li>If an OCR backend is configured, the file is sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
+          <li>If backend OCR is unavailable, local OCR fallback can run in your browser using Tesseract.</li>
+          <li>If veraPDF verification is enabled, the remediated PDF is sent through <code>/api/verapdf</code> and forwarded to the configured veraPDF service.</li>
+          <li>When you export a remediated PDF, worksheet, or evidence pack, it is downloaded locally to your device.</li>
+        </ul>
       </section>
 
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
