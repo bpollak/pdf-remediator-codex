@@ -67,6 +67,12 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
 
   const visibleEntries = showMissingOnly ? entries.filter((entry) => entry.needsAlt) : entries;
   const missingCount = entries.filter((entry) => entry.needsAlt).length;
+  const completedCount = entries.length - missingCount;
+  const hasDraftChanges = entries.some((entry) => {
+    const originalAlt = entry.image.alt ?? '';
+    const originalDecorative = Boolean(entry.image.decorative);
+    return entry.draft.alt !== originalAlt || entry.draft.decorative !== originalDecorative;
+  });
 
   const worksheetPayload = useMemo(
     () => ({
@@ -126,7 +132,10 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
       <div>
         <h2>Alt Text Workspace</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Review detected images, draft alt text, mark decorative images, and export a worksheet for remediation.
+          Review detected images, draft alt text, mark decorative images, and export a worksheet for manual remediation.
+        </p>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+          Draft edits here help you prepare manual fixes, but they do not update the automated baseline until you validate a revised PDF.
         </p>
       </div>
 
@@ -139,8 +148,16 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
           {showMissingOnly ? 'Showing missing only' : 'Showing all images'}
         </button>
         <span className="text-[var(--ucsd-text)]">
+          Draft progress: {completedCount} of {entries.length} images covered
+        </span>
+        <span className="text-[var(--ucsd-text)]">
           Missing alt coverage: {missingCount} of {entries.length}
         </span>
+        {hasDraftChanges ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+            Pending re-validation
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={exportJson}

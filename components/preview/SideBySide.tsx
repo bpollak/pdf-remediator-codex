@@ -95,7 +95,7 @@ function PdfPreviewPane({
       <div className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 text-sm text-[var(--ucsd-text)]">
         <p className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">{title}</p>
         <div className="mt-3 rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Automated Check Score</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Automated baseline</p>
           <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(score)}`}>{scoreValue(score)}</p>
         </div>
         <p className="mt-2">
@@ -110,9 +110,12 @@ function PdfPreviewPane({
       <div>
         <p className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">{title}</p>
         <div className="mt-3 rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Automated Check Score</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Automated baseline</p>
           <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(score)}`}>{scoreValue(score)}</p>
         </div>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+          Accessibility fixes often do not change the visible rendering. Use this preview to confirm the document and cross-reference findings.
+        </p>
         <details className="mt-1 text-xs text-[var(--ucsd-text)]">
           <summary className="cursor-pointer select-none">Advanced details</summary>
           <p className="mt-1">File size: {formatBytes(bytes.byteLength)}</p>
@@ -163,23 +166,31 @@ export function SideBySide({ fileId }: { fileId: string }) {
   }
 
   return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <PdfPreviewPane
-        title="Original preview"
-        bytes={file?.uploadedBytes}
-        fileName={file?.name ?? 'original.pdf'}
-        score={originalScore}
-        downloadLabel="Download original PDF"
-        actionTone="secondary"
-      />
-      <PdfPreviewPane
-        title="Remediated preview"
-        bytes={file?.remediatedBytes}
-        fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
-        score={remediatedScore}
-        downloadLabel="Download remediated PDF"
-        actionTone="primary"
-      />
+    <section className="space-y-4">
+      <div>
+        <h3>Reference previews</h3>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+          Use these previews to confirm the correct document and compare findings against the page content. They are reference views, not proof of accessibility changes.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <PdfPreviewPane
+          title="Uploaded document reference"
+          bytes={file?.uploadedBytes}
+          fileName={file?.name ?? 'original.pdf'}
+          score={originalScore}
+          downloadLabel="Download original PDF"
+          actionTone="secondary"
+        />
+        <PdfPreviewPane
+          title="Updated document reference"
+          bytes={file?.remediatedBytes}
+          fileName={file ? `remediated-${file.name}` : 'remediated.pdf'}
+          score={remediatedScore}
+          downloadLabel="Download remediated PDF"
+          actionTone="primary"
+        />
+      </div>
     </section>
   );
 }

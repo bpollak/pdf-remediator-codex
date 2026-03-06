@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/app-store';
 import { ComplianceScore } from './ComplianceScore';
 import { ALL_CATEGORIES, type Category } from '@/lib/audit/types';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
+import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -22,6 +23,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   const file = useAppStore((s) => s.files.find((f) => f.id === fileId));
   const auditResult = variant === 'remediated' ? file?.postRemediationAudit : file?.auditResult;
   const verapdfResult = file?.verapdfResult;
+  const accessibilityStatus = getAccessibilityStatus(file);
 
   if (!auditResult) {
     return (
@@ -49,37 +51,55 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
     findingsByCategory.set(f.category, (findingsByCategory.get(f.category) ?? 0) + 1);
   }
 
+  const scoreTitle =
+    variant === 'remediated'
+      ? 'Automated baseline for current remediated PDF'
+      : 'Automated baseline for uploaded PDF';
+  const scoreDescription =
+    variant === 'remediated'
+      ? 'Manual draft edits in the workspaces below do not change this baseline until you validate a revised PDF.'
+      : 'This baseline reflects the uploaded file before final manual remediation.';
+
   return (
     <section className="space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      {/* Score */}
-      <ComplianceScore score={displayedScore ?? auditResult.score} />
+      <ComplianceScore
+        score={displayedScore ?? auditResult.score}
+        title={scoreTitle}
+        description={scoreDescription}
+      />
+      {variant === 'remediated' ? (
+        <div className="rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Accessibility decision</p>
+          <p className="mt-1 text-lg font-semibold text-[var(--ucsd-navy)]">{accessibilityStatus.label}</p>
+          <p className="mt-1 text-sm text-[var(--ucsd-text)]">{accessibilityStatus.message}</p>
+        </div>
+      ) : null}
       {variant === 'remediated' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Automated Check Score is based on this app&apos;s checks. Review the external verification panel for the PDF/UA standard result (PDF/UA means &quot;Universal Accessibility&quot;).
+          Use this automated baseline as a progress signal. The final publish decision comes from the accessibility status and the PDF/UA validation result.
         </p>
       )}
       {variant === 'remediated' && displayedScore !== undefined && displayedScore < auditResult.score && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Perfect automated scoring requires both zero internal critical findings and a compliant external PDF/UA verification result.
+          A perfect automated baseline is only shown when this app&apos;s critical findings are clear and the external PDF/UA check passes.
         </p>
       )}
       {variant === 'remediated' && file?.remediationMode === 'analysis-only' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Structural remediation mode is analysis-only for this file. Content-bound tagging was not guaranteed and should be completed manually.
+          Structural remediation mode is analysis-only for this file. Content-bound tagging was not guaranteed and still needs manual work in Acrobat or PAC.
         </p>
       )}
       {variant === 'remediated' && file?.sourceType === 'checker-report-artifact' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Source assessment indicates this is likely a checker/report artifact, not a source content PDF.
+          Source assessment indicates this is likely a checker or report PDF, not a source content document.
         </p>
       )}
       {variant === 'remediated' && verapdfResult?.compliant === false && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Internal fixes improved this file, but external verification still found issues to resolve manually.
+          Internal fixes improved this file, but the external PDF/UA check still found issues to resolve manually.
         </p>
       )}
 
-      {/* Severity summary */}
       <div className="flex flex-wrap gap-2">
         {criticalCount > 0 && (
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${severityBadge.critical}`}>

@@ -62,6 +62,15 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
     const key = `h-${index}-${heading.page}-${heading.level}`;
     return includeHeadings[key];
   });
+  const reviewedTables = tableSuggestions.filter((table, index) => {
+    const key = `t-${index}-${table.page}`;
+    return (tableDecisions[key] ?? 'review') !== 'review';
+  }).length;
+  const hasDraftChanges =
+    headingSuggestions.some((heading, index) => {
+      const key = `h-${index}-${heading.page}-${heading.level}`;
+      return includeHeadings[key] !== true;
+    }) || reviewedTables > 0;
 
   const structurePlan = {
     generatedAt: new Date().toISOString(),
@@ -92,7 +101,10 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
       <div>
         <h2>Manual Structure Workspace</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Review heading/bookmark and table suggestions before final manual tagging in Acrobat or PAC.
+          Review heading, bookmark, and table suggestions before final manual tagging in Acrobat or PAC.
+        </p>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+          This workspace creates a review plan. It does not directly rewrite the PDF tag tree or change the automated baseline.
         </p>
       </div>
 
@@ -100,6 +112,12 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
         <span>Detected outlines: {parsed.outlines.length}</span>
         <span>Heading suggestions: {headingSuggestions.length}</span>
         <span>Table suggestions: {tableSuggestions.length}</span>
+        <span>Table decisions reviewed: {reviewedTables} of {tableSuggestions.length}</span>
+        {hasDraftChanges ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+            Pending re-validation
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={() => downloadJson(`${slugify(file?.name ?? 'document')}-structure-workspace.json`, structurePlan)}

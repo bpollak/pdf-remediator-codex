@@ -5,10 +5,10 @@ export default function LandingPage() {
     <section className="space-y-5 rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
       <h1>Make Your PDF More Accessible</h1>
       <p className="max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-        Upload your PDF. We check common accessibility issues and generate an improved version in your browser.
+        Upload your PDF. The app runs a first-pass accessibility workflow, checks common issues, and generates an improved version in your browser.
       </p>
       <p className="max-w-3xl text-base leading-relaxed text-[var(--ucsd-text)]">
-        You will get three things: an updated PDF, a summary of what changed, and a clear list of manual follow-up steps.
+        This tool is a companion to Acrobat or PAC, not a replacement for final desktop validation. You will get an updated PDF, a review workflow, and a clear list of manual follow-up steps before publishing.
       </p>
       <Link
         href="/app"

@@ -9,7 +9,8 @@ export default function AboutPage() {
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
           PDF Remediator is an assisted accessibility remediation copilot. Upload a PDF to get an automated first pass,
           clear remediation-mode labeling (<em>content-bound</em> vs <em>analysis-only</em>), and guided next steps
-          for final manual validation before publishing.
+          for final manual validation before publishing. It is designed to streamline the work you do before final QA
+          in Acrobat or PAC, not replace that desktop handoff.
         </p>
       </section>
 
@@ -55,7 +56,7 @@ export default function AboutPage() {
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>Fast first-pass remediation of common PDF accessibility issues.</li>
           <li>Identifying where manual edits are still required before publication.</li>
-          <li>Comparing before/after results so teams can quickly review progress.</li>
+          <li>Reviewing updated output and QA evidence before handoff to Acrobat or PAC.</li>
           <li>Reducing remediation effort while keeping humans in control of final compliance decisions.</li>
         </ul>
       </section>
@@ -117,7 +118,7 @@ export default function AboutPage() {
       <section className="rounded-lg bg-white px-10 py-10 shadow-md">
         <h2>How To Interpret Results</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li><strong>Automated Check Score</strong> reflects this app&apos;s internal checks, not a legal/compliance guarantee.</li>
+          <li><strong>Automated baseline</strong> reflects this app&apos;s internal checks, not a legal/compliance guarantee.</li>
           <li><strong>veraPDF status</strong> is an independent external PDF/UA technical verification when enabled.</li>
           <li><strong>100%</strong> is only shown for remediated output when critical internal findings are clear and external verification is compliant.</li>
           <li><strong>Unbound structure detection</strong> applies a strict score ceiling and routes output to analysis-only mode.</li>
