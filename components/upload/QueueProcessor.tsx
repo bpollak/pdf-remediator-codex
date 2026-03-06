@@ -1,15 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { runAudit } from '@/lib/audit/engine';
 import type { AuditResult } from '@/lib/audit/types';
-import { parsePdfBytes } from '@/lib/pdf/parser';
 import { classifyPdfSource } from '@/lib/pdf/source-type';
 import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { runOcrViaApi } from '@/lib/ocr/client';
 import { isLikelyScannedPdf } from '@/lib/ocr/detection';
-import { runLocalOcr } from '@/lib/ocr/local';
-import { remediatePdf } from '@/lib/remediate/engine';
 import {
   MAX_REMEDIATION_ITERATIONS,
   computeFailureScore,
@@ -22,6 +18,7 @@ import {
 import { runVerapdfViaApi } from '@/lib/verapdf/client';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import { useAppStore } from '@/stores/app-store';
+import { parsePdfInWorker, remediatePdfInWorker, runAuditInWorker } from '@/lib/workers/client';
 
 interface RemediationIterationArtifact {
   iteration: number;
@@ -41,10 +38,12 @@ function remediationModeForParsed(parsed: ParsedPDF): RemediationMode {
 
 export function QueueProcessor() {
   const files = useAppStore((s) => s.files);
+  const hydrated = useAppStore((s) => s.hydrated);
   const updateFile = useAppStore((s) => s.updateFile);
   const processing = useRef(new Set<string>());
 
   useEffect(() => {
+    if (!hydrated) return;
     if (processing.current.size > 0) return;
     const next = files.find((file) => file.status === 'queued' && !processing.current.has(file.id));
     if (!next) return;
@@ -54,10 +53,10 @@ export function QueueProcessor() {
     (async () => {
       try {
         updateFile(next.id, { status: 'parsing', progress: 10 });
-        const uploadedBytes = next.uploadedBytes.slice(0);
-        const originalParsedData = await parsePdfBytes(uploadedBytes.slice(0));
+        const uploadedBytes = next.uploadedBytes;
+        const originalParsedData = await parsePdfInWorker(next.id, uploadedBytes);
         const sourceAssessment = classifyPdfSource(next.name, originalParsedData);
-        let remediationSourceBytes = uploadedBytes.slice(0);
+        let remediationSourceBytes = uploadedBytes;
         let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
         let ocrApplied = false;
@@ -67,17 +66,18 @@ export function QueueProcessor() {
         if (isLikelyScannedPdf(originalParsedData)) {
           ocrAttempted = true;
           updateFile(next.id, { status: 'ocr', progress: 30 });
-          const ocrResult = await runOcrViaApi(remediationSourceBytes.slice(0), next.name, originalParsedData.language);
+          const ocrResult = await runOcrViaApi(remediationSourceBytes, next.name, originalParsedData.language);
 
           if (ocrResult.bytes) {
             remediationSourceBytes = ocrResult.bytes;
-            remediationParsedData = await parsePdfBytes(remediationSourceBytes.slice(0));
+            remediationParsedData = await parsePdfInWorker(next.id, remediationSourceBytes);
             ocrApplied = true;
             ocrReason = undefined;
           } else {
+            const { runLocalOcr } = await import('@/lib/ocr/local');
             const localOcr = await runLocalOcr(
               remediationParsedData,
-              remediationSourceBytes.slice(0),
+              remediationSourceBytes,
               remediationParsedData.language
             );
             if (localOcr.applied && localOcr.parsed) {
@@ -103,7 +103,7 @@ export function QueueProcessor() {
           ocrApplied,
           ocrReason
         });
-        const auditResult = runAudit(originalParsedData);
+        const auditResult = await runAuditInWorker(next.id, originalParsedData);
 
         updateFile(next.id, { status: 'remediating', progress: 75, auditResult });
 
@@ -113,23 +113,23 @@ export function QueueProcessor() {
         let previousFingerprint: string | undefined;
         let previousFailureScore: number | undefined;
         let latestVerapdfResult: VerapdfResult | undefined;
-        let currentSourceBytes = remediationSourceBytes.slice(0);
+        let currentSourceBytes = remediationSourceBytes;
         let currentParsedData = remediationParsedData;
 
         for (let iteration = 1; iteration <= MAX_REMEDIATION_ITERATIONS; iteration += 1) {
-          const remediated = await remediatePdf(
-            currentParsedData,
-            currentParsedData.language ?? originalParsedData.language ?? 'en-US',
-            currentSourceBytes.slice(0),
-            {
+          const remediatedBytes = await remediatePdfInWorker({
+            fileId: `${next.id}-${iteration}`,
+            parsed: currentParsedData,
+            language: currentParsedData.language ?? originalParsedData.language ?? 'en-US',
+            sourceBytes: currentSourceBytes,
+            options: {
               addInvisibleTextLayer: localOcrApplied,
               strictPdfUa: iteration > 1,
               verapdfFeedback: latestVerapdfResult
             }
-          );
-          const remediatedBytes = new Uint8Array(remediated).buffer;
-          const remediatedParsedData = await parsePdfBytes(remediatedBytes.slice(0));
-          const postRemediationAudit = runAudit(remediatedParsedData);
+          });
+          const remediatedParsedData = await parsePdfInWorker(`${next.id}-${iteration}`, remediatedBytes);
+          const postRemediationAudit = await runAuditInWorker(`${next.id}-${iteration}`, remediatedParsedData);
 
           updateFile(next.id, {
             status: 'remediating',
@@ -137,9 +137,9 @@ export function QueueProcessor() {
             postRemediationAudit
           });
 
-          const verapdfResult = await runVerapdfViaApi(remediatedBytes.slice(0), `remediated-${next.name}`);
+          const verapdfResult = await runVerapdfViaApi(remediatedBytes, `remediated-${next.name}`);
           const failureScore = computeFailureScore(verapdfResult);
-          const fingerprint = createByteFingerprint(remediatedBytes.slice(0));
+          const fingerprint = createByteFingerprint(remediatedBytes);
           remediationIterations.push({
             iteration,
             internalScore: postRemediationAudit.score,
@@ -151,11 +151,11 @@ export function QueueProcessor() {
             iteration,
             internalScore: postRemediationAudit.score,
             failureScore,
-              remediationMode: remediationModeForParsed(remediatedParsedData),
-              remediatedParsedData,
-              verapdfResult,
-              remediatedBytes: remediatedBytes.slice(0),
-              postRemediationAudit
+            remediationMode: remediationModeForParsed(remediatedParsedData),
+            remediatedParsedData,
+            verapdfResult,
+            remediatedBytes,
+            postRemediationAudit
           });
 
           const loopDecision = decideRemediationLoop({
@@ -176,7 +176,7 @@ export function QueueProcessor() {
 
           previousFingerprint = fingerprint;
           previousFailureScore = failureScore;
-          currentSourceBytes = remediatedBytes.slice(0);
+          currentSourceBytes = remediatedBytes;
           currentParsedData = remediatedParsedData;
         }
 
@@ -213,7 +213,7 @@ export function QueueProcessor() {
         processing.current.delete(next.id);
       }
     })();
-  }, [files, updateFile]);
+  }, [files, hydrated, updateFile]);
 
   return null;
 }

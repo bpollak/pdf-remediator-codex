@@ -69,7 +69,7 @@ function PdfPreviewPane({
 
     setSha256(null);
     crypto.subtle
-      .digest('SHA-256', bytes.slice(0))
+      .digest('SHA-256', bytes)
       .then((hash) => {
         if (!cancelled) setSha256(hashToHex(hash));
       })

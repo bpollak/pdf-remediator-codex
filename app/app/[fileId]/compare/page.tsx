@@ -13,7 +13,17 @@ import { VerificationPanel } from '@/components/report/VerificationPanel';
 import { useAppStore } from '@/stores/app-store';
 
 export default function ComparePage({ params }: { params: { fileId: string } }) {
+  const hydrated = useAppStore((s) => s.hydrated);
   const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-3">
+        <h1>Before and After Accessibility Report</h1>
+        <p className="text-sm text-[var(--ucsd-text)]">Loading saved results...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -535,124 +535,138 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
   const structureBindingPromise = inspectStructureBinding(bytes.slice(0));
   ensurePdfJsWorkerConfigured();
-  const loadingTask = getDocument({ data: bytes });
+  const loadingTask = getDocument({
+    data: bytes,
+    disableWorker: typeof window === 'undefined'
+  });
   const doc = await loadingTask.promise;
-  const metadataResult = await doc.getMetadata().catch(() => ({ info: {} as Record<string, unknown>, metadata: null }));
-  const rawInfo = metadataResult.info;
-  const metadata: Record<string, string | undefined> =
-    rawInfo && typeof rawInfo === 'object'
-      ? Object.fromEntries(
-          Object.entries(rawInfo as Record<string, unknown>).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value : value == null ? undefined : String(value)
-          ])
-        )
-      : {};
 
-  const manifest = decodeManifest(metadata.Keywords) ?? decodeManifest(metadata.Subject);
-  const structureBinding = await structureBindingPromise;
+  try {
+    const metadataResult = await doc.getMetadata().catch(() => ({ info: {} as Record<string, unknown>, metadata: null }));
+    const rawInfo = metadataResult.info;
+    const metadata: Record<string, string | undefined> =
+      rawInfo && typeof rawInfo === 'object'
+        ? Object.fromEntries(
+            Object.entries(rawInfo as Record<string, unknown>).map(([key, value]) => [
+              key,
+              typeof value === 'string' ? value : value == null ? undefined : String(value)
+            ])
+          )
+        : {};
 
-  const textItems: ParsedPDF['textItems'] = [];
-  const discoveredTags: ParsedPDF['tags'] = [];
-  const discoveredLinks: ParsedPDF['links'] = [];
-  const discoveredForms: ParsedPDF['forms'] = [];
-  const discoveredImages: ParsedPDF['images'] = [];
-  let discoveredHasStructTree = false;
+    const manifest = decodeManifest(metadata.Keywords) ?? decodeManifest(metadata.Subject);
+    const structureBinding = await structureBindingPromise;
 
-  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
-    const page = await doc.getPage(pageNumber);
-    const [content, annotations, structTree, imageItems] = await Promise.all([
-      page.getTextContent(),
-      page.getAnnotations({ intent: 'display' }).catch(() => []),
-      page.getStructTree().catch(() => null),
-      extractPageImages(page, pageNumber)
-    ]);
+    const textItems: ParsedPDF['textItems'] = [];
+    const discoveredTags: ParsedPDF['tags'] = [];
+    const discoveredLinks: ParsedPDF['links'] = [];
+    const discoveredForms: ParsedPDF['forms'] = [];
+    const discoveredImages: ParsedPDF['images'] = [];
+    let discoveredHasStructTree = false;
 
-    for (const item of content.items) {
-      if (!('str' in item) || !item.str.trim()) continue;
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+      const page = await doc.getPage(pageNumber);
 
-      const transform = item.transform;
-      const fontName = item.fontName ?? 'Helvetica';
-      const normalizedFontName = String(fontName);
-      const fontSize = Math.max(8, Math.abs(transform[0]) || Math.abs(transform[3]) || 12);
+      try {
+        const [content, annotations, structTree, imageItems] = await Promise.all([
+          page.getTextContent(),
+          page.getAnnotations({ intent: 'display' }).catch(() => []),
+          page.getStructTree().catch(() => null),
+          extractPageImages(page, pageNumber)
+        ]);
 
-      textItems.push({
-        text: item.str,
-        x: transform[4],
-        y: transform[5],
-        width: Math.max(1, item.width || 1),
-        height: Math.max(1, item.height || fontSize),
-        fontName: normalizedFontName,
-        fontSize,
-        bold: /bold|black|demi|semi/i.test(normalizedFontName),
-        italic: /italic|oblique/i.test(normalizedFontName),
-        page: pageNumber
-      });
-    }
+        for (const item of content.items) {
+          if (!('str' in item) || !item.str.trim()) continue;
 
-    if (structTree) {
-      discoveredHasStructTree = true;
-      collectStructTreeTags(structTree, pageNumber, discoveredTags);
-    }
+          const transform = item.transform;
+          const fontName = item.fontName ?? 'Helvetica';
+          const normalizedFontName = String(fontName);
+          const fontSize = Math.max(8, Math.abs(transform[0]) || Math.abs(transform[3]) || 12);
 
-    if (imageItems.length > 0) {
-      discoveredImages.push(...imageItems);
-    }
+          textItems.push({
+            text: item.str,
+            x: transform[4],
+            y: transform[5],
+            width: Math.max(1, item.width || 1),
+            height: Math.max(1, item.height || fontSize),
+            fontName: normalizedFontName,
+            fontSize,
+            bold: /bold|black|demi|semi/i.test(normalizedFontName),
+            italic: /italic|oblique/i.test(normalizedFontName),
+            page: pageNumber
+          });
+        }
 
-    for (let annotationIndex = 0; annotationIndex < (annotations as any[]).length; annotationIndex += 1) {
-      const annotation = (annotations as any[])[annotationIndex];
-      const subtype = cleanText(annotation?.subtype);
-      if (subtype === 'Link') {
-        const destPage = await resolveDestinationPage(doc, annotation?.dest);
-        const url = cleanText(annotation?.url) ?? cleanText(annotation?.unsafeUrl) ?? (destPage ? `#page-${destPage}` : '');
-        if (!url) continue;
+        if (structTree) {
+          discoveredHasStructTree = true;
+          collectStructTreeTags(structTree, pageNumber, discoveredTags);
+        }
 
-        discoveredLinks.push({
-          text: cleanText(annotation?.contents) ?? cleanText(annotation?.titleObj) ?? url,
-          url,
-          page: pageNumber
-        });
+        if (imageItems.length > 0) {
+          discoveredImages.push(...imageItems);
+        }
+
+        for (let annotationIndex = 0; annotationIndex < (annotations as any[]).length; annotationIndex += 1) {
+          const annotation = (annotations as any[])[annotationIndex];
+          const subtype = cleanText(annotation?.subtype);
+          if (subtype === 'Link') {
+            const destPage = await resolveDestinationPage(doc, annotation?.dest);
+            const url = cleanText(annotation?.url) ?? cleanText(annotation?.unsafeUrl) ?? (destPage ? `#page-${destPage}` : '');
+            if (!url) continue;
+
+            discoveredLinks.push({
+              text: cleanText(annotation?.contents) ?? cleanText(annotation?.titleObj) ?? url,
+              url,
+              page: pageNumber
+            });
+          }
+
+          if (subtype === 'Widget') {
+            const fieldFlags = typeof annotation?.fieldFlags === 'number' ? annotation.fieldFlags : 0;
+            discoveredForms.push({
+              name: cleanText(annotation?.fieldName) ?? cleanText(annotation?.id) ?? `field-${pageNumber}-${annotationIndex + 1}`,
+              label: cleanText(annotation?.alternativeText),
+              required: Boolean(fieldFlags & 0x2)
+            });
+          }
+        }
+      } finally {
+        page.cleanup();
       }
-
-      if (subtype === 'Widget') {
-        const fieldFlags = typeof annotation?.fieldFlags === 'number' ? annotation.fieldFlags : 0;
-        discoveredForms.push({
-          name: cleanText(annotation?.fieldName) ?? cleanText(annotation?.id) ?? `field-${pageNumber}-${annotationIndex + 1}`,
-          label: cleanText(annotation?.alternativeText),
-          required: Boolean(fieldFlags & 0x2)
-        });
-      }
     }
+
+    const discoveredOutlines: ParsedPDF['outlines'] = [];
+    const outlineTree = await doc.getOutline().catch(() => null);
+    await flattenOutlines(outlineTree, doc, discoveredOutlines);
+
+    if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
+      metadata['pdfuaid:part'] = manifest.pdfUaPart;
+    }
+
+    const metadataLang =
+      cleanText(metadata.Language) ??
+      cleanText(metadata.Lang) ??
+      (typeof (metadataResult as any)?.metadata?.get === 'function'
+        ? cleanText((metadataResult as any).metadata.get('dc:language'))
+        : undefined);
+
+    return {
+      pageCount: doc.numPages,
+      metadata,
+      language: manifest?.language ?? metadataLang,
+      title: cleanText(metadata.Title),
+      remediationMode: manifest?.remediationMode,
+      hasStructTree: Boolean(discoveredHasStructTree || structureBinding?.structElemCount || structureBinding?.hasParentTree),
+      structureBinding,
+      tags: dedupeTags(discoveredTags),
+      textItems,
+      images: dedupeImages(discoveredImages),
+      links: dedupeLinks(discoveredLinks),
+      outlines: dedupeOutlines(discoveredOutlines),
+      forms: dedupeForms(discoveredForms)
+    };
+  } finally {
+    doc.cleanup();
+    await loadingTask.destroy().catch(() => undefined);
   }
-
-  const discoveredOutlines: ParsedPDF['outlines'] = [];
-  const outlineTree = await doc.getOutline().catch(() => null);
-  await flattenOutlines(outlineTree, doc, discoveredOutlines);
-
-  if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
-    metadata['pdfuaid:part'] = manifest.pdfUaPart;
-  }
-
-  const metadataLang =
-    cleanText(metadata.Language) ??
-    cleanText(metadata.Lang) ??
-    (typeof (metadataResult as any)?.metadata?.get === 'function'
-      ? cleanText((metadataResult as any).metadata.get('dc:language'))
-      : undefined);
-
-  return {
-    pageCount: doc.numPages,
-    metadata,
-    language: manifest?.language ?? metadataLang,
-    title: cleanText(metadata.Title),
-    remediationMode: manifest?.remediationMode,
-    hasStructTree: Boolean(discoveredHasStructTree || structureBinding?.structElemCount || structureBinding?.hasParentTree),
-    structureBinding,
-    tags: dedupeTags(discoveredTags),
-    textItems,
-    images: dedupeImages(discoveredImages),
-    links: dedupeLinks(discoveredLinks),
-    outlines: dedupeOutlines(discoveredOutlines),
-    forms: dedupeForms(discoveredForms)
-  };
 }

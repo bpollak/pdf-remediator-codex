@@ -68,37 +68,52 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
   const tesseractLang = mapToTesseractLang(language ?? parsed.language);
 
   try {
-    const [{ createWorker }, loadingTask] = await Promise.all([
-      import('tesseract.js'),
-      Promise.resolve(getDocument({ data: sourceBytes }))
-    ]);
+    const loadingTask = getDocument({
+      data: sourceBytes,
+      disableWorker: false
+    });
 
-    const doc = await loadingTask.promise;
+    const [{ createWorker }, doc] = await Promise.all([
+      import('tesseract.js'),
+      loadingTask.promise
+    ]);
     const worker = await createWorker(tesseractLang);
     const ocrItems: TextItem[] = [];
 
     try {
       for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
         const page = await doc.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: LOCAL_OCR_SCALE });
 
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) continue;
+        try {
+          const viewport = page.getViewport({ scale: LOCAL_OCR_SCALE });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
 
-        await page.render({ canvasContext: context, viewport }).promise;
-        const recognition = (await worker.recognize(canvas)) as OcrRecognitionLike;
-        const lines = recognition.data?.lines ?? [];
+          try {
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            if (!context) continue;
 
-        for (const line of lines) {
-          const item = ocrLineToTextItem(line, pageNumber, viewport.height, LOCAL_OCR_SCALE);
-          if (item) ocrItems.push(item);
+            await page.render({ canvasContext: context, viewport }).promise;
+            const recognition = (await worker.recognize(canvas)) as OcrRecognitionLike;
+            const lines = recognition.data?.lines ?? [];
+
+            for (const line of lines) {
+              const item = ocrLineToTextItem(line, pageNumber, viewport.height, LOCAL_OCR_SCALE);
+              if (item) ocrItems.push(item);
+            }
+          } finally {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
+        } finally {
+          page.cleanup();
         }
       }
     } finally {
       await worker.terminate();
+      doc.cleanup();
+      await loadingTask.destroy().catch(() => undefined);
     }
 
     // Scale minimum text threshold by pages processed — a single-page scan
