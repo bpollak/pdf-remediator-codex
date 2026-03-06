@@ -68,7 +68,7 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
   const tesseractLang = mapToTesseractLang(language ?? parsed.language);
 
   try {
-    const loadingTask = getDocument({ data: sourceBytes });
+    const loadingTask = getDocument({ data: sourceBytes.slice(0) });
 
     const [{ createWorker }, doc] = await Promise.all([
       import('tesseract.js'),

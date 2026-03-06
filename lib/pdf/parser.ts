@@ -533,9 +533,12 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
 }
 
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
-  const structureBindingPromise = inspectStructureBinding(bytes.slice(0));
+  // pdf.js may transfer ownership of the provided buffer to its worker.
+  // Parse a cloned buffer so caller-owned bytes stay reusable downstream.
+  const parseBytes = bytes.slice(0);
+  const structureBindingPromise = inspectStructureBinding(bytes);
   ensurePdfJsWorkerConfigured();
-  const loadingTask = getDocument({ data: bytes });
+  const loadingTask = getDocument({ data: parseBytes });
   const doc = await loadingTask.promise;
 
   try {
