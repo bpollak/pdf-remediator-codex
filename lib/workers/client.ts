@@ -25,7 +25,11 @@ export async function remediatePdfInWorker(input: {
   const { remediatePdf } = await import('@/lib/remediate/engine');
   const result = await remediatePdf(parsed, language, sourceBytes, options);
 
-  return result instanceof Uint8Array
-    ? result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength)
-    : result;
+  if (result instanceof Uint8Array) {
+    const bytes = new Uint8Array(result.byteLength);
+    bytes.set(result);
+    return bytes.buffer;
+  }
+
+  return result;
 }
