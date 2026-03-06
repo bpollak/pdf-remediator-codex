@@ -15,6 +15,13 @@ interface PersistedAssetRecord {
   bytes: ArrayBuffer;
 }
 
+function stripAssetKeys(record: PersistedFileRecord): Omit<PersistedFileRecord, 'uploadedAssetKey' | 'remediatedAssetKey'> {
+  const next = { ...record };
+  delete (next as { uploadedAssetKey?: string }).uploadedAssetKey;
+  delete (next as { remediatedAssetKey?: string }).remediatedAssetKey;
+  return next;
+}
+
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -79,7 +86,7 @@ export async function loadPersistedFiles(): Promise<FileEntry[]> {
         const remediatedAsset = record.remediatedAssetKey
           ? (await requestToPromise(assetStore.get(record.remediatedAssetKey)) as PersistedAssetRecord | undefined)
           : undefined;
-        const { uploadedAssetKey: _uploadedAssetKey, remediatedAssetKey: _remediatedAssetKey, ...fileRecord } = record;
+        const fileRecord = stripAssetKeys(record);
 
         return {
           ...fileRecord,
