@@ -3,6 +3,7 @@
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { IssueList } from '@/components/report/IssueList';
 import { StructuralIntegrityPanel } from '@/components/report/StructuralIntegrityPanel';
+import { PublishingReadinessBanner } from '@/components/report/PublishingReadinessBanner';
 import { useAppStore } from '@/stores/app-store';
 
 export default function FileReportPage({ params }: { params: { fileId: string } }) {
@@ -12,7 +13,7 @@ export default function FileReportPage({ params }: { params: { fileId: string } 
   if (!hydrated) {
     return (
       <div className="space-y-3">
-        <h1>Accessibility Report</h1>
+        <h1>Accessibility Findings</h1>
         <p className="text-sm text-[var(--ucsd-text)]">Loading saved results...</p>
       </div>
     );
@@ -21,9 +22,13 @@ export default function FileReportPage({ params }: { params: { fileId: string } 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="break-words">Accessibility Report</h1>
+        <h1 className="break-words">Accessibility Findings</h1>
         <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Review the uploaded PDF findings here. Use the compare workflow for download, manual follow-up, and publish guidance.
+        </p>
       </div>
+      <PublishingReadinessBanner fileId={params.fileId} />
       <SummaryDashboard fileId={params.fileId} />
       <StructuralIntegrityPanel fileId={params.fileId} />
       <IssueList fileId={params.fileId} />

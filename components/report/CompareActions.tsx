@@ -25,8 +25,10 @@ export function CompareActions({ fileId }: { fileId: string }) {
     <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
       <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        Most teams can download this file now for manual review and publishing. Open the detailed report below only when
-        you need troubleshooting context.
+        Use this app for first-pass remediation and review. After download, continue final tag editing and desktop validation in Acrobat or PAC before publishing.
+      </p>
+      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+        Open the review sections below when you need troubleshooting context, manual follow-up guidance, or QA evidence.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

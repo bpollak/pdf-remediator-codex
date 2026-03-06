@@ -2,6 +2,7 @@
 
 import { useAppStore } from '@/stores/app-store';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
+import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 
 function metricValue(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : 'n/a';
@@ -39,31 +40,43 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const stopReasonMessage = stopReasonLabel(stopReason);
   const statement = neutralStatement(verification?.statement);
   const reason = neutralReason(verification?.reason);
+  const accessibilityStatus = getAccessibilityStatus(file);
+  const validationLabel =
+    verification?.compliant === true
+      ? 'Passed PDF/UA validation'
+      : accessibilityStatus.status === 'verification-unavailable'
+        ? 'Validation unavailable'
+        : verification?.attempted
+          ? 'Not yet passed PDF/UA validation'
+          : 'Validation not available yet';
 
   if (!verification) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <h2>PDF accessibility standard check (veraPDF)</h2>
-      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        veraPDF is an open-source tool that checks whether a PDF meets the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
-      </p>
-      <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        When available, these results reflect the remediated PDF generated after automated fix attempts.
-      </p>
-      <p className="mt-2 text-sm text-[var(--ucsd-text)]">Verification result is not available yet.</p>
+        <h2>PDF/UA validation</h2>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+          veraPDF is an independent checker for the PDF/UA accessibility standard. When available, it validates the
+          current remediated PDF.
+        </p>
+        <p className="mt-2 text-sm font-medium text-[var(--ucsd-navy)]">Validation result: {validationLabel}</p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+          Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
+        </p>
       </section>
     );
   }
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2>PDF accessibility standard check (veraPDF)</h2>
+      <h2>PDF/UA validation</h2>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        veraPDF is an open-source tool that checks whether a PDF meets the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
+        veraPDF is an independent checker for the PDF/UA accessibility standard. These results apply to the current
+        remediated PDF.
       </p>
+      <p className="mt-2 text-sm font-medium text-[var(--ucsd-navy)]">Validation result: {validationLabel}</p>
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        These results are for the remediated PDF generated after automated fix attempts.
+        Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
       </p>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
@@ -89,7 +102,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         </dl>
       ) : null}
       {verification.summary ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Next step: prioritize failed rules.</p>
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">Next step: prioritize the failed rules before publishing.</p>
       ) : null}
 
       {statement ? (

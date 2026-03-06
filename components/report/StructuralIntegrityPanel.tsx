@@ -44,27 +44,31 @@ function SnapshotCard({
       <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">{title}</h4>
       <dl className="mt-2 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-text)]">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">StructTreeRoot</dt>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Document tag tree</dt>
+          <dd className="text-[11px] text-gray-500">Technical label: StructTreeRoot</dd>
           <dd className={metricTone(parsed?.hasStructTree, true)}>{yesNo(parsed?.hasStructTree)}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">Content binding</dt>
-          <dd className={metricTone(binding?.hasContentBinding, true)}>{yesNo(binding?.hasContentBinding)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">ParentTree entries</dt>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Tag-to-content links</dt>
+          <dd className="text-[11px] text-gray-500">Technical label: ParentTree entries</dd>
           <dd className={metricTone(binding?.hasParentTreeEntries, true)}>{yesNo(binding?.hasParentTreeEntries)}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">DOC-005 raised</dt>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Content binding</dt>
+          <dd className="text-[11px] text-gray-500">Checks whether tags are connected to marked content</dd>
+          <dd className={metricTone(binding?.hasContentBinding, true)}>{yesNo(binding?.hasContentBinding)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Unbound tags warning</dt>
+          <dd className="text-[11px] text-gray-500">Technical label: DOC-005</dd>
           <dd className={metricTone(doc005, false)}>{yesNo(doc005)}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">Struct elements</dt>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Tag elements found</dt>
           <dd>{binding?.structElemCount ?? 'n/a'}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">Table struct nodes</dt>
+          <dt className="text-xs uppercase tracking-wide text-gray-500">Tagged table nodes</dt>
           <dd>{binding?.tableStructCount ?? 'n/a'}</dd>
         </div>
       </dl>
@@ -84,9 +88,9 @@ export function StructuralIntegrityPanel({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>Structural Integrity</h2>
+        <h2>Document Structure Signals</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Trust signals for tag-tree quality, content bindings, and source-file suitability.
+          Use these signals to judge whether the PDF tag tree is trustworthy and whether manual structural repair is still needed.
         </p>
       </div>
 
