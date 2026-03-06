@@ -37,6 +37,8 @@
   ],
   "exclude": [
     "node_modules",
-    "tests"
+    "tests",
+    "**/* 2.ts",
+    "**/* 2.tsx"
   ]
 }
