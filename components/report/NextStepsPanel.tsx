@@ -1,6 +1,7 @@
 'use client';
 
 import { buildManualNextSteps } from '@/lib/report/next-steps';
+import { hasPendingManualReviewChanges } from '@/lib/report/manual-review';
 import { useAppStore } from '@/stores/app-store';
 
 const badgeClass: Record<'high' | 'medium' | 'low', string> = {
@@ -23,7 +24,8 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
     verapdfResult: file?.verapdfResult,
     remediationStopReason: file?.remediationStopReason,
     remediationMode: file?.remediationMode,
-    sourceType: file?.sourceType
+    sourceType: file?.sourceType,
+    pendingManualReview: hasPendingManualReviewChanges(file)
   });
 
   return (

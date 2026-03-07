@@ -34,7 +34,8 @@ function PdfPreviewPane({
   fileName,
   score,
   downloadLabel,
-  actionTone = 'secondary'
+  actionTone = 'secondary',
+  pageFocus
 }: {
   title: string;
   bytes?: ArrayBuffer;
@@ -42,12 +43,17 @@ function PdfPreviewPane({
   score?: number;
   downloadLabel: string;
   actionTone?: 'primary' | 'secondary';
+  pageFocus?: number;
 }) {
   const blobUrl = useMemo(() => {
     if (!bytes) return null;
     const blob = new Blob([bytes], { type: 'application/pdf' });
     return URL.createObjectURL(blob);
   }, [bytes]);
+  const iframeSrc = useMemo(() => {
+    if (!blobUrl) return undefined;
+    return pageFocus ? `${blobUrl}#page=${pageFocus}` : blobUrl;
+  }, [blobUrl, pageFocus]);
   const [sha256, setSha256] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,6 +122,9 @@ function PdfPreviewPane({
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           Accessibility fixes often do not change the visible rendering. Use this preview to confirm the document and cross-reference findings.
         </p>
+        {pageFocus ? (
+          <p className="mt-1 text-xs font-medium text-[var(--ucsd-blue)]">Focused on page {pageFocus}</p>
+        ) : null}
         <details className="mt-1 text-xs text-[var(--ucsd-text)]">
           <summary className="cursor-pointer select-none">Advanced details</summary>
           <p className="mt-1">File size: {formatBytes(bytes.byteLength)}</p>
@@ -125,7 +134,7 @@ function PdfPreviewPane({
         </details>
       </div>
       <iframe
-        src={blobUrl ?? undefined}
+        src={iframeSrc}
         title={title}
         className="h-[70vh] w-full rounded border border-[rgba(24,43,73,0.2)]"
       />
@@ -146,6 +155,8 @@ function PdfPreviewPane({
 
 export function SideBySide({ fileId }: { fileId: string }) {
   const file = useAppStore((s) => s.files.find((entry) => entry.id === fileId));
+  const previewFocus = useAppStore((s) => s.previewFocusByFileId[fileId]);
+  const setPreviewFocus = useAppStore((s) => s.setPreviewFocus);
   const [isMounted, setIsMounted] = useState(false);
   const originalScore = computeDisplayedAutomatedScore({
     auditResult: file?.auditResult,
@@ -172,6 +183,20 @@ export function SideBySide({ fileId }: { fileId: string }) {
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
           Use these previews to confirm the correct document and compare findings against the page content. They are reference views, not proof of accessibility changes.
         </p>
+        {previewFocus ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-[rgba(0,98,155,0.15)] bg-[rgba(0,98,155,0.06)] px-3 py-2 text-sm text-[var(--ucsd-text)]">
+            <span>
+              Focused preview: {previewFocus.label} on page {previewFocus.page}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPreviewFocus(fileId, undefined)}
+              className="rounded-md border border-[rgba(24,43,73,0.2)] bg-white px-2 py-1 text-xs font-medium hover:bg-slate-50"
+            >
+              Clear focus
+            </button>
+          </div>
+        ) : null}
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <PdfPreviewPane
@@ -181,6 +206,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
           score={originalScore}
           downloadLabel="Download original PDF"
           actionTone="secondary"
+          pageFocus={previewFocus?.page}
         />
         <PdfPreviewPane
           title="Updated document reference"
@@ -189,6 +215,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
           score={remediatedScore}
           downloadLabel="Download remediated PDF"
           actionTone="primary"
+          pageFocus={previewFocus?.page}
         />
       </div>
     </section>

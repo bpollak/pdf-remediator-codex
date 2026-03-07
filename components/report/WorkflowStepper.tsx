@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
+import { summarizeManualReviewState } from '@/lib/report/manual-review';
 
 type WorkflowState = 'complete' | 'current' | 'pending' | 'blocked';
 
@@ -52,12 +53,9 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
 
   const steps = useMemo(() => {
     const status = getAccessibilityStatus(file);
-    const remediatedParsed = file?.remediatedParsedData ?? file?.parsedData;
+    const manualReview = summarizeManualReviewState(file);
     const hasRemediatedPdf = Boolean(file?.remediatedBytes);
     const remediatedFindings = file?.postRemediationAudit?.findings ?? [];
-    const missingAltCount = (remediatedParsed?.images ?? []).filter(
-      (image) => !image.decorative && (image.alt?.trim().length ?? 0) === 0
-    ).length;
     const structureFindingCount = remediatedFindings.filter((finding) =>
       ['Document Structure', 'Headings & Structure', 'Tables'].includes(finding.category)
     ).length;
@@ -88,7 +86,9 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
         description: 'Use the image list to prepare human-reviewed alt text updates.',
         href: '#alt-text-step',
         actionLabel: 'Open alt text workspace',
-        complete: hasRemediatedPdf && missingAltCount === 0,
+        complete:
+          hasRemediatedPdf &&
+          (manualReview.altText.totalImages === 0 || manualReview.altText.missingCount === 0),
         available: hasRemediatedPdf
       },
       {
@@ -97,13 +97,20 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
         description: 'Review heading and table issues, then finish structural edits in Acrobat or PAC.',
         href: '#structure-step',
         actionLabel: 'Open structure workspace',
-        complete: hasRemediatedPdf && file?.remediationMode !== 'analysis-only' && structureFindingCount === 0,
+        complete:
+          hasRemediatedPdf &&
+          file?.remediationMode !== 'analysis-only' &&
+          structureFindingCount === 0 &&
+          (manualReview.structure.tableSuggestions === 0 ||
+            manualReview.structure.reviewedTables === manualReview.structure.tableSuggestions),
         available: hasRemediatedPdf
       },
       {
         key: 'validation',
         title: 'Run validation',
-        description: 'Confirm the PDF/UA result after manual revisions.',
+        description: manualReview.pendingRevalidation
+          ? 'Manual draft changes are waiting for a revised PDF and validation pass.'
+          : 'Confirm the PDF/UA result after manual revisions.',
         href: '#validation-step',
         actionLabel: 'Open validation panel',
         complete: file?.verapdfResult?.compliant === true,

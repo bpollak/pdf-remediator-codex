@@ -5,6 +5,7 @@ import { ComplianceScore } from './ComplianceScore';
 import { ALL_CATEGORIES, type Category } from '@/lib/audit/types';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
+import { summarizeManualReviewState } from '@/lib/report/manual-review';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -24,6 +25,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   const auditResult = variant === 'remediated' ? file?.postRemediationAudit : file?.auditResult;
   const verapdfResult = file?.verapdfResult;
   const accessibilityStatus = getAccessibilityStatus(file);
+  const manualReview = summarizeManualReviewState(file);
 
   if (!auditResult) {
     return (
@@ -79,6 +81,11 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
           Use this automated baseline as a progress signal. The final publish decision comes from the accessibility status and the PDF/UA validation result.
         </p>
       )}
+      {variant === 'remediated' && manualReview.pendingRevalidation ? (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Manual draft edits exist in the workspaces below. Re-upload or validate a revised PDF before treating the current file as publish-ready.
+        </p>
+      ) : null}
       {variant === 'remediated' && displayedScore !== undefined && displayedScore < auditResult.score && (
         <p className="text-sm text-[var(--ucsd-text)]">
           A perfect automated baseline is only shown when this app&apos;s critical findings are clear and the external PDF/UA check passes.

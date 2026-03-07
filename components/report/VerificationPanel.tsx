@@ -3,6 +3,7 @@
 import { useAppStore } from '@/stores/app-store';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
+import { summarizeManualReviewState } from '@/lib/report/manual-review';
 
 function metricValue(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : 'n/a';
@@ -41,6 +42,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const statement = neutralStatement(verification?.statement);
   const reason = neutralReason(verification?.reason);
   const accessibilityStatus = getAccessibilityStatus(file);
+  const manualReview = summarizeManualReviewState(file);
   const validationLabel =
     verification?.compliant === true
       ? 'Passed PDF/UA validation'
@@ -62,6 +64,11 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
         </p>
+        {manualReview.pendingRevalidation ? (
+          <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+            Current draft changes are waiting for a revised PDF and another validation pass.
+          </p>
+        ) : null}
       </section>
     );
   }
@@ -78,6 +85,11 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
       </p>
+      {manualReview.pendingRevalidation ? (
+        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
+          Current draft changes are waiting for a revised PDF and another validation pass.
+        </p>
+      ) : null}
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         Standard checked: {verification.profile ?? 'not reported'}

@@ -4,6 +4,24 @@ import type { VerapdfResult } from '@/lib/verapdf/types';
 import type { RemediationIterationSummary, RemediationStopReason } from '@/lib/remediate/loop';
 import type { SourceType, SourceTypeConfidence } from '@/lib/pdf/source-type';
 
+export type ManualStructureTableDecision = 'confirm' | 'reject' | 'review';
+
+export interface ManualAltTextDraft {
+  alt: string;
+  decorative: boolean;
+}
+
+export interface ManualStructureDrafts {
+  includeHeadings: Record<string, boolean>;
+  tableDecisions: Record<string, ManualStructureTableDecision>;
+}
+
+export interface ManualReviewDrafts {
+  altText: Record<string, ManualAltTextDraft>;
+  structure: ManualStructureDrafts;
+  lastUpdatedAt?: string;
+}
+
 export interface FileEntry {
   id: string;
   name: string;
@@ -27,5 +45,6 @@ export interface FileEntry {
   verapdfResult?: VerapdfResult;
   remediationIterations?: RemediationIterationSummary[];
   remediationStopReason?: RemediationStopReason;
+  manualReviewDrafts?: ManualReviewDrafts;
   error?: string;
 }
