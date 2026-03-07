@@ -26,6 +26,7 @@ export interface PreviewFocus {
   variant?: 'original' | 'remediated';
   page: number;
   label: string;
+  detail?: string;
   bounds?: {
     x: number;
     y: number;

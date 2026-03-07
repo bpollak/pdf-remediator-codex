@@ -164,6 +164,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
                 <span>
                   Focused item: {previewFocus.label} on page {previewFocus.page}
                 </span>
+                {previewFocus.detail ? <span className="text-xs">{previewFocus.detail}</span> : null}
                 <button
                   type="button"
                   onClick={() => setPreviewFocus(fileId, undefined)}
@@ -215,6 +216,7 @@ export function SideBySide({ fileId }: { fileId: string }) {
             <div className="rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
               <p className="font-medium text-[var(--ucsd-navy)]">{previewFocus.label}</p>
               <p className="mt-1">The main viewer below is opened to page {previewFocus.page} for this focused item.</p>
+              {previewFocus.detail ? <p className="mt-1">{previewFocus.detail}</p> : null}
               {previewFocus.bounds ? (
                 <p className="mt-1 text-xs">
                   Bounds: x {Math.round(previewFocus.bounds.x)}, y {Math.round(previewFocus.bounds.y)}, w{' '}
