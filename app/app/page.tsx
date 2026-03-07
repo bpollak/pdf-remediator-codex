@@ -1,12 +1,33 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileQueue } from '@/components/upload/FileQueue';
 import { QueueProcessor } from '@/components/upload/QueueProcessor';
 import { useAppStore } from '@/stores/app-store';
 
-export default function AppPage() {
+function AppPageFallback() {
+  return (
+    <div className="space-y-6">
+      <div id="upload-revised-pdf" className="border-b border-gray-200 pb-4 scroll-mt-24">
+        <h1>Upload your PDF</h1>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+          We will check accessibility issues, apply automated fixes, and show what still needs manual review.
+        </p>
+        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
+          After you make manual fixes in Acrobat, PAC, or the source document, upload the revised PDF here to run
+          validation again.
+        </p>
+      </div>
+      <div className="rounded border border-[rgba(24,43,73,0.15)] bg-slate-50 p-4 text-sm text-[var(--ucsd-text)]">
+        Loading upload workflow...
+      </div>
+    </div>
+  );
+}
+
+function AppPageContent() {
   const searchParams = useSearchParams();
   const files = useAppStore((state) => state.files);
   const hydrated = useAppStore((state) => state.hydrated);
@@ -42,5 +63,13 @@ export default function AppPage() {
       <QueueProcessor />
       <FileQueue />
     </div>
+  );
+}
+
+export default function AppPage() {
+  return (
+    <Suspense fallback={<AppPageFallback />}>
+      <AppPageContent />
+    </Suspense>
   );
 }
