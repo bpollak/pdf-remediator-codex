@@ -60,6 +60,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
       ['Document Structure', 'Headings & Structure', 'Tables'].includes(finding.category)
     ).length;
     const hasValidationResult = typeof file?.verapdfResult?.compliant === 'boolean';
+    const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app#upload-revised-pdf';
 
     return assignStepStates([
       {
@@ -111,7 +112,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
         description: manualReview.pendingRevalidation
           ? 'Manual draft changes are waiting for a revised PDF and validation pass.'
           : 'Confirm the PDF/UA result after manual revisions.',
-        href: manualReview.pendingRevalidation ? '/app#upload-revised-pdf' : '#validation-step',
+        href: manualReview.pendingRevalidation ? revalidationHref : '#validation-step',
         actionLabel: manualReview.pendingRevalidation ? 'Upload revised PDF for validation' : 'Open validation panel',
         complete: !manualReview.pendingRevalidation && file?.verapdfResult?.compliant === true,
         available: hasRemediatedPdf || hasValidationResult

@@ -24,4 +24,15 @@ describe('app store source bytes', () => {
     const updated = useAppStore.getState().files[0];
     expect(Array.from(new Uint8Array(updated.uploadedBytes))).toEqual(initialSnapshot);
   });
+
+  it('stores revised-upload lineage metadata when provided', async () => {
+    const addFiles = useAppStore.getState().addFiles;
+    const file = new File([new Uint8Array([7, 8, 9]).buffer], 'revised.pdf', { type: 'application/pdf' });
+
+    await addFiles([file], { uploadIntent: 'revalidation', derivedFromFileId: 'base-file-1' });
+
+    const saved = useAppStore.getState().files[0];
+    expect(saved.uploadIntent).toBe('revalidation');
+    expect(saved.derivedFromFileId).toBe('base-file-1');
+  });
 });

@@ -48,6 +48,9 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const remediatedGeneratedAt = formatTimestamp(file?.remediationCompletedAt);
   const validationUpdatedAt = formatTimestamp(file?.validationCompletedAt);
   const draftUpdatedAt = formatTimestamp(manualReview.updatedAt);
+  const revalidationHref = file
+    ? { pathname: '/app', query: { revalidateFor: file.id }, hash: 'upload-revised-pdf' }
+    : { pathname: '/app', hash: 'upload-revised-pdf' };
   const validationLabel =
     verification?.compliant === true
       ? 'Passed PDF/UA validation'
@@ -77,7 +80,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
           <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
             <Link
-              href="/app#upload-revised-pdf"
+              href={revalidationHref}
               className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"
             >
               Upload revised PDF for validation
@@ -109,7 +112,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
           <Link
-            href="/app#upload-revised-pdf"
+            href={revalidationHref}
             className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"
           >
             Upload revised PDF for validation

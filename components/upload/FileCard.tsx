@@ -1,5 +1,7 @@
+'use client';
+
 import Link from 'next/link';
-import type { FileEntry } from '@/stores/app-store';
+import { useAppStore, type FileEntry } from '@/stores/app-store';
 
 function isWorkingStatus(status: FileEntry['status']): boolean {
   return status !== 'remediated' && status !== 'error';
@@ -20,6 +22,12 @@ function statusHint(file: FileEntry): string | null {
   const { status } = file;
   if (file.sourceType === 'checker-report-artifact') {
     return 'This file looks like a checker/report artifact. Upload the source PDF for publishable remediation output.';
+  }
+  if (file.uploadIntent === 'revalidation' && status === 'remediated') {
+    return 'Open results to compare this revised upload against the earlier review and check the updated validation outcome.';
+  }
+  if (file.uploadIntent === 'revalidation') {
+    return 'This revised upload stays linked to an earlier review while the new validation run completes.';
   }
   if (status === 'queued') return 'Waiting to start.';
   if (status === 'parsing') return 'Reading document text and structure.';
@@ -59,13 +67,23 @@ function accentBorder(file: FileEntry) {
 }
 
 export function FileCard({ file }: { file: FileEntry }) {
+  const sourceFile = useAppStore((state) =>
+    file.derivedFromFileId ? state.files.find((entry) => entry.id === file.derivedFromFileId) : undefined
+  );
   const isProcessed = file.status === 'remediated';
   const isWorking = isWorkingStatus(file.status);
 
   return (
     <article className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${accentBorder(file)}`}>
-      <div className="flex items-center justify-between">
-        <p className="truncate font-medium text-[var(--ucsd-navy)]">{file.name}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium text-[var(--ucsd-navy)]">{file.name}</p>
+          {file.uploadIntent === 'revalidation' ? (
+            <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+              Validation revision{sourceFile ? ` for ${sourceFile.name}` : ''}
+            </p>
+          ) : null}
+        </div>
         {statusBadge(file.status)}
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
@@ -80,6 +98,14 @@ export function FileCard({ file }: { file: FileEntry }) {
           Source type: {file.sourceType.replace(/-/g, ' ')} ({file.sourceTypeConfidence ?? 'n/a'} confidence)
         </p>
       )}
+      {sourceFile ? (
+        <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+          Linked review:{' '}
+          <Link href={`/app/${sourceFile.id}/compare`} className="text-[var(--ucsd-blue)] underline underline-offset-2">
+            {sourceFile.name}
+          </Link>
+        </p>
+      ) : null}
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
       {isProcessed ? (

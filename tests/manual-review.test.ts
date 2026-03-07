@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeManualReviewState, hasPendingManualReviewChanges, getNearbyTextSnippet } from '@/lib/report/manual-review';
+import {
+  getNearbyTextSnippet,
+  hasPendingManualReviewChanges,
+  normalizeManualReviewDrafts,
+  summarizeManualReviewState
+} from '@/lib/report/manual-review';
 import type { FileEntry } from '@/stores/app-store';
 
 function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
@@ -16,6 +21,39 @@ function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
       hasStructTree: true,
       tags: [],
       textItems: [
+        {
+          text: 'Campus Accessibility Guide',
+          x: 40,
+          y: 700,
+          width: 200,
+          height: 12,
+          fontName: 'Helvetica-Bold',
+          fontSize: 18,
+          bold: true,
+          page: 1
+        },
+        {
+          text: 'Getting There',
+          x: 40,
+          y: 650,
+          width: 150,
+          height: 12,
+          fontName: 'Helvetica-Bold',
+          fontSize: 16,
+          bold: true,
+          page: 1
+        },
+        {
+          text: 'Entrance Details',
+          x: 40,
+          y: 610,
+          width: 150,
+          height: 12,
+          fontName: 'Helvetica-Bold',
+          fontSize: 14,
+          bold: true,
+          page: 1
+        },
         {
           text: 'Figure 1. Campus accessibility map',
           x: 40,
@@ -56,7 +94,7 @@ function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
 }
 
 describe('manual review utilities', () => {
-  it('reports pending re-validation when persisted draft changes exist', () => {
+  it('reports pending re-validation when persisted alt-text draft changes exist', () => {
     const file = makeFile({
       manualReviewDrafts: {
         altText: {
@@ -66,7 +104,8 @@ describe('manual review utilities', () => {
           }
         },
         structure: {
-          includeHeadings: {},
+          headings: {},
+          headingOrder: [],
           tableDecisions: {}
         },
         lastUpdatedAt: '2026-03-06T10:00:00.000Z'
@@ -79,6 +118,77 @@ describe('manual review utilities', () => {
     expect(summary.pendingRevalidation).toBe(true);
     expect(summary.altText.completedCount).toBe(1);
     expect(summary.altText.missingCount).toBe(0);
+  });
+
+  it('treats heading level edits as pending structure changes', () => {
+    const file = makeFile({
+      manualReviewDrafts: {
+        altText: {},
+        structure: {
+          headings: {
+            'h-1-1-2': {
+              level: 1
+            }
+          },
+          headingOrder: [],
+          tableDecisions: {}
+        },
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
+    });
+
+    const summary = summarizeManualReviewState(file);
+
+    expect(hasPendingManualReviewChanges(file)).toBe(true);
+    expect(summary.structure.headingSuggestions).toBe(3);
+    expect(summary.structure.headingOverrides).toBe(1);
+  });
+
+  it('treats custom heading order as a pending structure change', () => {
+    const file = makeFile({
+      manualReviewDrafts: {
+        altText: {},
+        structure: {
+          headings: {},
+          headingOrder: ['h-1-1-2', 'h-0-1-1', 'h-2-1-3'],
+          tableDecisions: {}
+        },
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
+    });
+
+    const summary = summarizeManualReviewState(file);
+
+    expect(hasPendingManualReviewChanges(file)).toBe(true);
+    expect(summary.structure.headingOrderCustomized).toBe(true);
+    expect(summary.structure.headingOverrides).toBe(1);
+  });
+
+  it('normalizes legacy includeHeadings drafts into the new structure shape', () => {
+    const normalized = normalizeManualReviewDrafts({
+      altText: {},
+      structure: {
+        includeHeadings: {
+          'h-1-1-2': false
+        },
+        tableDecisions: {}
+      },
+      lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+    });
+
+    expect(normalized).toEqual({
+      altText: {},
+      structure: {
+        headings: {
+          'h-1-1-2': {
+            include: false
+          }
+        },
+        headingOrder: [],
+        tableDecisions: {}
+      },
+      lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+    });
   });
 
   it('reports no pending re-validation when no draft overrides exist', () => {
