@@ -6,6 +6,8 @@ import { IssueList } from '@/components/report/IssueList';
 import { ManualStructureWorkspace } from '@/components/report/ManualStructureWorkspace';
 import { NextStepsPanel } from '@/components/report/NextStepsPanel';
 import { PublishingReadinessBanner } from '@/components/report/PublishingReadinessBanner';
+import { ReportStatePanel } from '@/components/report/ReportStatePanel';
+import { RevisionDeltaPanel } from '@/components/report/RevisionDeltaPanel';
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { AltTextWorkspace } from '@/components/report/AltTextWorkspace';
 import { StructuralIntegrityPanel } from '@/components/report/StructuralIntegrityPanel';
@@ -38,6 +40,8 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <div id="publish-step" className="scroll-mt-24">
         <PublishingReadinessBanner fileId={params.fileId} />
       </div>
+      <ReportStatePanel fileId={params.fileId} />
+      <RevisionDeltaPanel fileId={params.fileId} />
       <WorkflowStepper fileId={params.fileId} />
 
       <div id="download-step" className="scroll-mt-24">
