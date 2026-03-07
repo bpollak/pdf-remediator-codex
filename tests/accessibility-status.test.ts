@@ -128,7 +128,8 @@ describe('getAccessibilityStatus', () => {
             }
           },
           structure: {
-            includeHeadings: {},
+            headings: {},
+            headingOrder: [],
             tableDecisions: {}
           },
           lastUpdatedAt: '2026-03-06T10:00:00.000Z'

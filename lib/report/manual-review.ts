@@ -4,29 +4,126 @@ import type {
   FileEntry,
   ManualAltTextDraft,
   ManualReviewDrafts,
+  ManualStructureHeadingDraft,
   ManualStructureTableDecision
 } from '@/types/file-entry';
+
+interface LegacyManualStructureDrafts {
+  includeHeadings?: Record<string, boolean>;
+  headings?: Record<string, ManualStructureHeadingDraft>;
+  headingOrder?: string[];
+  tableDecisions?: Record<string, ManualStructureTableDecision>;
+}
+
+interface LegacyManualReviewDrafts {
+  altText?: Record<string, ManualAltTextDraft>;
+  structure?: LegacyManualStructureDrafts;
+  lastUpdatedAt?: string;
+}
+
+interface HeadingCandidateWithKey {
+  key: string;
+  text: string;
+  level: number;
+  page: number;
+}
 
 function emptyDrafts(): ManualReviewDrafts {
   return {
     altText: {},
     structure: {
-      includeHeadings: {},
+      headings: {},
+      headingOrder: [],
       tableDecisions: {}
     }
   };
 }
 
-export function getManualReviewDrafts(file: FileEntry | undefined): ManualReviewDrafts {
-  if (!file?.manualReviewDrafts) return emptyDrafts();
+function clampHeadingLevel(value: number | undefined): number | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  const normalized = Math.round(value!);
+  return Math.max(1, Math.min(6, normalized));
+}
+
+function normalizeHeadingDraft(
+  draft: ManualStructureHeadingDraft | undefined,
+  includeOverride?: boolean
+): ManualStructureHeadingDraft | undefined {
+  const normalized: ManualStructureHeadingDraft = {};
+  const include = includeOverride ?? draft?.include;
+  const level = clampHeadingLevel(draft?.level);
+
+  if (include === false) normalized.include = false;
+  if (level !== undefined) normalized.level = level;
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function uniqueStrings(values: string[] | undefined): string[] {
+  if (!values) return [];
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== 'string' || value.length === 0 || seen.has(value)) continue;
+    seen.add(value);
+    ordered.push(value);
+  }
+
+  return ordered;
+}
+
+export function normalizeManualReviewDrafts(
+  drafts: ManualReviewDrafts | LegacyManualReviewDrafts | undefined
+): ManualReviewDrafts | undefined {
+  if (!drafts) return undefined;
+
+  const structure = (drafts.structure ?? {}) as Partial<ManualReviewDrafts['structure']> &
+    LegacyManualStructureDrafts;
+  const altText = Object.fromEntries(
+    Object.entries(drafts.altText ?? {}).filter(([, value]) => Boolean(value))
+  ) as Record<string, ManualAltTextDraft>;
+  const headings: Record<string, ManualStructureHeadingDraft> = {};
+
+  for (const [key, value] of Object.entries(structure.headings ?? {})) {
+    const normalized = normalizeHeadingDraft(value);
+    if (normalized) headings[key] = normalized;
+  }
+
+  for (const [key, include] of Object.entries(structure.includeHeadings ?? {})) {
+    const normalized = normalizeHeadingDraft(headings[key], include);
+    if (normalized) headings[key] = normalized;
+  }
+
+  const tableDecisions = Object.fromEntries(
+    Object.entries(structure.tableDecisions ?? {}).filter(
+      ([, value]) => value === 'confirm' || value === 'reject'
+    )
+  ) as Record<string, ManualStructureTableDecision>;
+  const headingOrder = uniqueStrings(structure.headingOrder);
+
+  if (
+    Object.keys(altText).length === 0 &&
+    Object.keys(headings).length === 0 &&
+    headingOrder.length === 0 &&
+    Object.keys(tableDecisions).length === 0
+  ) {
+    return undefined;
+  }
+
   return {
-    altText: file.manualReviewDrafts.altText ?? {},
+    altText,
     structure: {
-      includeHeadings: file.manualReviewDrafts.structure?.includeHeadings ?? {},
-      tableDecisions: file.manualReviewDrafts.structure?.tableDecisions ?? {}
+      headings,
+      headingOrder,
+      tableDecisions
     },
-    lastUpdatedAt: file.manualReviewDrafts.lastUpdatedAt
+    lastUpdatedAt: drafts.lastUpdatedAt
   };
+}
+
+export function getManualReviewDrafts(file: FileEntry | undefined): ManualReviewDrafts {
+  return normalizeManualReviewDrafts(file?.manualReviewDrafts) ?? emptyDrafts();
 }
 
 export function getParsedReviewBase(file: FileEntry | undefined): ParsedPDF | undefined {
@@ -49,6 +146,68 @@ export function getTableDraftKey(table: { page: number }, index: number): string
   return `t-${index}-${table.page}`;
 }
 
+function getHeadingCandidates(parsed: ParsedPDF): HeadingCandidateWithKey[] {
+  return detectHeadings(parsed).map((heading, index) => ({
+    ...heading,
+    key: getHeadingDraftKey(heading, index)
+  }));
+}
+
+function getHeadingMap(parsed: ParsedPDF): Map<string, HeadingCandidateWithKey> {
+  return new Map(getHeadingCandidates(parsed).map((heading) => [heading.key, heading]));
+}
+
+function normalizeHeadingOrderWithKeys(headingKeys: string[], storedOrder: string[]): string[] {
+  const includedKeys = new Set(headingKeys);
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+
+  for (const key of storedOrder) {
+    if (!includedKeys.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    ordered.push(key);
+  }
+
+  for (const key of headingKeys) {
+    if (seen.has(key)) continue;
+    ordered.push(key);
+  }
+
+  return ordered;
+}
+
+function hasCustomHeadingOrder(headingKeys: string[], storedOrder: string[]): boolean {
+  if (headingKeys.length === 0 || storedOrder.length === 0) return false;
+  const normalized = normalizeHeadingOrderWithKeys(headingKeys, storedOrder);
+  return normalized.some((key, index) => key !== headingKeys[index]);
+}
+
+function hasHeadingDraftChanges(file: FileEntry | undefined): boolean {
+  const parsed = getParsedReviewBase(file);
+  const drafts = getManualReviewDrafts(file);
+
+  if (!parsed) {
+    return Object.keys(drafts.structure.headings).length > 0 || drafts.structure.headingOrder.length > 0;
+  }
+
+  const headingMap = getHeadingMap(parsed);
+  for (const [key, draft] of Object.entries(drafts.structure.headings)) {
+    const detected = headingMap.get(key);
+    if (!detected) {
+      if (draft.include === false || draft.level !== undefined) return true;
+      continue;
+    }
+
+    if (draft.include === false) return true;
+    if (draft.level !== undefined && draft.level !== detected.level) return true;
+  }
+
+  return hasCustomHeadingOrder(
+    Array.from(headingMap.keys()),
+    drafts.structure.headingOrder
+  );
+}
+
 export function getStructureTableDecision(
   file: FileEntry | undefined,
   key: string
@@ -56,8 +215,33 @@ export function getStructureTableDecision(
   return getManualReviewDrafts(file).structure.tableDecisions[key] ?? 'review';
 }
 
+export function getStructureHeadingDraft(
+  file: FileEntry | undefined,
+  key: string
+): ManualStructureHeadingDraft | undefined {
+  return getManualReviewDrafts(file).structure.headings[key];
+}
+
 export function getStructureHeadingIncluded(file: FileEntry | undefined, key: string): boolean {
-  return getManualReviewDrafts(file).structure.includeHeadings[key] ?? true;
+  return getStructureHeadingDraft(file, key)?.include ?? true;
+}
+
+export function getStructureHeadingLevel(
+  file: FileEntry | undefined,
+  key: string,
+  detectedLevel: number
+): number {
+  return getStructureHeadingDraft(file, key)?.level ?? detectedLevel;
+}
+
+export function getOrderedStructureHeadingKeys(
+  file: FileEntry | undefined,
+  headingKeys: string[]
+): string[] {
+  return normalizeHeadingOrderWithKeys(
+    headingKeys,
+    getManualReviewDrafts(file).structure.headingOrder
+  );
 }
 
 export function hasPendingManualReviewChanges(file: FileEntry | undefined): boolean {
@@ -65,7 +249,7 @@ export function hasPendingManualReviewChanges(file: FileEntry | undefined): bool
   const drafts = getManualReviewDrafts(file);
   return (
     Object.keys(drafts.altText).length > 0 ||
-    Object.keys(drafts.structure.includeHeadings).length > 0 ||
+    hasHeadingDraftChanges(file) ||
     Object.keys(drafts.structure.tableDecisions).length > 0
   );
 }
@@ -76,7 +260,7 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
 
   if (!parsed) {
     return {
-      pendingRevalidation: false,
+      pendingRevalidation: hasPendingManualReviewChanges(file),
       altText: {
         totalImages: 0,
         missingCount: 0,
@@ -86,6 +270,7 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
       structure: {
         headingSuggestions: 0,
         headingOverrides: 0,
+        headingOrderCustomized: false,
         tableSuggestions: 0,
         reviewedTables: 0
       },
@@ -100,7 +285,14 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
     return !draft.decorative && draft.alt.trim().length === 0;
   }).length;
 
-  const headingSuggestions = detectHeadings(parsed);
+  const headingSuggestions = getHeadingCandidates(parsed);
+  const headingKeys = headingSuggestions.map((heading) => heading.key);
+  const headingOverrides = headingSuggestions.filter((heading) => {
+    const draft = drafts.structure.headings[heading.key];
+    if (!draft) return false;
+    return draft.include === false || (draft.level !== undefined && draft.level !== heading.level);
+  }).length;
+  const headingOrderCustomized = hasCustomHeadingOrder(headingKeys, drafts.structure.headingOrder);
   const tableSuggestions = detectTables(parsed);
   const reviewedTables = tableSuggestions.filter((table, index) => {
     const key = getTableDraftKey(table, index);
@@ -117,7 +309,8 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
     },
     structure: {
       headingSuggestions: headingSuggestions.length,
-      headingOverrides: Object.keys(drafts.structure.includeHeadings).length,
+      headingOverrides: headingOverrides + (headingOrderCustomized ? 1 : 0),
+      headingOrderCustomized,
       tableSuggestions: tableSuggestions.length,
       reviewedTables
     },
@@ -125,7 +318,37 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
   };
 }
 
-export function getNearbyTextSnippet(parsed: ParsedPDF, input: { page: number; x: number; y: number; width: number; height: number }): string | undefined {
+export function buildStructurePlanHeadings(
+  file: FileEntry | undefined,
+  detectedHeadings: Array<{ page: number; level: number; text: string }>
+) {
+  const keyed = detectedHeadings.map((heading, index) => ({
+    key: getHeadingDraftKey(heading, index),
+    ...heading
+  }));
+  const orderedKeys = getOrderedStructureHeadingKeys(
+    file,
+    keyed.map((heading) => heading.key)
+  );
+  const keyedMap = new Map(keyed.map((heading) => [heading.key, heading]));
+
+  return orderedKeys
+    .map((key) => {
+      const heading = keyedMap.get(key);
+      if (!heading) return undefined;
+      return {
+        ...heading,
+        includeInBookmarkPlan: getStructureHeadingIncluded(file, key),
+        editedLevel: getStructureHeadingLevel(file, key, heading.level)
+      };
+    })
+    .filter((heading): heading is NonNullable<typeof heading> => Boolean(heading));
+}
+
+export function getNearbyTextSnippet(
+  parsed: ParsedPDF,
+  input: { page: number; x: number; y: number; width: number; height: number }
+): string | undefined {
   const centerX = input.x + input.width / 2;
   const centerY = input.y + input.height / 2;
 

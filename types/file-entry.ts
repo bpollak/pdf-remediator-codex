@@ -5,14 +5,21 @@ import type { RemediationIterationSummary, RemediationStopReason } from '@/lib/r
 import type { SourceType, SourceTypeConfidence } from '@/lib/pdf/source-type';
 
 export type ManualStructureTableDecision = 'confirm' | 'reject' | 'review';
+export type UploadIntent = 'new-upload' | 'revalidation';
 
 export interface ManualAltTextDraft {
   alt: string;
   decorative: boolean;
 }
 
+export interface ManualStructureHeadingDraft {
+  include?: boolean;
+  level?: number;
+}
+
 export interface ManualStructureDrafts {
-  includeHeadings: Record<string, boolean>;
+  headings: Record<string, ManualStructureHeadingDraft>;
+  headingOrder: string[];
   tableDecisions: Record<string, ManualStructureTableDecision>;
 }
 
@@ -27,6 +34,8 @@ export interface FileEntry {
   name: string;
   size: number;
   uploadedBytes: ArrayBuffer;
+  uploadIntent?: UploadIntent;
+  derivedFromFileId?: string;
   status: 'queued' | 'parsing' | 'ocr' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';
   progress: number;
   ocrAttempted?: boolean;
