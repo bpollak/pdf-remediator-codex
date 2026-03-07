@@ -6,6 +6,7 @@ import { ALL_CATEGORIES, type Category } from '@/lib/audit/types';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
+import { formatTimestamp } from '@/lib/report/time-format';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -26,6 +27,8 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   const verapdfResult = file?.verapdfResult;
   const accessibilityStatus = getAccessibilityStatus(file);
   const manualReview = summarizeManualReviewState(file);
+  const remediatedGeneratedAt = formatTimestamp(file?.remediationCompletedAt);
+  const draftUpdatedAt = formatTimestamp(manualReview.updatedAt);
 
   if (!auditResult) {
     return (
@@ -85,6 +88,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
         <p className="text-sm text-[var(--ucsd-text)]">
           Manual draft edits exist in the workspaces below. Re-upload or validate a revised PDF before treating the current file as publish-ready.
         </p>
+      ) : null}
+      {variant === 'remediated' && (remediatedGeneratedAt || draftUpdatedAt) ? (
+        <div className="rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
+          {remediatedGeneratedAt ? <p>Current remediated PDF generated: {remediatedGeneratedAt}</p> : null}
+          {draftUpdatedAt ? <p className="mt-1">Latest saved draft edit: {draftUpdatedAt}</p> : null}
+        </div>
       ) : null}
       {variant === 'remediated' && displayedScore !== undefined && displayedScore < auditResult.score && (
         <p className="text-sm text-[var(--ucsd-text)]">

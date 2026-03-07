@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useAppStore } from '@/stores/app-store';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
+import { formatTimestamp } from '@/lib/report/time-format';
 
 function metricValue(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : 'n/a';
@@ -43,6 +45,9 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const reason = neutralReason(verification?.reason);
   const accessibilityStatus = getAccessibilityStatus(file);
   const manualReview = summarizeManualReviewState(file);
+  const remediatedGeneratedAt = formatTimestamp(file?.remediationCompletedAt);
+  const validationUpdatedAt = formatTimestamp(file?.validationCompletedAt);
+  const draftUpdatedAt = formatTimestamp(manualReview.updatedAt);
   const validationLabel =
     verification?.compliant === true
       ? 'Passed PDF/UA validation'
@@ -64,10 +69,20 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
           Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
         </p>
+        <div className="mt-3 rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
+          {remediatedGeneratedAt ? <p>Current remediated PDF generated: {remediatedGeneratedAt}</p> : null}
+          {draftUpdatedAt ? <p className="mt-1">Latest saved draft edit: {draftUpdatedAt}</p> : null}
+        </div>
         {manualReview.pendingRevalidation ? (
-          <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-            Current draft changes are waiting for a revised PDF and another validation pass.
-          </p>
+          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
+            <Link
+              href="/app#upload-revised-pdf"
+              className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"
+            >
+              Upload revised PDF for validation
+            </Link>
+          </div>
         ) : null}
       </section>
     );
@@ -85,10 +100,21 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
         Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
       </p>
+      <div className="mt-3 rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
+        {remediatedGeneratedAt ? <p>Current remediated PDF generated: {remediatedGeneratedAt}</p> : null}
+        {validationUpdatedAt ? <p className="mt-1">Latest validation result recorded: {validationUpdatedAt}</p> : null}
+        {draftUpdatedAt ? <p className="mt-1">Latest saved draft edit: {draftUpdatedAt}</p> : null}
+      </div>
       {manualReview.pendingRevalidation ? (
-        <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          Current draft changes are waiting for a revised PDF and another validation pass.
-        </p>
+        <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
+          <Link
+            href="/app#upload-revised-pdf"
+            className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"
+          >
+            Upload revised PDF for validation
+          </Link>
+        </div>
       ) : null}
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">

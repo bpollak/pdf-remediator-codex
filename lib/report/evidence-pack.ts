@@ -60,6 +60,8 @@ export function buildEvidencePack(file: FileEntry) {
       ocrApplied: file.ocrApplied ?? false,
       ocrReason: file.ocrReason,
       remediationMode: file.remediationMode,
+      remediationCompletedAt: file.remediationCompletedAt,
+      validationCompletedAt: file.validationCompletedAt,
       remediationIterations: file.remediationIterations ?? [],
       remediationStopReason: file.remediationStopReason
     },

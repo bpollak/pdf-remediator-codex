@@ -188,6 +188,7 @@ export function QueueProcessor() {
         if (!selectedArtifact) {
           throw new Error('Selected remediation iteration artifact was not found.');
         }
+        const completedAt = new Date().toISOString();
 
         updateFile(next.id, {
           status: 'remediated',
@@ -199,6 +200,8 @@ export function QueueProcessor() {
           remediatedParsedData: selectedArtifact.remediatedParsedData,
           postRemediationAudit: selectedArtifact.postRemediationAudit,
           remediationMode: selectedArtifact.remediationMode,
+          remediationCompletedAt: completedAt,
+          validationCompletedAt: completedAt,
           verapdfResult: selectedArtifact.verapdfResult,
           remediationIterations,
           remediationStopReason

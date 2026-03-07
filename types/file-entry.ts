@@ -38,6 +38,8 @@ export interface FileEntry {
   remediatedBytes?: ArrayBuffer;
   postRemediationAudit?: AuditResult;
   remediationMode?: RemediationMode;
+  remediationCompletedAt?: string;
+  validationCompletedAt?: string;
   sourceType?: SourceType;
   sourceTypeConfidence?: SourceTypeConfidence;
   sourceTypeReasons?: string[];

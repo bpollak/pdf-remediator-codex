@@ -98,6 +98,7 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
 
   function jumpToPreview(entry: (typeof entries)[number]) {
     setPreviewFocus(fileId, {
+      variant: file?.remediatedParsedData ? 'remediated' : 'original',
       page: entry.image.page,
       label: entry.label,
       bounds: {

@@ -13,6 +13,7 @@ export type { FileEntry } from '@/types/file-entry';
 export type { ManualStructureTableDecision } from '@/types/file-entry';
 
 export interface PreviewFocus {
+  variant?: 'original' | 'remediated';
   page: number;
   label: string;
   bounds?: {
@@ -57,6 +58,7 @@ function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
   }
   if ('ocrAttempted' in patch || 'ocrApplied' in patch || 'ocrReason' in patch) return true;
   if ('remediationMode' in patch || 'verapdfResult' in patch) return true;
+  if ('remediationCompletedAt' in patch || 'validationCompletedAt' in patch) return true;
   if ('remediationIterations' in patch || 'remediationStopReason' in patch) return true;
   if ('manualReviewDrafts' in patch) return true;
   if ('error' in patch) return true;

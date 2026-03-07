@@ -111,9 +111,9 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
         description: manualReview.pendingRevalidation
           ? 'Manual draft changes are waiting for a revised PDF and validation pass.'
           : 'Confirm the PDF/UA result after manual revisions.',
-        href: '#validation-step',
-        actionLabel: 'Open validation panel',
-        complete: file?.verapdfResult?.compliant === true,
+        href: manualReview.pendingRevalidation ? '/app#upload-revised-pdf' : '#validation-step',
+        actionLabel: manualReview.pendingRevalidation ? 'Upload revised PDF for validation' : 'Open validation panel',
+        complete: !manualReview.pendingRevalidation && file?.verapdfResult?.compliant === true,
         available: hasRemediatedPdf || hasValidationResult
       },
       {
