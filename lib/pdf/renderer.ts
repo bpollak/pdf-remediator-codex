@@ -1,7 +1,9 @@
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { ensurePdfJsWorkerConfigured } from './configure-worker';
 
-const documentCache = new WeakMap<ArrayBuffer, Promise<any>>();
+type PdfDocumentProxy = Awaited<ReturnType<typeof getDocument>['promise']>;
+
+const documentCache = new WeakMap<ArrayBuffer, Promise<PdfDocumentProxy>>();
 
 async function getPdfDocument(bytes: ArrayBuffer) {
   const cached = documentCache.get(bytes);
