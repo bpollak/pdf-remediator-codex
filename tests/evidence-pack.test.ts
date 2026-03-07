@@ -23,7 +23,26 @@ describe('buildEvidencePack', () => {
       sourceTypeSuggestedAction: 'Proceed with remediation.',
       auditResult: { score: 45, findings: [] },
       postRemediationAudit: { score: 75, findings: [] },
-      remediatedBytes: new Uint8Array([4, 5, 6]).buffer
+      remediatedBytes: new Uint8Array([4, 5, 6]).buffer,
+      remediatedParsedData: {
+        pageCount: 1,
+        metadata: {},
+        hasStructTree: true,
+        tags: [],
+        textItems: [],
+        images: [],
+        links: [],
+        outlines: [],
+        forms: []
+      },
+      manualReviewDrafts: {
+        altText: {},
+        structure: {
+          includeHeadings: {},
+          tableDecisions: {}
+        },
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
     });
 
     const pack = buildEvidencePack(file);
@@ -33,5 +52,6 @@ describe('buildEvidencePack', () => {
     expect(pack.scoring.remediatedInternalScore).toBe(75);
     expect(pack.document.uploadedFingerprint).toContain(':');
     expect(pack.document.remediatedFingerprint).toContain(':');
+    expect(pack.manualReview.pendingRevalidation).toBe(false);
   });
 });

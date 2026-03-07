@@ -69,7 +69,7 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
           </h4>
           <div className="space-y-2">
             {findings.map((finding) => (
-              <IssueCard key={`${finding.ruleId}-${finding.description}`} finding={finding} />
+              <IssueCard key={`${finding.ruleId}-${finding.description}`} finding={finding} fileId={fileId} variant={variant} />
             ))}
           </div>
         </div>

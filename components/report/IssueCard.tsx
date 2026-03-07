@@ -1,5 +1,8 @@
+'use client';
+
 import type { AuditFinding } from '@/lib/audit/types';
 import { findingActionTitle } from '@/lib/report/finding-copy';
+import { useAppStore } from '@/stores/app-store';
 
 const severityStyles = {
   critical: 'bg-red-100 text-red-800',
@@ -13,7 +16,26 @@ const severityLabel = {
   minor: 'Lower priority',
 } as const;
 
-export function IssueCard({ finding }: { finding: AuditFinding }) {
+export function IssueCard({
+  finding,
+  fileId,
+  variant
+}: {
+  finding: AuditFinding;
+  fileId: string;
+  variant: 'original' | 'remediated';
+}) {
+  const setPreviewFocus = useAppStore((state) => state.setPreviewFocus);
+
+  function reviewInPreview() {
+    setPreviewFocus(fileId, {
+      variant,
+      page: finding.location.page ?? 1,
+      label: findingActionTitle(finding)
+    });
+    document.getElementById('review-step')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <article className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-3 shadow-sm">
       <p className="font-medium text-[var(--ucsd-navy)]">
@@ -41,6 +63,13 @@ export function IssueCard({ finding }: { finding: AuditFinding }) {
       <p className="mt-2 text-xs text-gray-500">
         Technical reference: {finding.ruleId} • WCAG {finding.wcagCriterion}
       </p>
+      <button
+        type="button"
+        onClick={reviewInPreview}
+        className="mt-3 inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
+      >
+        Review in preview
+      </button>
     </article>
   );
 }

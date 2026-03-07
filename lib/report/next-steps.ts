@@ -51,8 +51,9 @@ export function buildManualNextSteps(input: {
   remediationStopReason?: RemediationStopReason;
   remediationMode?: RemediationMode;
   sourceType?: SourceType;
+  pendingManualReview?: boolean;
 }): NextStepItem[] {
-  const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode, sourceType } = input;
+  const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode, sourceType, pendingManualReview } = input;
   const steps: NextStepItem[] = [];
   const manualPathHint =
     'If you use Acrobat, fix issues in Tags and Accessibility Checker. If you edit in Word or PowerPoint, update the source file, export a new PDF, then re-upload.';
@@ -71,6 +72,15 @@ export function buildManualNextSteps(input: {
       title: 'Complete structural tagging manually in Acrobat or PAC',
       description:
         'This output is marked analysis-only because content-bound PDF tags were not guaranteed. Complete MCID/ParentTree-backed tagging manually before publishing.',
+      severity: 'high'
+    });
+  }
+
+  if (pendingManualReview) {
+    steps.push({
+      title: 'Validate a revised PDF after your draft edits',
+      description:
+        'You have saved draft changes in the manual workspaces. Apply those edits in Acrobat, PAC, or the source document, then upload the revised PDF for another validation pass.',
       severity: 'high'
     });
   }

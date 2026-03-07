@@ -117,6 +117,32 @@ describe('getAccessibilityStatus', () => {
     });
   });
 
+  it('returns Not yet accessible when manual draft changes are waiting for re-validation', () => {
+    const result = getAccessibilityStatus(
+      file({
+        manualReviewDrafts: {
+          altText: {
+            'img-1-1': {
+              alt: 'Updated description',
+              decorative: false
+            }
+          },
+          structure: {
+            includeHeadings: {},
+            tableDecisions: {}
+          },
+          lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+        }
+      })
+    );
+
+    expect(result.status).toBe('not-yet-accessible');
+    expect(result.reasons).toContainEqual({
+      code: 'pending-revalidation',
+      label: 'Manual draft changes are waiting for re-validation'
+    });
+  });
+
   it('returns Processing while remediation is still running', () => {
     const result = getAccessibilityStatus(
       file({

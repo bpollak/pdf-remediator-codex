@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { detectHeadings, detectTables } from '@/lib/remediate/heuristics';
 import { useAppStore } from '@/stores/app-store';
-
-type TableDecision = 'confirm' | 'reject' | 'review';
+import {
+  getHeadingDraftKey,
+  getStructureHeadingIncluded,
+  getStructureTableDecision,
+  getTableDraftKey,
+  summarizeManualReviewState
+} from '@/lib/report/manual-review';
 
 function slugify(input: string): string {
   return input
@@ -26,28 +31,13 @@ function downloadJson(fileName: string, payload: unknown) {
 
 export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
+  const updateStructureHeadingDraft = useAppStore((state) => state.updateStructureHeadingDraft);
+  const updateStructureTableDraft = useAppStore((state) => state.updateStructureTableDraft);
   const parsed = file?.remediatedParsedData ?? file?.parsedData;
 
   const headingSuggestions = useMemo(() => (parsed ? detectHeadings(parsed) : []), [parsed]);
   const tableSuggestions = useMemo(() => (parsed ? detectTables(parsed) : []), [parsed]);
-  const [includeHeadings, setIncludeHeadings] = useState<Record<string, boolean>>({});
-  const [tableDecisions, setTableDecisions] = useState<Record<string, TableDecision>>({});
-
-  useEffect(() => {
-    const headingDefaults: Record<string, boolean> = {};
-    for (let index = 0; index < headingSuggestions.length; index += 1) {
-      const heading = headingSuggestions[index]!;
-      headingDefaults[`h-${index}-${heading.page}-${heading.level}`] = true;
-    }
-    setIncludeHeadings(headingDefaults);
-
-    const tableDefaults: Record<string, TableDecision> = {};
-    for (let index = 0; index < tableSuggestions.length; index += 1) {
-      const table = tableSuggestions[index]!;
-      tableDefaults[`t-${index}-${table.page}`] = 'review';
-    }
-    setTableDecisions(tableDefaults);
-  }, [headingSuggestions, tableSuggestions]);
+  const summary = summarizeManualReviewState(file);
 
   if (!parsed) {
     return (
@@ -59,18 +49,9 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
   }
 
   const selectedHeadings = headingSuggestions.filter((heading, index) => {
-    const key = `h-${index}-${heading.page}-${heading.level}`;
-    return includeHeadings[key];
+    const key = getHeadingDraftKey(heading, index);
+    return getStructureHeadingIncluded(file, key);
   });
-  const reviewedTables = tableSuggestions.filter((table, index) => {
-    const key = `t-${index}-${table.page}`;
-    return (tableDecisions[key] ?? 'review') !== 'review';
-  }).length;
-  const hasDraftChanges =
-    headingSuggestions.some((heading, index) => {
-      const key = `h-${index}-${heading.page}-${heading.level}`;
-      return includeHeadings[key] !== true;
-    }) || reviewedTables > 0;
 
   const structurePlan = {
     generatedAt: new Date().toISOString(),
@@ -78,20 +59,20 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
     base: file?.remediatedParsedData ? 'remediated' : 'original',
     existingOutlines: parsed.outlines,
     headingSuggestions: headingSuggestions.map((heading, index) => {
-      const key = `h-${index}-${heading.page}-${heading.level}`;
+      const key = getHeadingDraftKey(heading, index);
       return {
         ...heading,
-        includeInBookmarkPlan: Boolean(includeHeadings[key])
+        includeInBookmarkPlan: getStructureHeadingIncluded(file, key)
       };
     }),
     selectedBookmarkPlan: selectedHeadings,
     tableSuggestions: tableSuggestions.map((table, index) => {
-      const key = `t-${index}-${table.page}`;
+      const key = getTableDraftKey(table, index);
       return {
         page: table.page,
         rowCount: table.rows.length,
         columnCount: table.rows[0]?.cells.length ?? 0,
-        decision: tableDecisions[key] ?? 'review'
+        decision: getStructureTableDecision(file, key)
       };
     })
   };
@@ -104,16 +85,17 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
           Review heading, bookmark, and table suggestions before final manual tagging in Acrobat or PAC.
         </p>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          This workspace creates a review plan. It does not directly rewrite the PDF tag tree or change the automated baseline.
+          This workspace creates a persisted review plan. It does not directly rewrite the PDF tag tree or change the automated baseline.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--ucsd-text)]">
         <span>Detected outlines: {parsed.outlines.length}</span>
-        <span>Heading suggestions: {headingSuggestions.length}</span>
-        <span>Table suggestions: {tableSuggestions.length}</span>
-        <span>Table decisions reviewed: {reviewedTables} of {tableSuggestions.length}</span>
-        {hasDraftChanges ? (
+        <span>Heading suggestions: {summary.structure.headingSuggestions}</span>
+        <span>Heading overrides: {summary.structure.headingOverrides}</span>
+        <span>Table suggestions: {summary.structure.tableSuggestions}</span>
+        <span>Table decisions reviewed: {summary.structure.reviewedTables} of {summary.structure.tableSuggestions}</span>
+        {summary.pendingRevalidation ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
             Pending re-validation
           </span>
@@ -135,18 +117,13 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
           ) : (
             <div className="mt-2 max-h-[28vh] space-y-2 overflow-auto pr-1">
               {headingSuggestions.map((heading, index) => {
-                const key = `h-${index}-${heading.page}-${heading.level}`;
+                const key = getHeadingDraftKey(heading, index);
                 return (
                   <label key={key} className="flex items-start gap-2 rounded border border-[rgba(24,43,73,0.12)] p-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={Boolean(includeHeadings[key])}
-                      onChange={(event) =>
-                        setIncludeHeadings((state) => ({
-                          ...state,
-                          [key]: event.target.checked
-                        }))
-                      }
+                      checked={getStructureHeadingIncluded(file, key)}
+                      onChange={(event) => updateStructureHeadingDraft(fileId, key, event.target.checked)}
                     />
                     <span className="text-[var(--ucsd-text)]">
                       <span className="font-medium text-[var(--ucsd-navy)]">H{heading.level}</span> p.{heading.page}: {heading.text}
@@ -165,8 +142,8 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
           ) : (
             <div className="mt-2 max-h-[28vh] space-y-2 overflow-auto pr-1">
               {tableSuggestions.map((table, index) => {
-                const key = `t-${index}-${table.page}`;
-                const decision = tableDecisions[key] ?? 'review';
+                const key = getTableDraftKey(table, index);
+                const decision = getStructureTableDecision(file, key);
                 return (
                   <div key={key} className="rounded border border-[rgba(24,43,73,0.12)] p-2 text-sm">
                     <p className="font-medium text-[var(--ucsd-navy)]">
@@ -178,7 +155,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                         className={`rounded px-2 py-0.5 text-xs ${
                           decision === 'confirm' ? 'bg-green-100 text-green-800' : 'border border-[rgba(24,43,73,0.2)] text-[var(--ucsd-text)]'
                         }`}
-                        onClick={() => setTableDecisions((state) => ({ ...state, [key]: 'confirm' }))}
+                        onClick={() => updateStructureTableDraft(fileId, key, 'confirm')}
                       >
                         Confirm table
                       </button>
@@ -187,7 +164,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                         className={`rounded px-2 py-0.5 text-xs ${
                           decision === 'reject' ? 'bg-red-100 text-red-800' : 'border border-[rgba(24,43,73,0.2)] text-[var(--ucsd-text)]'
                         }`}
-                        onClick={() => setTableDecisions((state) => ({ ...state, [key]: 'reject' }))}
+                        onClick={() => updateStructureTableDraft(fileId, key, 'reject')}
                       >
                         Mark as non-table
                       </button>
@@ -196,7 +173,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                         className={`rounded px-2 py-0.5 text-xs ${
                           decision === 'review' ? 'bg-amber-100 text-amber-900' : 'border border-[rgba(24,43,73,0.2)] text-[var(--ucsd-text)]'
                         }`}
-                        onClick={() => setTableDecisions((state) => ({ ...state, [key]: 'review' }))}
+                        onClick={() => updateStructureTableDraft(fileId, key, 'review')}
                       >
                         Needs review
                       </button>

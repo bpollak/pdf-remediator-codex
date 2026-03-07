@@ -1,5 +1,6 @@
 import type { FileEntry } from '@/types/file-entry';
 import { computeDisplayedAutomatedScore } from './display-score';
+import { hasPendingManualReviewChanges } from './manual-review';
 
 export type AccessibilityStatus =
   | 'accessible'
@@ -16,6 +17,7 @@ export type AccessibilityReasonCode =
   | 'failed-checks'
   | 'analysis-only'
   | 'source-artifact'
+  | 'pending-revalidation'
   | 'verification-unavailable';
 
 export interface AccessibilityReason {
@@ -84,6 +86,7 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   const remainingInternal = auditResult.findings.length;
   const failedRules = file.verapdfResult?.summary?.failedRules ?? 0;
   const failedChecks = file.verapdfResult?.summary?.failedChecks ?? 0;
+  const hasPendingReviewChanges = hasPendingManualReviewChanges(file);
   const verificationUnavailable =
     !file.verapdfResult ||
     file.verapdfResult.attempted === false ||
@@ -101,6 +104,13 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
     reasons.push({
       code: 'analysis-only',
       label: 'Manual structure tagging is still required'
+    });
+  }
+
+  if (hasPendingReviewChanges) {
+    reasons.push({
+      code: 'pending-revalidation',
+      label: 'Manual draft changes are waiting for re-validation'
     });
   }
 

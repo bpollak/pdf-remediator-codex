@@ -41,6 +41,17 @@ describe('buildManualNextSteps', () => {
     expect(steps[0]?.severity).toBe('high');
   });
 
+  it('adds validation guidance when manual draft changes are pending', () => {
+    const steps = buildManualNextSteps({
+      remediatedFindings: [],
+      pendingManualReview: true,
+      verapdfResult: { attempted: true, compliant: true }
+    });
+
+    expect(steps[0]?.title).toContain('Validate a revised PDF');
+    expect(steps[0]?.severity).toBe('high');
+  });
+
   it('includes top remaining findings and recommendation text', () => {
     const steps = buildManualNextSteps({
       remediatedFindings: [
