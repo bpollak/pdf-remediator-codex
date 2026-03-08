@@ -69,12 +69,10 @@ function formatPageList(findings: AuditFinding[]): string {
 }
 
 function GroupedIssueCard({
-  ruleId,
   instances,
   fileId,
   variant,
 }: {
-  ruleId: string;
   instances: AuditFinding[];
   fileId: string;
   variant: AuditVariant;
