@@ -6,6 +6,7 @@ import { FileCard } from './FileCard';
 export function FileQueue() {
   const files = useAppStore((s) => s.files);
   const hydrated = useAppStore((s) => s.hydrated);
+  const displayFiles = [...files].reverse();
 
   if (!hydrated) {
     return <p className="text-[var(--ucsd-text)]">Loading saved files...</p>;
@@ -15,7 +16,7 @@ export function FileQueue() {
 
   return (
     <div className="space-y-3">
-      {files.map((file) => (
+      {displayFiles.map((file) => (
         <FileCard key={file.id} file={file} />
       ))}
     </div>
