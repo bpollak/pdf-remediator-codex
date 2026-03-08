@@ -1,9 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '@/stores/app-store';
+import type { FileEntry } from '@/types/file-entry';
+
+function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
+  return {
+    id: 'file-1',
+    name: 'sample.pdf',
+    size: 2048,
+    uploadedBytes: new ArrayBuffer(8),
+    status: 'remediated',
+    progress: 100,
+    ...overrides
+  };
+}
 
 describe('app store source bytes', () => {
   beforeEach(() => {
-    useAppStore.setState({ files: [] });
+    useAppStore.setState({ files: [], previewFocusByFileId: {}, hydrated: true });
   });
 
   it('preserves uploaded bytes after remediation updates', async () => {
@@ -34,5 +47,38 @@ describe('app store source bytes', () => {
     const saved = useAppStore.getState().files[0];
     expect(saved.uploadIntent).toBe('revalidation');
     expect(saved.derivedFromFileId).toBe('base-file-1');
+  });
+
+  it('removes a saved review together with linked revised uploads', () => {
+    useAppStore.setState({
+      files: [
+        makeFile({ id: 'base', name: 'base.pdf' }),
+        makeFile({
+          id: 'revision-1',
+          name: 'revision-1.pdf',
+          uploadIntent: 'revalidation',
+          derivedFromFileId: 'base'
+        }),
+        makeFile({
+          id: 'revision-2',
+          name: 'revision-2.pdf',
+          uploadIntent: 'revalidation',
+          derivedFromFileId: 'revision-1'
+        }),
+        makeFile({ id: 'other', name: 'other.pdf' })
+      ],
+      previewFocusByFileId: {
+        base: { page: 1, label: 'Base' },
+        'revision-1': { page: 2, label: 'Revision 1' },
+        other: { page: 3, label: 'Other' }
+      }
+    });
+
+    useAppStore.getState().removeFile('base');
+
+    expect(useAppStore.getState().files.map((file) => file.id)).toEqual(['other']);
+    expect(useAppStore.getState().previewFocusByFileId).toEqual({
+      other: { page: 3, label: 'Other' }
+    });
   });
 });

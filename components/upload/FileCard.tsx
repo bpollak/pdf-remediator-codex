@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAppStore, type FileEntry } from '@/stores/app-store';
+import { collectDescendantFileIds, useAppStore, type FileEntry } from '@/stores/app-store';
 
 function isWorkingStatus(status: FileEntry['status']): boolean {
   return status !== 'remediated' && status !== 'error';
@@ -66,12 +66,33 @@ function accentBorder(file: FileEntry) {
   return 'border-l-4 border-l-[var(--ucsd-blue)]';
 }
 
+function isSettledStatus(status: FileEntry['status']): boolean {
+  return status === 'remediated' || status === 'error';
+}
+
 export function FileCard({ file }: { file: FileEntry }) {
-  const sourceFile = useAppStore((state) =>
-    file.derivedFromFileId ? state.files.find((entry) => entry.id === file.derivedFromFileId) : undefined
-  );
+  const files = useAppStore((state) => state.files);
+  const removeFile = useAppStore((state) => state.removeFile);
+  const sourceFile = file.derivedFromFileId ? files.find((entry) => entry.id === file.derivedFromFileId) : undefined;
   const isProcessed = file.status === 'remediated';
   const isWorking = isWorkingStatus(file.status);
+  const descendantIds = collectDescendantFileIds(files, file.id);
+  const descendantIdSet = new Set(descendantIds);
+  const descendantFiles = files.filter((entry) => descendantIdSet.has(entry.id));
+  const hasActiveDescendants = descendantFiles.some((entry) => !isSettledStatus(entry.status));
+
+  function handleRemove() {
+    const linkedUploadLabel =
+      descendantFiles.length > 0
+        ? ` and ${descendantFiles.length} linked revised upload${descendantFiles.length === 1 ? '' : 's'}`
+        : '';
+    const confirmed = window.confirm(
+      `Remove "${file.name}"${linkedUploadLabel} from this browser? This deletes the saved PDF and review data from the Upload PDF list on this device.`
+    );
+
+    if (!confirmed) return;
+    removeFile(file.id);
+  }
 
   return (
     <article className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${accentBorder(file)}`}>
@@ -109,7 +130,7 @@ export function FileCard({ file }: { file: FileEntry }) {
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
       {isProcessed ? (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Link
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--ucsd-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)] focus-visible:ring-offset-2"
             href={`/app/${file.id}/compare`}
@@ -119,7 +140,25 @@ export function FileCard({ file }: { file: FileEntry }) {
               <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638l-3.96-3.96a.75.75 0 1 1 1.06-1.06l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06l3.96-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
             </svg>
           </Link>
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={hasActiveDescendants}
+            title={hasActiveDescendants ? 'Wait for linked revised uploads to finish before removing this saved review.' : undefined}
+            className={`inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition ${
+              hasActiveDescendants
+                ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                : 'border-red-200 text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2'
+            }`}
+          >
+            Remove from list
+          </button>
         </div>
+      ) : null}
+      {isProcessed && hasActiveDescendants ? (
+        <p className="mt-2 text-xs text-[var(--ucsd-text)]">
+          Finish linked revised uploads before removing this saved review.
+        </p>
       ) : null}
     </article>
   );

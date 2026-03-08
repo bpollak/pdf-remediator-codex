@@ -9,7 +9,7 @@ import {
   getParsedReviewBase,
   normalizeManualReviewDrafts
 } from '@/lib/report/manual-review';
-import { loadPersistedFiles, saveFileEntry } from '@/lib/persistence/file-store';
+import { deleteFileEntries, loadPersistedFiles, saveFileEntry } from '@/lib/persistence/file-store';
 import type {
   FileEntry,
   ManualAltTextDraft,
@@ -47,6 +47,7 @@ interface AppStore {
   hydrateFromPersistence: () => Promise<void>;
   addFiles: (files: File[], options?: AddFilesOptions) => Promise<void>;
   updateFile: (id: string, patch: Partial<FileEntry>) => void;
+  removeFile: (id: string) => void;
   updateAltTextDraft: (fileId: string, imageId: string, draft: ManualAltTextDraft | undefined) => void;
   updateStructureHeadingIncluded: (fileId: string, key: string, include: boolean) => void;
   updateStructureHeadingLevel: (fileId: string, key: string, level: number | undefined) => void;
@@ -138,6 +139,26 @@ function getDetectedHeadingKeys(file: FileEntry): string[] {
   return detectHeadings(parsed).map((heading, index) => getHeadingDraftKey(heading, index));
 }
 
+export function collectDescendantFileIds(files: FileEntry[], rootId: string): string[] {
+  const descendants: string[] = [];
+  const pending = [rootId];
+  const seen = new Set<string>([rootId]);
+
+  while (pending.length > 0) {
+    const currentId = pending.pop();
+    if (!currentId) continue;
+
+    for (const candidate of files) {
+      if (candidate.derivedFromFileId !== currentId || seen.has(candidate.id)) continue;
+      seen.add(candidate.id);
+      descendants.push(candidate.id);
+      pending.push(candidate.id);
+    }
+  }
+
+  return descendants;
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   files: [],
   hydrated: false,
@@ -196,6 +217,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (updatedEntry && shouldPersistPatch(patch)) {
       void saveFileEntry(updatedEntry).catch(() => undefined);
     }
+  },
+  removeFile: (id) => {
+    const files = get().files;
+    if (!files.some((file) => file.id === id)) return;
+
+    const fileIdsToRemove = [id, ...collectDescendantFileIds(files, id)];
+    const idsToRemove = new Set(fileIdsToRemove);
+
+    set((state) => {
+      const nextPreviewFocusByFileId = { ...state.previewFocusByFileId };
+      for (const fileId of fileIdsToRemove) {
+        delete nextPreviewFocusByFileId[fileId];
+      }
+
+      return {
+        files: state.files.filter((file) => !idsToRemove.has(file.id)),
+        previewFocusByFileId: nextPreviewFocusByFileId
+      };
+    });
+
+    void deleteFileEntries(fileIdsToRemove).catch(() => undefined);
   },
   updateAltTextDraft: (fileId, imageId, draft) => {
     const file = get().files.find((entry) => entry.id === fileId);

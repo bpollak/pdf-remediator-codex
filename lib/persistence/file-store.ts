@@ -145,3 +145,26 @@ export async function saveFileEntry(entry: FileEntry): Promise<void> {
     database.close();
   }
 }
+
+export async function deleteFileEntries(fileIds: string[]): Promise<void> {
+  const uniqueIds = [...new Set(fileIds)];
+  if (uniqueIds.length === 0) return;
+
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction([FILE_STORE, ASSET_STORE], 'readwrite');
+    const fileStore = transaction.objectStore(FILE_STORE);
+    const assetStore = transaction.objectStore(ASSET_STORE);
+
+    for (const fileId of uniqueIds) {
+      fileStore.delete(fileId);
+      assetStore.delete(uploadedAssetKey(fileId));
+      assetStore.delete(remediatedAssetKey(fileId));
+    }
+
+    await transactionToPromise(transaction);
+  } finally {
+    database.close();
+  }
+}
