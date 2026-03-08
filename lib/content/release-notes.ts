@@ -16,7 +16,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Moved the newest uploaded PDFs to the top of the Upload PDF list.',
       'Added Remove from list actions for completed remediated PDFs so saved reviews can be cleared from this browser.',
       'Added Remove from list actions for failed uploads marked Needs attention.',
-      'Removing a saved upload also clears linked revised uploads from the local Upload PDF list to avoid orphaned entries.'
+      'Removing a saved upload also clears linked revised uploads from the local Upload PDF list to avoid orphaned entries.',
+      'Hardened PDF byte handling so scanned uploads stay reusable across parse, OCR, remediation, and verification steps.'
     ]
   },
   {

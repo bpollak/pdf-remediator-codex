@@ -414,12 +414,19 @@ export async function buildRemediatedPdf(
         : {})
   };
 
+  const loadableSourceBytes =
+    sourceBytes instanceof Uint8Array
+      ? sourceBytes.slice()
+      : sourceBytes instanceof ArrayBuffer
+        ? sourceBytes.slice(0)
+        : undefined;
+
   const pdf =
-    sourceBytes instanceof Uint8Array || sourceBytes instanceof ArrayBuffer
-      ? await PDFDocument.load(sourceBytes, { updateMetadata: false, ignoreEncryption: true })
+    loadableSourceBytes instanceof Uint8Array || loadableSourceBytes instanceof ArrayBuffer
+      ? await PDFDocument.load(loadableSourceBytes, { updateMetadata: false, ignoreEncryption: true })
       : await PDFDocument.create();
 
-  if (!sourceBytes) {
+  if (!loadableSourceBytes) {
     const helvetica = await pdf.embedFont(StandardFonts.Helvetica);
     const timesRoman = await pdf.embedFont(StandardFonts.TimesRoman);
     const courier = await pdf.embedFont(StandardFonts.Courier);
@@ -444,7 +451,7 @@ export async function buildRemediatedPdf(
     }
   }
 
-  if (sourceBytes && options.addInvisibleTextLayer) {
+  if (loadableSourceBytes && options.addInvisibleTextLayer) {
     const taggedItems = resolveTaggedLayerItems(parsed, plan, true);
     const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
     if (bindings.length > 0) {

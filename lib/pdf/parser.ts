@@ -402,7 +402,8 @@ function hasParentTreeContentEntries(context: PDFDocument['context'], parentTree
 
 async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['structureBinding'] | undefined> {
   try {
-    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+    const structureBytes = bytes.slice(0);
+    const pdf = await PDFDocument.load(structureBytes, { ignoreEncryption: true, updateMetadata: false });
     const context = pdf.context;
     const structTreeRootObject = pdf.catalog.get(PDFName.of('StructTreeRoot'));
     const structTreeRootDict = asPdfDict(safeLookup(context, structTreeRootObject));
@@ -533,8 +534,8 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
 }
 
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
-  // pdf.js may transfer ownership of the provided buffer to its worker.
-  // Parse a cloned buffer so caller-owned bytes stay reusable downstream.
+  // Clone bytes for each loader so caller-owned buffers stay reusable across OCR,
+  // remediation, preview, and verification steps.
   const parseBytes = bytes.slice(0);
   const structureBindingPromise = inspectStructureBinding(bytes);
   ensurePdfJsWorkerConfigured();
