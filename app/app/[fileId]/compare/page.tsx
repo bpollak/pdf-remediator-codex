@@ -2,6 +2,7 @@
 
 import { SideBySide } from '@/components/preview/SideBySide';
 import { CompareActions, EvidencePackAction } from '@/components/report/CompareActions';
+import { CollapsibleSection } from '@/components/report/CollapsibleSection';
 import { IssueList } from '@/components/report/IssueList';
 import { ManualStructureWorkspace } from '@/components/report/ManualStructureWorkspace';
 import { NextStepsPanel } from '@/components/report/NextStepsPanel';
@@ -48,48 +49,60 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         <CompareActions fileId={params.fileId} />
       </div>
 
-      <div id="review-step" className="scroll-mt-24 space-y-6">
-        <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-          <div>
-            <h2>Review previews and findings</h2>
-            <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-              Confirm the document, review the automated baseline, and use the findings below to decide what still needs manual remediation.
-            </p>
-          </div>
-          <EvidencePackAction fileId={params.fileId} />
-          <SideBySide fileId={params.fileId} />
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <h2>Uploaded PDF findings</h2>
-            <SummaryDashboard fileId={params.fileId} variant="original" />
-            <IssueList fileId={params.fileId} variant="original" />
-          </div>
-          <div className="space-y-4">
-            <h2>Remediated PDF findings</h2>
-            <SummaryDashboard fileId={params.fileId} variant="remediated" />
-            <IssueList fileId={params.fileId} variant="remediated" />
-          </div>
-        </section>
-      </div>
-
-      <div id="alt-text-step" className="scroll-mt-24">
-        <AltTextWorkspace fileId={params.fileId} />
-      </div>
-
-      <div id="structure-step" className="scroll-mt-24 space-y-6">
-        <StructuralIntegrityPanel fileId={params.fileId} />
-        <ManualStructureWorkspace fileId={params.fileId} />
-      </div>
-
-      <div id="validation-step" className="scroll-mt-24">
-        <VerificationPanel fileId={params.fileId} />
-      </div>
-
       <div id="next-steps-step" className="scroll-mt-24">
         <NextStepsPanel fileId={params.fileId} />
       </div>
+
+      <CollapsibleSection
+        id="review-step"
+        title="Review previews and findings"
+        subtitle="Confirm the document, review the automated baseline, and use the findings below to decide what still needs manual remediation."
+      >
+        <div className="space-y-6">
+          <EvidencePackAction fileId={params.fileId} />
+          <SideBySide fileId={params.fileId} />
+
+          <section className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-4">
+              <h3>Uploaded PDF findings</h3>
+              <SummaryDashboard fileId={params.fileId} variant="original" />
+              <IssueList fileId={params.fileId} variant="original" />
+            </div>
+            <div className="space-y-4">
+              <h3>Remediated PDF findings</h3>
+              <SummaryDashboard fileId={params.fileId} variant="remediated" />
+              <IssueList fileId={params.fileId} variant="remediated" />
+            </div>
+          </section>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="alt-text-step"
+        title="Fix alt text"
+        subtitle="Review detected images, draft alt text, and export a worksheet for manual remediation."
+      >
+        <AltTextWorkspace fileId={params.fileId} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="structure-step"
+        title="Fix structure"
+        subtitle="Review heading and table issues, then finish structural edits in Acrobat or PAC."
+      >
+        <div className="space-y-6">
+          <StructuralIntegrityPanel fileId={params.fileId} />
+          <ManualStructureWorkspace fileId={params.fileId} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="validation-step"
+        title="Run validation"
+        subtitle="Confirm the PDF/UA result after manual revisions."
+      >
+        <VerificationPanel fileId={params.fileId} />
+      </CollapsibleSection>
     </div>
   );
 }
