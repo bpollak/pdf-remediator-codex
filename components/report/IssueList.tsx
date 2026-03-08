@@ -193,7 +193,6 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
                 ) : (
                   <GroupedIssueCard
                     key={group.ruleId}
-                    ruleId={group.ruleId}
                     instances={group.instances}
                     fileId={fileId}
                     variant={variant}
