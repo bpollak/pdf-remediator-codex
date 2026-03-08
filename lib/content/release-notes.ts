@@ -8,6 +8,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-03-08-upload-queue-management',
+    versionLabel: 'Release 2026.03.08',
+    deployedOn: 'March 8, 2026',
+    summary: 'The Upload PDF screen is easier to clean up after repeat runs, failed attempts, and revised validations.',
+    highlights: [
+      'Moved the newest uploaded PDFs to the top of the Upload PDF list.',
+      'Added Remove from list actions for completed remediated PDFs so saved reviews can be cleared from this browser.',
+      'Added Remove from list actions for failed uploads marked Needs attention.',
+      'Removing a saved upload also clears linked revised uploads from the local Upload PDF list to avoid orphaned entries.'
+    ]
+  },
+  {
     id: '2026-02-25-guardrails-and-stability',
     versionLabel: 'Release 2026.02.25',
     deployedOn: 'February 25, 2026',
