@@ -17,7 +17,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Added post-OCR validation so a returned PDF only counts as OCR-applied when it actually exposes usable searchable text.',
       'Fell back to local browser OCR when upstream OCR output cannot be parsed or does not improve text extraction.',
       'Added original-report messaging so OCR activity is visible even though the uploaded-file baseline still shows the source PDF.',
-      'Removed redundant explanatory copy from the accessibility status banner so the status chips carry the detail.'
+      'Removed redundant explanatory copy from the accessibility status banner so the status chips carry the detail.',
+      'Stopped draft-edit persistence from rewriting large PDF assets on every keystroke so alt-text entry stays responsive.'
     ]
   },
   {

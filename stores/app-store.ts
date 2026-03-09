@@ -103,6 +103,10 @@ function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
   return false;
 }
 
+function shouldPersistAssetsForPatch(patch: Partial<FileEntry>): boolean {
+  return 'uploadedBytes' in patch || 'remediatedBytes' in patch;
+}
+
 function buildManualReviewDrafts(
   file: FileEntry,
   options: {
@@ -215,7 +219,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
 
     if (updatedEntry && shouldPersistPatch(patch)) {
-      void saveFileEntry(updatedEntry).catch(() => undefined);
+      void saveFileEntry(updatedEntry, { persistAssets: shouldPersistAssetsForPatch(patch) }).catch(() => undefined);
     }
   },
   removeFile: (id) => {

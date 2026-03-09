@@ -15,6 +15,10 @@ interface PersistedAssetRecord {
   bytes: ArrayBuffer;
 }
 
+interface SaveFileEntryOptions {
+  persistAssets?: boolean;
+}
+
 function stripAssetKeys(record: PersistedFileRecord): Omit<PersistedFileRecord, 'uploadedAssetKey' | 'remediatedAssetKey'> {
   const next = { ...record };
   delete (next as { uploadedAssetKey?: string }).uploadedAssetKey;
@@ -109,7 +113,7 @@ export async function loadPersistedFiles(): Promise<FileEntry[]> {
   }
 }
 
-export async function saveFileEntry(entry: FileEntry): Promise<void> {
+export async function saveFileEntry(entry: FileEntry, options: SaveFileEntryOptions = {}): Promise<void> {
   const database = await openDatabase();
 
   try {
@@ -126,18 +130,20 @@ export async function saveFileEntry(entry: FileEntry): Promise<void> {
       remediatedAssetKey: nextRemediatedAssetKey
     } satisfies PersistedFileRecord);
 
-    assetStore.put({
-      key: nextUploadedAssetKey,
-      bytes: uploadedBytes
-    } satisfies PersistedAssetRecord);
-
-    if (remediatedBytes && nextRemediatedAssetKey) {
+    if (options.persistAssets !== false) {
       assetStore.put({
-        key: nextRemediatedAssetKey,
-        bytes: remediatedBytes
+        key: nextUploadedAssetKey,
+        bytes: uploadedBytes
       } satisfies PersistedAssetRecord);
-    } else {
-      assetStore.delete(remediatedAssetKey(entry.id));
+
+      if (remediatedBytes && nextRemediatedAssetKey) {
+        assetStore.put({
+          key: nextRemediatedAssetKey,
+          bytes: remediatedBytes
+        } satisfies PersistedAssetRecord);
+      } else {
+        assetStore.delete(remediatedAssetKey(entry.id));
+      }
     }
 
     await transactionToPromise(transaction);
