@@ -104,4 +104,33 @@ describe('getRevisionDeltaSummary', () => {
     expect(summary?.descendants).toHaveLength(1);
     expect(summary?.latestDescendant?.id).toBe('child-1');
   });
+
+  it('does not report zero failed PDF/UA rules when validation returned no verdict', () => {
+    const parent = makeFile({
+      id: 'parent-1',
+      verapdfResult: {
+        attempted: true,
+        compliant: false,
+        summary: {
+          failedRules: 5,
+          failedChecks: 11
+        }
+      }
+    });
+    const child = makeFile({
+      id: 'child-1',
+      derivedFromFileId: 'parent-1',
+      verapdfResult: {
+        attempted: true,
+        reason: 'veraPDF request timed out'
+      }
+    });
+
+    const summary = getRevisionDeltaSummary(child, [parent, child]);
+    const failedRulesMetric = summary?.metrics.find((metric) => metric.label === 'Failed PDF/UA rules');
+
+    expect(failedRulesMetric?.currentValue).toBe('Unavailable');
+    expect(failedRulesMetric?.trend).toBe('unchanged');
+    expect(summary?.validationChanged).toBe(true);
+  });
 });

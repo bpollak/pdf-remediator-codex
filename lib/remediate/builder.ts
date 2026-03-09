@@ -27,6 +27,7 @@ import { buildTagTree } from './tagger';
 import { injectStructTree } from './struct-tree';
 import { encodeManifest, MANIFEST_PREFIX } from './manifest';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 const MAX_OCR_TEXT_LAYER_ITEMS = 20000;
 const MAX_TAGGED_TEXT_ITEMS = 1200;
@@ -374,7 +375,7 @@ export interface BuildRemediatedPdfOptions {
 
 function shouldForceStrictMetadata(options: BuildRemediatedPdfOptions): boolean {
   if (options.strictPdfUa) return true;
-  if (options.verapdfFeedback?.compliant === false) return true;
+  if (getVerapdfComplianceVerdict(options.verapdfFeedback) === false) return true;
 
   const failedRules = options.verapdfFeedback?.summary?.failedRules;
   if (typeof failedRules === 'number' && failedRules > 0) return true;

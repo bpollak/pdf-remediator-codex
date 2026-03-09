@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 type WorkflowState = 'complete' | 'current' | 'pending' | 'blocked';
 
@@ -59,7 +60,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
     const structureFindingCount = remediatedFindings.filter((finding) =>
       ['Document Structure', 'Headings & Structure', 'Tables'].includes(finding.category)
     ).length;
-    const hasValidationResult = typeof file?.verapdfResult?.compliant === 'boolean';
+    const hasValidationResult = typeof getVerapdfComplianceVerdict(file?.verapdfResult) === 'boolean';
     const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app#upload-revised-pdf';
 
     return assignStepStates([
@@ -114,7 +115,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
           : 'Confirm the PDF/UA result after manual revisions.',
         href: manualReview.pendingRevalidation ? revalidationHref : '#validation-step',
         actionLabel: manualReview.pendingRevalidation ? 'Upload revised PDF for validation' : 'Open validation panel',
-        complete: !manualReview.pendingRevalidation && file?.verapdfResult?.compliant === true,
+        complete: !manualReview.pendingRevalidation && getVerapdfComplianceVerdict(file?.verapdfResult) === true,
         available: hasRemediatedPdf || hasValidationResult
       },
       {

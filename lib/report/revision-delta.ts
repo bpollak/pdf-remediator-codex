@@ -1,6 +1,7 @@
 import type { FileEntry } from '@/types/file-entry';
 import { getAccessibilityStatus } from './accessibility-status';
 import { computeDisplayedAutomatedScore } from './display-score';
+import { getVerapdfComplianceVerdict, getVerapdfUnavailableReason } from '@/lib/verapdf/result';
 
 export type RevisionTrend = 'improved' | 'regressed' | 'unchanged';
 
@@ -33,6 +34,10 @@ function compareScores(current: number | undefined, previous: number | undefined
   if (current > previous) return 'improved';
   if (current < previous) return 'regressed';
   return 'unchanged';
+}
+
+function formatCount(value: number | undefined): string {
+  return typeof value === 'number' ? String(value) : 'Unavailable';
 }
 
 function statusRank(status: ReturnType<typeof getAccessibilityStatus>['status']): number {
@@ -118,8 +123,12 @@ export function getRevisionDeltaSummary(
   });
   const currentFindings = file.postRemediationAudit?.findings.length ?? 0;
   const previousFindings = parent.postRemediationAudit?.findings.length ?? 0;
-  const currentFailedRules = file.verapdfResult?.summary?.failedRules ?? 0;
-  const previousFailedRules = parent.verapdfResult?.summary?.failedRules ?? 0;
+  const currentFailedRules = getVerapdfUnavailableReason(file.verapdfResult)
+    ? undefined
+    : file.verapdfResult?.summary?.failedRules;
+  const previousFailedRules = getVerapdfUnavailableReason(parent.verapdfResult)
+    ? undefined
+    : parent.verapdfResult?.summary?.failedRules;
   const currentStatus = getAccessibilityStatus(file);
   const previousStatus = getAccessibilityStatus(parent);
   const currentFingerprints = findingsFingerprint(file);
@@ -142,8 +151,8 @@ export function getRevisionDeltaSummary(
     },
     {
       label: 'Failed PDF/UA rules',
-      previousValue: String(previousFailedRules),
-      currentValue: String(currentFailedRules),
+      previousValue: formatCount(previousFailedRules),
+      currentValue: formatCount(currentFailedRules),
       trend: compareCounts(currentFailedRules, previousFailedRules)
     },
     {
@@ -161,6 +170,7 @@ export function getRevisionDeltaSummary(
     metrics,
     issuesCleared,
     issuesIntroduced,
-    validationChanged: parent.verapdfResult?.compliant !== file.verapdfResult?.compliant
+    validationChanged:
+      getVerapdfComplianceVerdict(parent.verapdfResult) !== getVerapdfComplianceVerdict(file.verapdfResult)
   };
 }

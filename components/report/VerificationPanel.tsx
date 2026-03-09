@@ -6,6 +6,7 @@ import type { RemediationStopReason } from '@/lib/remediate/loop';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
 import { formatTimestamp } from '@/lib/report/time-format';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 function metricValue(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : 'n/a';
@@ -44,6 +45,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const statement = neutralStatement(verification?.statement);
   const reason = neutralReason(verification?.reason);
   const accessibilityStatus = getAccessibilityStatus(file);
+  const verificationVerdict = getVerapdfComplianceVerdict(verification);
   const manualReview = summarizeManualReviewState(file);
   const remediatedGeneratedAt = formatTimestamp(file?.remediationCompletedAt);
   const validationUpdatedAt = formatTimestamp(file?.validationCompletedAt);
@@ -52,7 +54,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     ? { pathname: '/app', query: { revalidateFor: file.id }, hash: 'upload-revised-pdf' }
     : { pathname: '/app', hash: 'upload-revised-pdf' };
   const validationLabel =
-    verification?.compliant === true
+    verificationVerdict === true
       ? 'Passed PDF/UA validation'
       : accessibilityStatus.status === 'verification-unavailable'
         ? 'Validation unavailable'

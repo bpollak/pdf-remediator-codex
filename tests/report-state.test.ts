@@ -67,4 +67,22 @@ describe('getReportStateSnapshot', () => {
     expect(snapshot.nextAction.label).toBe('Upload revised PDF for validation');
     expect(snapshot.nextAction.href).toContain('revalidateFor=file-1');
   });
+
+  it('does not report zero failed veraPDF counts when no verdict was returned', () => {
+    const snapshot = getReportStateSnapshot(
+      makeFile({
+        verapdfResult: {
+          attempted: true,
+          reason: 'veraPDF request timed out'
+        }
+      })
+    );
+
+    expect(snapshot.validatedFile.label).toBe('Verification unavailable');
+    expect(snapshot.validatedFile.description).toContain('veraPDF request timed out.');
+    expect(snapshot.validatedFile.chips).toContain('PDF/UA verdict unavailable');
+    expect(snapshot.validatedFile.chips).toContain('PDF/UA check details unavailable');
+    expect(snapshot.validatedFile.chips).not.toContain('No failed PDF/UA rules');
+    expect(snapshot.validatedFile.chips).not.toContain('No failed PDF/UA checks');
+  });
 });

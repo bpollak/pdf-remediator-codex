@@ -99,4 +99,35 @@ describe('normalizeVerapdfPayload', () => {
     expect(result.compliant).toBe(true);
     expect(result.summary?.failedRules).toBe(0);
   });
+
+  it('extracts compliance data from veraPDF REST validationResult payloads', () => {
+    const jsonReport = JSON.stringify({
+      report: {
+        jobs: [
+          {
+            validationResult: [
+              {
+                profileName: 'PDF/UA-1 validation profile',
+                statement: 'PDF file is not compliant with Validation Profile requirements.',
+                compliant: false,
+                details: {
+                  passedRules: 100,
+                  failedRules: 6,
+                  passedChecks: 300,
+                  failedChecks: 41
+                }
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+
+    expect(result.compliant).toBe(false);
+    expect(result.profile).toBe('PDF/UA-1 validation profile');
+    expect(result.summary?.failedRules).toBe(6);
+    expect(result.summary?.failedChecks).toBe(41);
+  });
 });

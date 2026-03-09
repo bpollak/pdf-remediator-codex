@@ -1,6 +1,7 @@
 import type { FileEntry } from '@/types/file-entry';
 import { computeDisplayedAutomatedScore } from './display-score';
 import { hasPendingManualReviewChanges } from './manual-review';
+import { getVerapdfComplianceVerdict, getVerapdfUnavailableReason } from '@/lib/verapdf/result';
 
 export type AccessibilityStatus =
   | 'accessible'
@@ -31,11 +32,6 @@ export interface AccessibilityStatusResult {
   message: string;
   reasons: AccessibilityReason[];
   automatedScore?: number;
-}
-
-function isVerificationUnavailable(reason: string | undefined): boolean {
-  if (!reason) return false;
-  return /unavailable|failed to contact|timed out|not enabled|not configured/i.test(reason);
 }
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
@@ -87,11 +83,9 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   const failedRules = file.verapdfResult?.summary?.failedRules ?? 0;
   const failedChecks = file.verapdfResult?.summary?.failedChecks ?? 0;
   const hasPendingReviewChanges = hasPendingManualReviewChanges(file);
-  const verificationUnavailable =
-    !file.verapdfResult ||
-    file.verapdfResult.attempted === false ||
-    typeof file.verapdfResult.compliant !== 'boolean' ||
-    isVerificationUnavailable(file.verapdfResult.reason);
+  const verificationVerdict = getVerapdfComplianceVerdict(file.verapdfResult);
+  const verificationUnavailableReason = getVerapdfUnavailableReason(file.verapdfResult);
+  const verificationUnavailable = Boolean(verificationUnavailableReason);
 
   if (file.sourceType === 'checker-report-artifact') {
     reasons.push({
@@ -146,14 +140,13 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
     return {
       status: 'verification-unavailable',
       label: 'Verification unavailable',
-      message:
-        'This document cannot be confirmed accessible yet because the external PDF/UA check is unavailable. Manual remediation and desktop validation are still required before publishing.',
+      message: `This document cannot be confirmed accessible yet because the external PDF/UA check is unavailable: ${verificationUnavailableReason} Manual remediation and desktop validation are still required before publishing.`,
       reasons: [...reasons, { code: 'verification-unavailable', label: 'External PDF/UA verification unavailable' }],
       automatedScore
     };
   }
 
-  if (reasons.length > 0 || file.verapdfResult?.compliant !== true || automatedScore !== 100) {
+  if (reasons.length > 0 || verificationVerdict !== true || automatedScore !== 100) {
     return {
       status: 'not-yet-accessible',
       label: 'Not yet accessible',

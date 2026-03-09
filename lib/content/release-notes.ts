@@ -19,7 +19,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Added original-report messaging so OCR activity is visible even though the uploaded-file baseline still shows the source PDF.',
       'Removed redundant explanatory copy from the accessibility status banner so the status chips carry the detail.',
       'Stopped draft-edit persistence from rewriting large PDF assets on every keystroke so alt-text entry stays responsive.',
-      'Removed the redundant red accessibility status banner from the report screens so the workflow-state panels remain the primary status surface.'
+      'Removed the redundant red accessibility status banner from the report screens so the workflow-state panels remain the primary status surface.',
+      'Hardened veraPDF integration with Render wake-up handling, API retries, and clearer verdict fallback when the service returns incomplete metadata.'
     ]
   },
   {

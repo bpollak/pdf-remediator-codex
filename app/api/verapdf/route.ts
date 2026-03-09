@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { normalizeVerapdfPayload } from '@/lib/verapdf/normalize';
 import { rateLimit } from '@/lib/rate-limit';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import {
+  DEFAULT_VERAPDF_TIMEOUT_MS,
+  MAX_VERAPDF_TIMEOUT_MS,
+  VERAPDF_ROUTE_MAX_DURATION_MS,
+  VERAPDF_WARMUP_TIMEOUT_MS
+} from '@/lib/verapdf/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = VERAPDF_ROUTE_MAX_DURATION_MS / 1000;
 
-const DEFAULT_VERAPDF_TIMEOUT_MS = 120_000;
 const DEFAULT_VERAPDF_PROFILE = 'ua1';
 const DEFAULT_LOCAL_VERAPDF_URL = 'http://127.0.0.1:8081';
 const RATE_LIMIT_MAX = 20;
@@ -16,7 +21,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.VERAPDF_TIMEOUT_MS);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_VERAPDF_TIMEOUT_MS;
-  return Math.min(raw, 600_000);
+  return Math.min(raw, MAX_VERAPDF_TIMEOUT_MS);
 }
 
 function getConfiguredProfile(): string {
@@ -75,10 +80,10 @@ function resolveInfoUrl(serviceUrl: string): string {
   return parsed.toString();
 }
 
-async function probeVerapdf(serviceUrl: string): Promise<boolean> {
+async function probeVerapdf(serviceUrl: string, timeoutMs = 3_000): Promise<boolean> {
   const infoUrl = resolveInfoUrl(serviceUrl);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(infoUrl, {
@@ -192,6 +197,12 @@ export async function POST(request: NextRequest) {
   const timer = setTimeout(() => controller.abort(), getConfiguredTimeoutMs());
 
   try {
+    if (resolved.source === 'env') {
+      // Render-backed veraPDF can hibernate; warming it first avoids the
+      // validation request paying the cold-start penalty.
+      await probeVerapdf(serviceUrl, VERAPDF_WARMUP_TIMEOUT_MS).catch(() => false);
+    }
+
     const upstream = await fetch(upstreamUrl, {
       method: 'POST',
       body: upstreamForm,

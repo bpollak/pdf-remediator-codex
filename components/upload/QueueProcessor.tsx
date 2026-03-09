@@ -17,6 +17,7 @@ import {
 } from '@/lib/remediate/loop';
 import { runVerapdfViaApi } from '@/lib/verapdf/client';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 import { useAppStore } from '@/stores/app-store';
 import { parsePdfInWorker, remediatePdfInWorker, runAuditInWorker } from '@/lib/workers/client';
 
@@ -159,7 +160,7 @@ export function QueueProcessor() {
           remediationIterations.push({
             iteration,
             internalScore: postRemediationAudit.score,
-            verapdfCompliant: verapdfResult.compliant,
+            verapdfCompliant: getVerapdfComplianceVerdict(verapdfResult),
             failedRules: verapdfResult.summary?.failedRules,
             failedChecks: verapdfResult.summary?.failedChecks
           });

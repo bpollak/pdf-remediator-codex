@@ -1,4 +1,5 @@
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 export const MAX_REMEDIATION_ITERATIONS = 3;
 
@@ -74,7 +75,7 @@ export function decideRemediationLoop(input: RemediationLoopDecisionInput): Reme
     return { continue: false, reason: 'service_unavailable' };
   }
 
-  if (verapdfResult?.compliant === true) {
+  if (getVerapdfComplianceVerdict(verapdfResult) === true) {
     return { continue: false, reason: 'compliant' };
   }
 
@@ -102,7 +103,7 @@ function isSafeInternalScore(candidate: RemediationIterationCandidate, originalI
 }
 
 function isCompliant(candidate: RemediationIterationCandidate): boolean {
-  return candidate.verapdfResult?.compliant === true;
+  return getVerapdfComplianceVerdict(candidate.verapdfResult) === true;
 }
 
 function normalizedFailureScore(candidate: RemediationIterationCandidate): number {

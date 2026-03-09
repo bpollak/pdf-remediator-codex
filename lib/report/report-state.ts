@@ -1,6 +1,7 @@
 import type { FileEntry } from '@/types/file-entry';
 import { getAccessibilityStatus } from './accessibility-status';
 import { summarizeManualReviewState } from './manual-review';
+import { getVerapdfUnavailableReason } from '@/lib/verapdf/result';
 
 export type ReportStateTone = 'success' | 'attention' | 'info' | 'neutral';
 
@@ -40,11 +41,12 @@ export function getReportStateSnapshot(file: FileEntry | undefined): ReportState
   const manualReview = summarizeManualReviewState(file);
   const structureEditCount = manualReview.structure.headingOverrides + manualReview.structure.reviewedTables;
   const draftChangeCount = manualReview.altText.editedCount + structureEditCount;
-  const failedRules = file?.verapdfResult?.summary?.failedRules ?? 0;
-  const failedChecks = file?.verapdfResult?.summary?.failedChecks ?? 0;
+  const failedRules = file?.verapdfResult?.summary?.failedRules;
+  const failedChecks = file?.verapdfResult?.summary?.failedChecks;
   const remediatedFindings = file?.postRemediationAudit?.findings.length ?? 0;
   const hasAuditSnapshot = Boolean(file?.postRemediationAudit);
   const hasValidationSnapshot = Boolean(file?.verapdfResult);
+  const verificationUnavailableReason = getVerapdfUnavailableReason(file?.verapdfResult);
 
   const validatedFile: ReportStateBlock = {
     title: 'Current validated file',
@@ -59,14 +61,22 @@ export function getReportStateSnapshot(file: FileEntry | undefined): ReportState
           : 'No internal issues remain'
         : 'Audit snapshot pending',
       hasValidationSnapshot
-        ? failedRules > 0
-          ? `${failedRules} PDF/UA rules failed`
-          : 'No failed PDF/UA rules'
+        ? verificationUnavailableReason
+          ? 'PDF/UA verdict unavailable'
+          : typeof failedRules === 'number'
+            ? failedRules > 0
+              ? `${failedRules} PDF/UA rules failed`
+              : 'No failed PDF/UA rules'
+            : 'PDF/UA rule counts unavailable'
         : 'PDF/UA result pending',
       hasValidationSnapshot
-        ? failedChecks > 0
-          ? `${failedChecks} PDF/UA checks failed`
-          : 'No failed PDF/UA checks'
+        ? verificationUnavailableReason
+          ? 'PDF/UA check details unavailable'
+          : typeof failedChecks === 'number'
+            ? failedChecks > 0
+              ? `${failedChecks} PDF/UA checks failed`
+              : 'No failed PDF/UA checks'
+            : 'PDF/UA check counts unavailable'
         : 'PDF/UA check details pending'
     ]
   };
@@ -123,7 +133,7 @@ export function getReportStateSnapshot(file: FileEntry | undefined): ReportState
       href: '#next-steps-step',
       actionLabel: 'Review publish guidance'
     };
-  } else if (failedRules > 0 || failedChecks > 0) {
+  } else if ((typeof failedRules === 'number' && failedRules > 0) || (typeof failedChecks === 'number' && failedChecks > 0)) {
     nextAction = {
       tone: 'attention',
       label: 'Resolve remaining PDF/UA failures',

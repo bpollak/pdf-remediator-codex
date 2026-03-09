@@ -1,5 +1,6 @@
 import type { AuditResult } from '@/lib/audit/types';
 import type { VerapdfResult } from '@/lib/verapdf/types';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -18,10 +19,9 @@ export function computeDisplayedAutomatedScore(input: {
   // Remediated output cannot present as perfect unless both internal criticals
   // are clear and independent external verification reports compliance.
   if (variant === 'remediated' && auditResult.score >= 100) {
-    const canShowPerfect = !hasCriticalFindings(auditResult) && verapdfResult?.compliant === true;
+    const canShowPerfect = !hasCriticalFindings(auditResult) && getVerapdfComplianceVerdict(verapdfResult) === true;
     if (!canShowPerfect) return 99;
   }
 
   return auditResult.score;
 }
-

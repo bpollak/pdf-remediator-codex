@@ -7,6 +7,7 @@ import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
 import { formatTimestamp } from '@/lib/report/time-format';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 type AuditVariant = 'original' | 'remediated';
 
@@ -121,7 +122,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
           Source assessment indicates this is likely a checker or report PDF, not a source content document.
         </p>
       )}
-      {variant === 'remediated' && verapdfResult?.compliant === false && (
+      {variant === 'remediated' && getVerapdfComplianceVerdict(verapdfResult) === false && (
         <p className="text-sm text-[var(--ucsd-text)]">
           Internal fixes improved this file, but the external PDF/UA check still found issues to resolve manually.
         </p>

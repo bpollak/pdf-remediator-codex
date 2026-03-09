@@ -3,6 +3,7 @@ import type { RemediationMode } from '@/lib/pdf/types';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import type { SourceType } from '@/lib/pdf/source-type';
+import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 import { findingActionTitle, findingDescription, findingDetails } from './finding-copy';
 
 export interface NextStepItem {
@@ -85,7 +86,7 @@ export function buildManualNextSteps(input: {
     });
   }
 
-  if (verapdfResult?.compliant === false) {
+  if (getVerapdfComplianceVerdict(verapdfResult) === false) {
     const failedRules = verapdfResult.summary?.failedRules;
     const failedChecks = verapdfResult.summary?.failedChecks;
     const counts =

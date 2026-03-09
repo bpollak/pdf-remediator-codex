@@ -103,6 +103,36 @@ describe('getAccessibilityStatus', () => {
     });
   });
 
+  it('uses summary counts to infer a usable compliance verdict when explicit compliant is missing', () => {
+    const result = getAccessibilityStatus(
+      file({
+        verapdfResult: {
+          attempted: true,
+          summary: {
+            failedRules: 0,
+            failedChecks: 0
+          }
+        }
+      })
+    );
+
+    expect(result.status).toBe('accessible');
+  });
+
+  it('includes the specific veraPDF failure reason when verification is unavailable', () => {
+    const result = getAccessibilityStatus(
+      file({
+        verapdfResult: {
+          attempted: true,
+          reason: 'veraPDF verification timed out'
+        }
+      })
+    );
+
+    expect(result.status).toBe('verification-unavailable');
+    expect(result.message).toContain('veraPDF verification timed out.');
+  });
+
   it('blocks Accessible for analysis-only remediation even with a perfect score', () => {
     const result = getAccessibilityStatus(
       file({

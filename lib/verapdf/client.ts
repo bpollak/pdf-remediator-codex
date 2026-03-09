@@ -1,7 +1,9 @@
 import type { VerapdfResult } from './types';
+import { CLIENT_VERAPDF_TIMEOUT_MS } from './config';
 
 const VERAPDF_API_PATH = '/api/verapdf';
-const CLIENT_TIMEOUT_MS = 90_000;
+const MAX_RETRIES = 1;
+const RETRYABLE_STATUSES = new Set([502, 504]);
 
 function summarizeError(status: number): string {
   if (status === 503) return 'veraPDF verification service unavailable';
@@ -14,6 +16,10 @@ interface ErrorPayload {
   reason?: string;
   error?: string;
   detail?: string;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseResult(payload: unknown): VerapdfResult | null {
@@ -48,42 +54,59 @@ export async function runVerapdfViaApi(bytes: ArrayBuffer, fileName: string): Pr
   const formData = new FormData();
   formData.append('file', new File([bytes], fileName, { type: 'application/pdf' }));
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    if (attempt > 0) {
+      await delay(1000 * 2 ** (attempt - 1));
+    }
 
-  try {
-    const response = await fetch(VERAPDF_API_PATH, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CLIENT_VERAPDF_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null) as ErrorPayload | null;
-      const reason = errorPayload?.reason ?? errorPayload?.error ?? summarizeError(response.status);
-      const detail = typeof errorPayload?.detail === 'string' && errorPayload.detail.trim()
-        ? ` (${errorPayload.detail.trim()})`
-        : '';
+    try {
+      const response = await fetch(VERAPDF_API_PATH, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null) as ErrorPayload | null;
+        const reason = errorPayload?.reason ?? errorPayload?.error ?? summarizeError(response.status);
+        const detail = typeof errorPayload?.detail === 'string' && errorPayload.detail.trim()
+          ? ` (${errorPayload.detail.trim()})`
+          : '';
+
+        if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_RETRIES) {
+          continue;
+        }
+
+        return {
+          attempted: typeof errorPayload?.attempted === 'boolean' ? errorPayload.attempted : response.status !== 503,
+          reason: `${reason}${detail}`
+        };
+      }
+
+      const body = await response.json().catch(() => null);
+      const parsed = parseResult(body);
+      if (parsed) return parsed;
+
+      return { attempted: true, reason: 'veraPDF returned an unexpected response.' };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        if (attempt < MAX_RETRIES) continue;
+        return { attempted: true, reason: 'veraPDF verification timed out' };
+      }
+
+      if (attempt < MAX_RETRIES) continue;
+
       return {
-        attempted: typeof errorPayload?.attempted === 'boolean' ? errorPayload.attempted : response.status !== 503,
-        reason: `${reason}${detail}`
+        attempted: true,
+        reason: error instanceof Error ? error.message : 'Unknown veraPDF verification error'
       };
+    } finally {
+      clearTimeout(timer);
     }
-
-    const body = await response.json().catch(() => null);
-    const parsed = parseResult(body);
-    if (parsed) return parsed;
-
-    return { attempted: true, reason: 'veraPDF returned an unexpected response.' };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return { attempted: true, reason: 'veraPDF verification timed out' };
-    }
-    return {
-      attempted: true,
-      reason: error instanceof Error ? error.message : 'Unknown veraPDF verification error'
-    };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return { attempted: true, reason: 'veraPDF verification failed after retries.' };
 }
