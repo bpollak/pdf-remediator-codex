@@ -64,6 +64,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
     variant === 'remediated'
       ? 'Manual draft edits in the workspaces below do not change this baseline until you validate a revised PDF.'
       : 'This baseline reflects the uploaded file before final manual remediation.';
+  const originalOcrMessage =
+    variant === 'original' && file?.ocrAttempted
+      ? file.ocrApplied
+        ? 'OCR was applied during remediation, but this page still shows the original uploaded-PDF baseline. Review the compare page for OCR-influenced remediation results.'
+        : `OCR was attempted during remediation but did not yield usable searchable text${file.ocrReason ? `: ${file.ocrReason}.` : '.'}`
+      : undefined;
 
   return (
     <section className="space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
@@ -72,6 +78,11 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
         title={scoreTitle}
         description={scoreDescription}
       />
+      {originalOcrMessage ? (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          {originalOcrMessage}
+        </p>
+      ) : null}
       {variant === 'remediated' ? (
         <div className="rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3">
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Accessibility decision</p>

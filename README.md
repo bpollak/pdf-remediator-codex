@@ -10,7 +10,7 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 2. If likely scanned, the client calls `POST /api/ocr`.
 3. The API route forwards the file to an OCR backend and expects a PDF response with an OCR text layer.
 4. If backend OCR is unavailable, the browser falls back to local Tesseract OCR (first pages only).
-5. Audit/remediation then run against OCR-enriched content.
+5. Remediation runs against OCR-enriched content when OCR adds usable searchable text; the original findings view still reports the uploaded PDF baseline.
 
 ### Environment variables
 
@@ -24,8 +24,8 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `VERAPDF_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for veraPDF backend auth.
 - `VERAPDF_TIMEOUT_MS` (optional): veraPDF request timeout in milliseconds (default `120000`).
 
-If `OCR_SERVICE_URL` is not configured, OCR is skipped and processing continues with the original PDF.
-When no backend is configured, local browser OCR fallback is attempted automatically.
+If `OCR_SERVICE_URL` is not configured, the backend OCR step is unavailable.
+When no backend is configured, local browser OCR fallback is attempted automatically for likely scanned PDFs.
 
 If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
 can show an external PDF/UA check with rule/check counts.

@@ -1,7 +1,7 @@
 import { mapToTesseractLang } from './language';
+import { CLIENT_OCR_TIMEOUT_MS } from './config';
 
 const OCR_API_PATH = '/api/ocr';
-const CLIENT_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUSES = new Set([502, 504]);
 const SERVICE_UNAVAILABLE_COOLDOWN_MS = 5 * 60_000;
@@ -62,7 +62,7 @@ export async function runOcrViaApi(bytes: ArrayBuffer, fileName: string, languag
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), CLIENT_OCR_TIMEOUT_MS);
 
     try {
       const response = await attemptOcrFetch(formData, controller.signal);

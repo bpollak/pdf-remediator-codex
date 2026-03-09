@@ -8,6 +8,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-03-09-ocr-reliability-and-reporting',
+    versionLabel: 'Release 2026.03.09',
+    deployedOn: 'March 9, 2026',
+    summary: 'Scanned-PDF OCR is more reliable and the uploaded-file report now explains when OCR affected remediation.',
+    highlights: [
+      'Aligned browser OCR timeouts with the longer server OCR processing window so large scans are less likely to fail early.',
+      'Added post-OCR validation so a returned PDF only counts as OCR-applied when it actually exposes usable searchable text.',
+      'Fell back to local browser OCR when upstream OCR output cannot be parsed or does not improve text extraction.',
+      'Added original-report messaging so OCR activity is visible even though the uploaded-file baseline still shows the source PDF.'
+    ]
+  },
+  {
     id: '2026-03-08-upload-queue-management',
     versionLabel: 'Release 2026.03.08',
     deployedOn: 'March 8, 2026',

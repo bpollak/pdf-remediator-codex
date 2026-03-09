@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLikelyScannedPdf } from '@/lib/ocr/detection';
+import { assessOcrTextGain, isLikelyScannedPdf, summarizePdfTextSignal } from '@/lib/ocr/detection';
 import type { ParsedPDF } from '@/lib/pdf/types';
 
 function createBaseParsed(): ParsedPDF {
@@ -81,5 +81,76 @@ describe('isLikelyScannedPdf', () => {
     ];
 
     expect(isLikelyScannedPdf(parsed)).toBe(true);
+  });
+});
+
+describe('summarizePdfTextSignal', () => {
+  it('captures text density metrics used by OCR heuristics', () => {
+    const parsed = createBaseParsed();
+    parsed.pageCount = 2;
+    parsed.textItems = [
+      { text: 'Budget review', x: 30, y: 700, width: 80, height: 12, fontName: 'Helvetica', fontSize: 12, page: 1 },
+      { text: 'March 2026', x: 30, y: 680, width: 70, height: 12, fontName: 'Helvetica', fontSize: 12, page: 2 }
+    ];
+
+    const summary = summarizePdfTextSignal(parsed);
+
+    expect(summary.totalTextItems).toBe(2);
+    expect(summary.totalNonWhitespaceChars).toBe('BudgetreviewMarch2026'.length);
+    expect(summary.textItemsPerPage).toBe(1);
+    expect(summary.nonWhitespaceCharsPerPage).toBe('BudgetreviewMarch2026'.length / 2);
+  });
+});
+
+describe('assessOcrTextGain', () => {
+  it('accepts OCR output that adds strong searchable-text growth', () => {
+    const original = createBaseParsed();
+    original.pageCount = 2;
+    original.textItems = [
+      { text: 'A', x: 10, y: 700, width: 10, height: 10, fontName: 'Helvetica', fontSize: 10, page: 1 }
+    ];
+
+    const candidate = createBaseParsed();
+    candidate.pageCount = 2;
+    candidate.textItems = [
+      { text: 'Application for academic accommodation', x: 30, y: 700, width: 240, height: 12, fontName: 'OCR', fontSize: 12, page: 1 },
+      { text: 'Student ID and department details', x: 30, y: 680, width: 220, height: 12, fontName: 'OCR', fontSize: 12, page: 1 },
+      { text: 'Supporting documentation is attached', x: 30, y: 700, width: 230, height: 12, fontName: 'OCR', fontSize: 12, page: 2 },
+      { text: 'Advisor signature and approval date', x: 30, y: 680, width: 220, height: 12, fontName: 'OCR', fontSize: 12, page: 2 }
+    ];
+
+    const assessment = assessOcrTextGain(original, candidate);
+
+    expect(assessment.accepted).toBe(true);
+    expect(assessment.reason).toBeUndefined();
+  });
+
+  it('rejects OCR output that does not improve searchable text', () => {
+    const original = createBaseParsed();
+    original.pageCount = 2;
+    original.textItems = [
+      { text: 'A', x: 10, y: 700, width: 10, height: 10, fontName: 'Helvetica', fontSize: 10, page: 1 }
+    ];
+
+    const candidate = createBaseParsed();
+    candidate.pageCount = 2;
+    candidate.textItems = [
+      { text: 'A', x: 10, y: 700, width: 10, height: 10, fontName: 'Helvetica', fontSize: 10, page: 1 }
+    ];
+
+    const assessment = assessOcrTextGain(original, candidate);
+
+    expect(assessment.accepted).toBe(false);
+    expect(assessment.reason).toMatch(/did not add enough searchable text/i);
+  });
+
+  it('rejects OCR output that still exposes no text', () => {
+    const original = createBaseParsed();
+    const candidate = createBaseParsed();
+
+    const assessment = assessOcrTextGain(original, candidate);
+
+    expect(assessment.accepted).toBe(false);
+    expect(assessment.reason).toBe('OCR output did not expose any searchable text');
   });
 });

@@ -5,7 +5,7 @@ import type { AuditResult } from '@/lib/audit/types';
 import { classifyPdfSource } from '@/lib/pdf/source-type';
 import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { runOcrViaApi } from '@/lib/ocr/client';
-import { isLikelyScannedPdf } from '@/lib/ocr/detection';
+import { assessOcrTextGain, isLikelyScannedPdf } from '@/lib/ocr/detection';
 import {
   MAX_REMEDIATION_ITERATIONS,
   computeFailureScore,
@@ -67,13 +67,29 @@ export function QueueProcessor() {
           ocrAttempted = true;
           updateFile(next.id, { status: 'ocr', progress: 30 });
           const ocrResult = await runOcrViaApi(remediationSourceBytes, next.name, originalParsedData.language);
+          let upstreamOcrFailureReason = ocrResult.reason;
 
           if (ocrResult.bytes) {
-            remediationSourceBytes = ocrResult.bytes;
-            remediationParsedData = await parsePdfInWorker(next.id, remediationSourceBytes);
-            ocrApplied = true;
-            ocrReason = undefined;
-          } else {
+            try {
+              const candidateParsed = await parsePdfInWorker(`${next.id}-ocr`, ocrResult.bytes);
+              const candidateAssessment = assessOcrTextGain(originalParsedData, candidateParsed);
+
+              if (candidateAssessment.accepted) {
+                remediationSourceBytes = ocrResult.bytes;
+                remediationParsedData = candidateParsed;
+                ocrApplied = true;
+                ocrReason = undefined;
+                upstreamOcrFailureReason = undefined;
+              } else {
+                upstreamOcrFailureReason = candidateAssessment.reason;
+              }
+            } catch (error) {
+              upstreamOcrFailureReason =
+                error instanceof Error ? `OCR output could not be parsed (${error.message})` : 'OCR output could not be parsed';
+            }
+          }
+
+          if (!ocrApplied) {
             const { runLocalOcr } = await import('@/lib/ocr/local');
             const localOcr = await runLocalOcr(
               remediationParsedData,
@@ -84,9 +100,9 @@ export function QueueProcessor() {
               remediationParsedData = localOcr.parsed;
               ocrApplied = true;
               localOcrApplied = true;
-              ocrReason = ocrResult.reason ? `${ocrResult.reason}; used local OCR fallback` : 'Used local OCR fallback';
+              ocrReason = upstreamOcrFailureReason ? `${upstreamOcrFailureReason}; used local OCR fallback` : 'Used local OCR fallback';
             } else {
-              ocrReason = ocrResult.reason ?? localOcr.reason;
+              ocrReason = upstreamOcrFailureReason ?? localOcr.reason;
             }
           }
         }

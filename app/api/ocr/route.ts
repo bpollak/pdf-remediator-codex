@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { DEFAULT_OCR_TIMEOUT_MS, MAX_OCR_TIMEOUT_MS } from '@/lib/ocr/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
-
-const DEFAULT_OCR_TIMEOUT_MS = 240_000;
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.OCR_TIMEOUT_MS);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_OCR_TIMEOUT_MS;
-  return Math.min(raw, 600_000);
+  return Math.min(raw, MAX_OCR_TIMEOUT_MS);
 }
 
 export async function POST(request: NextRequest) {
