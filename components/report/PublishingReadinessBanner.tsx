@@ -19,7 +19,6 @@ export function PublishingReadinessBanner({ fileId }: { fileId: string }) {
     <section className={`rounded border p-4 shadow-sm ${classes}`} aria-live="polite">
       <p className="text-sm font-semibold">Accessibility status</p>
       <p className="mt-1 text-xl font-semibold">{status.label}</p>
-      <p className="mt-1 text-sm">{status.message}</p>
       {status.reasons.length > 0 ? (
         <ul className="mt-3 flex flex-wrap gap-2" aria-label="Blocking reasons">
           {status.reasons.map((reason) => (

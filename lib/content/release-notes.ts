@@ -16,7 +16,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Aligned browser OCR timeouts with the longer server OCR processing window so large scans are less likely to fail early.',
       'Added post-OCR validation so a returned PDF only counts as OCR-applied when it actually exposes usable searchable text.',
       'Fell back to local browser OCR when upstream OCR output cannot be parsed or does not improve text extraction.',
-      'Added original-report messaging so OCR activity is visible even though the uploaded-file baseline still shows the source PDF.'
+      'Added original-report messaging so OCR activity is visible even though the uploaded-file baseline still shows the source PDF.',
+      'Removed redundant explanatory copy from the accessibility status banner so the status chips carry the detail.'
     ]
   },
   {
