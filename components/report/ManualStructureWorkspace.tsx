@@ -32,6 +32,7 @@ const headingLevels = [1, 2, 3, 4, 5, 6] as const;
 
 export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
+  const markWorkflowProgress = useAppStore((state) => state.markWorkflowProgress);
   const updateStructureHeadingIncluded = useAppStore((state) => state.updateStructureHeadingIncluded);
   const updateStructureHeadingLevel = useAppStore((state) => state.updateStructureHeadingLevel);
   const moveStructureHeading = useAppStore((state) => state.moveStructureHeading);
@@ -115,7 +116,12 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
         ) : null}
         <button
           type="button"
-          onClick={() => downloadJson(`${slugify(file?.name ?? 'document')}-structure-workspace.json`, structurePlan)}
+          onClick={() => {
+            markWorkflowProgress(fileId, {
+              structurePreparedAt: file?.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
+            });
+            downloadJson(`${slugify(file?.name ?? 'document')}-structure-workspace.json`, structurePlan);
+          }}
           className="rounded-md bg-[var(--ucsd-blue)] px-2.5 py-1 text-white hover:bg-[var(--ucsd-navy)]"
         >
           Export structure plan

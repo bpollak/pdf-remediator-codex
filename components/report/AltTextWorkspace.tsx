@@ -35,6 +35,7 @@ function csvEscape(value: string) {
 export function AltTextWorkspace({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
   const updateAltTextDraft = useAppStore((state) => state.updateAltTextDraft);
+  const markWorkflowProgress = useAppStore((state) => state.markWorkflowProgress);
   const setPreviewFocus = useAppStore((state) => state.setPreviewFocus);
   const parsed = file?.remediatedParsedData ?? file?.parsedData;
   const sourceBytes = file?.remediatedParsedData ? file?.remediatedBytes ?? file?.uploadedBytes : file?.uploadedBytes;
@@ -113,11 +114,17 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
 
   function exportJson() {
     const safeName = slugify(file?.name ?? 'document');
+    markWorkflowProgress(fileId, {
+      altTextPreparedAt: file?.workflowProgress?.altTextPreparedAt ?? new Date().toISOString()
+    });
     downloadTextFile(`${safeName}-alt-text-worksheet.json`, JSON.stringify(worksheetPayload, null, 2));
   }
 
   function exportCsv() {
     const safeName = slugify(file?.name ?? 'document');
+    markWorkflowProgress(fileId, {
+      altTextPreparedAt: file?.workflowProgress?.altTextPreparedAt ?? new Date().toISOString()
+    });
     const header = ['id', 'label', 'page', 'x', 'y', 'width', 'height', 'decorative', 'alt', 'nearbyText'];
     const rows = worksheetPayload.images.map((image) =>
       [

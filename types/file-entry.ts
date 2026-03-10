@@ -29,6 +29,13 @@ export interface ManualReviewDrafts {
   lastUpdatedAt?: string;
 }
 
+export interface WorkflowProgress {
+  downloadedAt?: string;
+  reviewedAt?: string;
+  altTextPreparedAt?: string;
+  structurePreparedAt?: string;
+}
+
 export interface FileEntry {
   id: string;
   name: string;
@@ -57,5 +64,6 @@ export interface FileEntry {
   remediationIterations?: RemediationIterationSummary[];
   remediationStopReason?: RemediationStopReason;
   manualReviewDrafts?: ManualReviewDrafts;
+  workflowProgress?: WorkflowProgress;
   error?: string;
 }

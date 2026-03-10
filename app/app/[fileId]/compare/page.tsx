@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { SideBySide } from '@/components/preview/SideBySide';
 import { CompareActions, EvidencePackAction } from '@/components/report/CompareActions';
 import { CollapsibleSection } from '@/components/report/CollapsibleSection';
@@ -17,7 +18,35 @@ import { useAppStore } from '@/stores/app-store';
 
 export default function ComparePage({ params }: { params: { fileId: string } }) {
   const hydrated = useAppStore((s) => s.hydrated);
+  const markWorkflowProgress = useAppStore((s) => s.markWorkflowProgress);
+  const reviewedAt = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.workflowProgress?.reviewedAt);
   const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+
+  useEffect(() => {
+    if (!hydrated || reviewedAt || typeof window === 'undefined') return;
+
+    const reviewSection = document.getElementById('review-step');
+    if (!reviewSection || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.35) continue;
+          markWorkflowProgress(params.fileId, {
+            reviewedAt: new Date().toISOString()
+          });
+          observer.disconnect();
+          break;
+        }
+      },
+      {
+        threshold: [0.35]
+      }
+    );
+
+    observer.observe(reviewSection);
+    return () => observer.disconnect();
+  }, [hydrated, markWorkflowProgress, params.fileId, reviewedAt]);
 
   if (!hydrated) {
     return (
@@ -34,7 +63,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         <h1 className="break-words">Accessibility Remediation Workflow</h1>
         <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
         <p className="text-sm text-[var(--ucsd-text)]">
-          Use this app for first-pass remediation, review, and QA packaging. Finish final tag editing and desktop validation in Acrobat or PAC before publishing.
+          Use this app for first-pass remediation, planning, and QA packaging. Finish the actual PDF edits and desktop validation in Acrobat or PAC before publishing.
         </p>
       </div>
       <ReportStatePanel fileId={params.fileId} />
@@ -75,16 +104,16 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
 
       <CollapsibleSection
         id="alt-text-step"
-        title="Fix alt text"
-        subtitle="Review detected images, draft alt text, and export a worksheet for manual remediation."
+        title="Prepare alt text updates"
+        subtitle="Review detected images, draft alt text, and export a worksheet for the actual edits you will make in Acrobat, PAC, or the source file."
       >
         <AltTextWorkspace fileId={params.fileId} />
       </CollapsibleSection>
 
       <CollapsibleSection
         id="structure-step"
-        title="Fix structure"
-        subtitle="Review heading and table issues, then finish structural edits in Acrobat or PAC."
+        title="Prepare structure fixes"
+        subtitle="Review heading and table issues here, then apply the actual structural edits in Acrobat, PAC, or the source file."
       >
         <div className="space-y-6">
           <StructuralIntegrityPanel fileId={params.fileId} />
@@ -94,8 +123,8 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
 
       <CollapsibleSection
         id="validation-step"
-        title="Run validation"
-        subtitle="Confirm the PDF/UA result after manual revisions."
+        title="Validate revised PDF"
+        subtitle="Confirm the PDF/UA result after you apply manual revisions and upload the revised file."
       >
         <VerificationPanel fileId={params.fileId} />
       </CollapsibleSection>

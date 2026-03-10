@@ -11,10 +11,13 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     id: '2026-03-10-build-stability-fixes',
     versionLabel: 'Release 2026.03.10',
     deployedOn: 'March 10, 2026',
-    summary: 'Build-blocking veraPDF and report type-safety issues were fixed so deployments can complete cleanly again.',
+    summary: 'Build stability issues were fixed and the remediation workflow now reports real user progress more accurately.',
     highlights: [
       'Fixed report generation helpers so optional veraPDF summary data no longer trips TypeScript in manual next steps or revision-delta comparisons.',
-      'Changed the veraPDF API route max duration export to a static literal so Next.js recognizes the route config during production builds.'
+      'Changed the veraPDF API route max duration export to a static literal so Next.js recognizes the route config during production builds.',
+      'Changed the remediation workflow so Step 1 completes only after the user actually downloads the remediated PDF instead of merely landing on the compare screen.',
+      'Retitled browser-based planning steps so the UI distinguishes in-app preparation from the actual Acrobat or PAC edits that still happen outside the app.',
+      'Updated the workflow and state panels to prioritize download first, then in-browser review, before alt-text, structure, re-validation, and publish guidance.'
     ]
   },
   {

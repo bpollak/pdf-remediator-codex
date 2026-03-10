@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo } from 'react';
 import { buildEvidencePack } from '@/lib/report/evidence-pack';
+import { formatTimestamp } from '@/lib/report/time-format';
 import { useAppStore } from '@/stores/app-store';
 
 export function CompareActions({ fileId }: { fileId: string }) {
   const file = useAppStore((s) => s.files.find((entry) => entry.id === fileId));
+  const markWorkflowProgress = useAppStore((s) => s.markWorkflowProgress);
   const remediatedBytes = file?.remediatedBytes;
 
   const blobUrl = useMemo(() => {
@@ -20,12 +22,14 @@ export function CompareActions({ fileId }: { fileId: string }) {
   }, [blobUrl]);
 
   const downloadName = file ? `remediated-${file.name}` : 'remediated.pdf';
+  const downloadedAtLabel = formatTimestamp(file?.workflowProgress?.downloadedAt);
 
   return (
     <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
       <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        Use this app for first-pass remediation and review. After download, continue final tag editing and desktop validation in Acrobat or PAC before publishing.
+        This step is only complete after you click Download remediated PDF. After that, continue final tag editing and desktop
+        validation in Acrobat or PAC before publishing.
       </p>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
         Open the review sections below when you need troubleshooting context, manual follow-up guidance, or QA evidence.
@@ -35,12 +39,18 @@ export function CompareActions({ fileId }: { fileId: string }) {
         <a
           href={blobUrl ?? undefined}
           download={downloadName}
+          onClick={() => {
+            if (!blobUrl) return;
+            markWorkflowProgress(fileId, {
+              downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
+            });
+          }}
           className={`inline-flex items-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition ${
             blobUrl ? 'bg-[var(--ucsd-blue)] hover:bg-[var(--ucsd-navy)]' : 'pointer-events-none bg-gray-300'
           }`}
           aria-disabled={!blobUrl}
         >
-          Download remediated PDF
+          {downloadedAtLabel ? 'Download remediated PDF again' : 'Download remediated PDF'}
         </a>
         <a
           href={blobUrl ?? undefined}
@@ -55,6 +65,14 @@ export function CompareActions({ fileId }: { fileId: string }) {
         >
           Open remediated PDF in new tab
         </a>
+      </div>
+
+      <div className="mt-4 rounded border border-[rgba(24,43,73,0.12)] bg-white/80 p-3 text-sm text-[var(--ucsd-text)]">
+        {downloadedAtLabel ? (
+          <p>Download recorded: {downloadedAtLabel}. Review the file in Acrobat or PAC, then return here for findings, planning, and validation guidance.</p>
+        ) : (
+          <p>The workflow stays on Step 1 until you click Download remediated PDF.</p>
+        )}
       </div>
     </section>
   );

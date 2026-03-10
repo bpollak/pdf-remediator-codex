@@ -35,13 +35,30 @@ describe('getReportStateSnapshot', () => {
 
     expect(snapshot.validatedFile.label).toBe('Accessible');
     expect(snapshot.draftPlan.label).toBe('No saved draft edits yet');
-    expect(snapshot.nextAction.label).toBe('Final spot-check and publish');
-    expect(snapshot.nextAction.href).toBe('#next-steps-step');
+    expect(snapshot.nextAction.label).toBe('Download the remediated PDF');
+    expect(snapshot.nextAction.href).toBe('#download-step');
+  });
+
+  it('moves to review only after the remediated PDF has actually been downloaded', () => {
+    const snapshot = getReportStateSnapshot(
+      makeFile({
+        workflowProgress: {
+          downloadedAt: '2026-03-10T19:05:00.000Z'
+        }
+      })
+    );
+
+    expect(snapshot.nextAction.label).toBe('Review the preview and findings');
+    expect(snapshot.nextAction.href).toBe('#review-step');
   });
 
   it('reports pending draft work and a revised-upload next action', () => {
     const snapshot = getReportStateSnapshot(
       makeFile({
+        workflowProgress: {
+          downloadedAt: '2026-03-10T19:05:00.000Z',
+          reviewedAt: '2026-03-10T19:06:00.000Z'
+        },
         manualReviewDrafts: {
           altText: {
             'img-1': {
@@ -71,6 +88,10 @@ describe('getReportStateSnapshot', () => {
   it('does not report zero failed veraPDF counts when no verdict was returned', () => {
     const snapshot = getReportStateSnapshot(
       makeFile({
+        workflowProgress: {
+          downloadedAt: '2026-03-10T19:05:00.000Z',
+          reviewedAt: '2026-03-10T19:06:00.000Z'
+        },
         verapdfResult: {
           attempted: true,
           reason: 'veraPDF request timed out'

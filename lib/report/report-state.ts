@@ -39,6 +39,8 @@ function validatedFileTone(file: FileEntry | undefined): ReportStateTone {
 export function getReportStateSnapshot(file: FileEntry | undefined): ReportStateSnapshot {
   const accessibility = getAccessibilityStatus(file);
   const manualReview = summarizeManualReviewState(file);
+  const hasDownloadedPdf = Boolean(file?.workflowProgress?.downloadedAt);
+  const hasReviewedFindings = Boolean(file?.workflowProgress?.reviewedAt);
   const structureEditCount = manualReview.structure.headingOverrides + manualReview.structure.reviewedTables;
   const draftChangeCount = manualReview.altText.editedCount + structureEditCount;
   const failedRules = file?.verapdfResult?.summary?.failedRules;
@@ -116,6 +118,22 @@ export function getReportStateSnapshot(file: FileEntry | undefined): ReportState
       tone: 'neutral',
       label: 'Wait for remediation to finish',
       description: 'The updated PDF and validation state will appear here after processing completes.'
+    };
+  } else if (file.remediatedBytes && !hasDownloadedPdf) {
+    nextAction = {
+      tone: 'info',
+      label: 'Download the remediated PDF',
+      description: 'Step 1 is not complete until you download the updated PDF from this page. Save that file locally before you move on to review.',
+      href: '#download-step',
+      actionLabel: 'Go to download panel'
+    };
+  } else if (hasDownloadedPdf && !hasReviewedFindings) {
+    nextAction = {
+      tone: 'info',
+      label: 'Review the preview and findings',
+      description: 'Compare the uploaded and remediated previews in this page before you leave the browser for manual editing.',
+      href: '#review-step',
+      actionLabel: 'Open review section'
     };
   } else if (manualReview.pendingRevalidation) {
     nextAction = {

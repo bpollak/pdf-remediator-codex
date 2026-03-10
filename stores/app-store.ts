@@ -16,6 +16,7 @@ import type {
   ManualReviewDrafts,
   ManualStructureHeadingDraft,
   ManualStructureTableDecision,
+  WorkflowProgress,
   UploadIntent
 } from '@/types/file-entry';
 
@@ -54,6 +55,7 @@ interface AppStore {
   moveStructureHeading: (fileId: string, key: string, direction: 'up' | 'down') => void;
   resetStructureHeadingOrder: (fileId: string) => void;
   updateStructureTableDraft: (fileId: string, key: string, decision: ManualStructureTableDecision) => void;
+  markWorkflowProgress: (fileId: string, patch: Partial<WorkflowProgress>) => void;
   setPreviewFocus: (fileId: string, focus: PreviewFocus | undefined) => void;
 }
 
@@ -98,6 +100,7 @@ function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
   if ('remediationCompletedAt' in patch || 'validationCompletedAt' in patch) return true;
   if ('remediationIterations' in patch || 'remediationStopReason' in patch) return true;
   if ('manualReviewDrafts' in patch) return true;
+  if ('workflowProgress' in patch) return true;
   if ('error' in patch) return true;
   if (patch.status === 'remediated' || patch.status === 'error') return true;
   return false;
@@ -120,6 +123,16 @@ function buildManualReviewDrafts(
     structure: options.structure ?? drafts.structure,
     lastUpdatedAt: new Date().toISOString()
   });
+}
+
+function mergeWorkflowProgress(
+  file: FileEntry,
+  patch: Partial<WorkflowProgress>
+): WorkflowProgress {
+  return {
+    ...(file.workflowProgress ?? {}),
+    ...patch
+  };
 }
 
 function nextHeadingDraft(
@@ -255,7 +268,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     get().updateFile(fileId, {
-      manualReviewDrafts: buildManualReviewDrafts(file, { altText: nextAltText })
+      manualReviewDrafts: buildManualReviewDrafts(file, { altText: nextAltText }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        altTextPreparedAt: file.workflowProgress?.altTextPreparedAt ?? new Date().toISOString()
+      })
     });
   },
   updateStructureHeadingIncluded: (fileId, key, include) => {
@@ -275,6 +291,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...drafts.structure,
           headings: nextHeadings
         }
+      }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
     });
   },
@@ -295,6 +314,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...drafts.structure,
           headings: nextHeadings
         }
+      }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
     });
   },
@@ -321,6 +343,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...drafts.structure,
           headingOrder: nextOrder
         }
+      }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
     });
   },
@@ -335,6 +360,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...drafts.structure,
           headingOrder: []
         }
+      }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
     });
   },
@@ -356,7 +384,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...drafts.structure,
           tableDecisions: nextTableDecisions
         }
+      }),
+      workflowProgress: mergeWorkflowProgress(file, {
+        structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
+    });
+  },
+  markWorkflowProgress: (fileId, patch) => {
+    const file = get().files.find((entry) => entry.id === fileId);
+    if (!file) return;
+
+    get().updateFile(fileId, {
+      workflowProgress: mergeWorkflowProgress(file, patch)
     });
   },
   setPreviewFocus: (fileId, focus) => {
