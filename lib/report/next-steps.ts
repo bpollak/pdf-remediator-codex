@@ -56,6 +56,8 @@ export function buildManualNextSteps(input: {
 }): NextStepItem[] {
   const { remediatedFindings, verapdfResult, remediationStopReason, remediationMode, sourceType, pendingManualReview } = input;
   const steps: NextStepItem[] = [];
+  const verapdfVerdict = getVerapdfComplianceVerdict(verapdfResult);
+  const verapdfSummary = verapdfResult?.summary;
   const manualPathHint =
     'If you use Acrobat, fix issues in Tags and Accessibility Checker. If you edit in Word or PowerPoint, update the source file, export a new PDF, then re-upload.';
 
@@ -86,9 +88,9 @@ export function buildManualNextSteps(input: {
     });
   }
 
-  if (getVerapdfComplianceVerdict(verapdfResult) === false) {
-    const failedRules = verapdfResult.summary?.failedRules;
-    const failedChecks = verapdfResult.summary?.failedChecks;
+  if (verapdfVerdict === false) {
+    const failedRules = verapdfSummary?.failedRules;
+    const failedChecks = verapdfSummary?.failedChecks;
     const counts =
       typeof failedRules === 'number' || typeof failedChecks === 'number'
         ? ` (${typeof failedRules === 'number' ? `${failedRules} failed rules` : ''}${

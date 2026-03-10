@@ -8,6 +8,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-03-10-build-stability-fixes',
+    versionLabel: 'Release 2026.03.10',
+    deployedOn: 'March 10, 2026',
+    summary: 'Build-blocking veraPDF and report type-safety issues were fixed so deployments can complete cleanly again.',
+    highlights: [
+      'Fixed report generation helpers so optional veraPDF summary data no longer trips TypeScript in manual next steps or revision-delta comparisons.',
+      'Changed the veraPDF API route max duration export to a static literal so Next.js recognizes the route config during production builds.'
+    ]
+  },
+  {
     id: '2026-03-09-ocr-reliability-and-reporting',
     versionLabel: 'Release 2026.03.09',
     deployedOn: 'March 9, 2026',

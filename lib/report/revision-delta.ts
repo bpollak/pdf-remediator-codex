@@ -23,7 +23,8 @@ export interface RevisionDeltaSummary {
   validationChanged: boolean;
 }
 
-function compareCounts(current: number, previous: number): RevisionTrend {
+function compareCounts(current: number | undefined, previous: number | undefined): RevisionTrend {
+  if (typeof current !== 'number' || typeof previous !== 'number') return 'unchanged';
   if (current < previous) return 'improved';
   if (current > previous) return 'regressed';
   return 'unchanged';

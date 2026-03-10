@@ -5,13 +5,13 @@ import type { VerapdfResult } from '@/lib/verapdf/types';
 import {
   DEFAULT_VERAPDF_TIMEOUT_MS,
   MAX_VERAPDF_TIMEOUT_MS,
-  VERAPDF_ROUTE_MAX_DURATION_MS,
   VERAPDF_WARMUP_TIMEOUT_MS
 } from '@/lib/verapdf/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = VERAPDF_ROUTE_MAX_DURATION_MS / 1000;
+// Next.js only recognizes route config exports when they are static literals.
+export const maxDuration = 300;
 
 const DEFAULT_VERAPDF_PROFILE = 'ua1';
 const DEFAULT_LOCAL_VERAPDF_URL = 'http://127.0.0.1:8081';

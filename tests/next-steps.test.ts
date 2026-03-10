@@ -38,6 +38,7 @@ describe('buildManualNextSteps', () => {
     });
 
     expect(steps[0]?.title).toContain('Open the remediated PDF in Acrobat or PAC');
+    expect(steps[0]?.description).toContain('3 failed rules, 12 failed checks');
     expect(steps[0]?.severity).toBe('high');
   });
 
