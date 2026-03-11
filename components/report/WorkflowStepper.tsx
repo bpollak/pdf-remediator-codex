@@ -8,7 +8,6 @@ const stateLabel: Record<WorkflowStepState, string> = {
   complete: 'Complete',
   current: 'Current step',
   pending: 'Pending',
-  blocked: 'Blocked',
   'not-needed': 'Not needed'
 };
 
@@ -16,7 +15,6 @@ const stateClasses: Record<WorkflowStepState, string> = {
   complete: 'border-green-200 bg-green-50',
   current: 'border-[var(--ucsd-blue)] bg-[rgba(0,98,155,0.06)] ring-2 ring-[rgba(0,98,155,0.15)]',
   pending: 'border-[rgba(24,43,73,0.15)] bg-white',
-  blocked: 'border-gray-200 bg-gray-50',
   'not-needed': 'border-slate-200 bg-slate-50'
 };
 
@@ -30,7 +28,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
       <div>
         <h2>Remediation workflow</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Follow these steps in order. Each card reflects what you have actually done in this workflow, not just what the app has generated.
+          Follow the recommended order below, but you can open any step at any time. Each card reflects what you have actually done in this workflow, not just what the app has generated.
         </p>
       </div>
 
@@ -55,12 +53,7 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
             <p className="mt-2 text-sm text-[var(--ucsd-text)]">{step.description}</p>
             <a
               href={step.href}
-              className={`mt-3 inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition ${
-                step.state === 'blocked'
-                  ? 'pointer-events-none bg-gray-200 text-gray-500'
-                  : 'bg-[var(--ucsd-blue)] text-white hover:bg-[var(--ucsd-navy)]'
-              }`}
-              aria-disabled={step.state === 'blocked'}
+              className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-3 py-2 text-sm font-medium text-white transition hover:bg-[var(--ucsd-navy)]"
             >
               {step.actionLabel}
             </a>

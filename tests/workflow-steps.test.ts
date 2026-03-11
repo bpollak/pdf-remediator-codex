@@ -35,7 +35,7 @@ describe('buildWorkflowSteps', () => {
 
     expect(steps[0]?.key).toBe('download');
     expect(steps[0]?.state).toBe('current');
-    expect(steps[1]?.state).toBe('blocked');
+    expect(steps[1]?.state).toBe('pending');
   });
 
   it('moves review to the current step after download is recorded', () => {

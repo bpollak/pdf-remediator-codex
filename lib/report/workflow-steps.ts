@@ -3,7 +3,7 @@ import type { FileEntry } from '@/types/file-entry';
 import { getAccessibilityStatus } from './accessibility-status';
 import { summarizeManualReviewState } from './manual-review';
 
-export type WorkflowStepState = 'complete' | 'current' | 'pending' | 'blocked' | 'not-needed';
+export type WorkflowStepState = 'complete' | 'current' | 'pending' | 'not-needed';
 
 export interface WorkflowStep {
   key: string;
@@ -16,7 +16,6 @@ export interface WorkflowStep {
 
 interface StepDefinition extends Omit<WorkflowStep, 'state'> {
   satisfied: boolean;
-  available: boolean;
   notNeeded?: boolean;
 }
 
@@ -28,11 +27,11 @@ function assignStepStates(steps: StepDefinition[]): WorkflowStep[] {
   return steps.map((step) => {
     if (step.notNeeded) return { ...step, state: 'not-needed' };
     if (step.satisfied) return { ...step, state: 'complete' };
-    if (!assignedCurrent && step.available) {
+    if (!assignedCurrent) {
       assignedCurrent = true;
       return { ...step, state: 'current' };
     }
-    return { ...step, state: step.available ? 'pending' : 'blocked' };
+    return { ...step, state: 'pending' };
   });
 }
 
@@ -56,7 +55,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
     Boolean(file?.workflowProgress?.structurePreparedAt) ||
     manualReview.structure.headingOverrides > 0 ||
     manualReview.structure.reviewedTables > 0;
-  const hasValidationResult = typeof getVerapdfComplianceVerdict(file?.verapdfResult) === 'boolean';
   const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app#upload-revised-pdf';
 
   return assignStepStates([
@@ -69,7 +67,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: '#download-step',
       actionLabel: hasRemediatedPdf ? 'Go to download panel' : 'Wait for updated PDF',
       satisfied: hasDownloadedPdf,
-      available: true
     },
     {
       key: 'review',
@@ -80,7 +77,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: '#review-step',
       actionLabel: 'Open review section',
       satisfied: hasReviewedFindings,
-      available: hasDownloadedPdf
     },
     {
       key: 'alt-text',
@@ -93,7 +89,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: '#alt-text-step',
       actionLabel: 'Open alt text workspace',
       satisfied: needsAltTextPlan && altTextPrepared,
-      available: hasReviewedFindings,
       notNeeded: !needsAltTextPlan
     },
     {
@@ -109,7 +104,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: '#structure-step',
       actionLabel: 'Open structure workspace',
       satisfied: needsStructurePlan && structurePrepared,
-      available: hasReviewedFindings,
       notNeeded: !needsStructurePlan
     },
     {
@@ -123,7 +117,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: manualReview.pendingRevalidation ? revalidationHref : '#validation-step',
       actionLabel: manualReview.pendingRevalidation ? 'Upload revised PDF' : 'Open validation panel',
       satisfied: !manualReview.pendingRevalidation && getVerapdfComplianceVerdict(file?.verapdfResult) === true,
-      available: hasDownloadedPdf || hasValidationResult
     },
     {
       key: 'publish',
@@ -135,7 +128,6 @@ export function buildWorkflowSteps(file: FileEntry | undefined): WorkflowStep[] 
       href: '#next-steps-step',
       actionLabel: 'Open publish guidance',
       satisfied: status.status === 'accessible',
-      available: hasDownloadedPdf
     }
   ]);
 }
