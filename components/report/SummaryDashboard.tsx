@@ -59,12 +59,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
 
   const scoreTitle =
     variant === 'remediated'
-      ? 'Automated baseline for current remediated PDF'
-      : 'Automated baseline for uploaded PDF';
+      ? 'Accessibility score — improved PDF'
+      : 'Accessibility score — original upload';
   const scoreDescription =
     variant === 'remediated'
-      ? 'Manual draft edits in the workspaces below do not change this baseline until you validate a revised PDF.'
-      : 'This baseline reflects the uploaded file before final manual remediation.';
+      ? 'This score reflects the auto-fixed PDF. Draft edits you make below won\u2019t update this score until you upload a revised file.'
+      : 'This score reflects the original file you uploaded, before any fixes.';
   const originalOcrMessage =
     variant === 'original' && file?.ocrAttempted
       ? file.ocrApplied
@@ -93,12 +93,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       ) : null}
       {variant === 'remediated' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Use this automated baseline as a progress signal. The final publish decision comes from the accessibility status and the PDF/UA validation result.
+          Use this score to track your progress. The final publish decision comes from the accessibility status above and the independent validation check.
         </p>
       )}
       {variant === 'remediated' && manualReview.pendingRevalidation ? (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Manual draft edits exist in the workspaces below. Re-upload or validate a revised PDF before treating the current file as publish-ready.
+          You have unsaved draft changes below. Upload a revised PDF to update this score before publishing.
         </p>
       ) : null}
       {variant === 'remediated' && (remediatedGeneratedAt || draftUpdatedAt) ? (
@@ -109,22 +109,22 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       ) : null}
       {variant === 'remediated' && displayedScore !== undefined && displayedScore < auditResult.score && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          A perfect automated baseline is only shown when this app&apos;s critical findings are clear and the external PDF/UA check passes.
+          A perfect score is only shown when all checks pass and the independent accessibility validation also passes.
         </p>
       )}
       {variant === 'remediated' && file?.remediationMode === 'analysis-only' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Structural remediation mode is analysis-only for this file. Content-bound tagging was not guaranteed and still needs manual work in Acrobat or PAC.
+          This file could only be analyzed, not fully auto-fixed. You will need to apply structural fixes manually using Adobe Acrobat or the free <a href="https://pac.pdf-accessibility.org/" target="_blank" rel="noreferrer" className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]">PAC tool</a>.
         </p>
       )}
       {variant === 'remediated' && file?.sourceType === 'checker-report-artifact' && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Source assessment indicates this is likely a checker or report PDF, not a source content document.
+          This file appears to be a report or checker output rather than a content document you would publish.
         </p>
       )}
       {variant === 'remediated' && getVerapdfComplianceVerdict(verapdfResult) === false && (
         <p className="text-sm text-[var(--ucsd-text)]">
-          Internal fixes improved this file, but the external PDF/UA check still found issues to resolve manually.
+          Auto-fixes improved this file, but the independent accessibility check still found issues to resolve manually.
         </p>
       )}
 

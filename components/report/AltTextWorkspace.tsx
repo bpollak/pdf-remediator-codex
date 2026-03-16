@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PdfRegionThumbnail } from './PdfRegionThumbnail';
 import { useAppStore } from '@/stores/app-store';
 import {
@@ -32,6 +32,88 @@ function csvEscape(value: string) {
   return value;
 }
 
+function AltTextEditor({
+  draft,
+  imageId,
+  isDecorative,
+  onSave,
+  onEditingChange
+}: {
+  draft: { alt: string; decorative: boolean };
+  imageId: string;
+  isDecorative: boolean;
+  onSave: (next: { alt: string; decorative: boolean }) => void;
+  onEditingChange: (editing: boolean) => void;
+}) {
+  const [localAlt, setLocalAlt] = useState(draft.alt);
+  const [localDecorative, setLocalDecorative] = useState(draft.decorative);
+  const [saved, setSaved] = useState(false);
+  const prevImageId = useRef(imageId);
+
+  // Sync from store when the draft changes externally (e.g. switching images)
+  useEffect(() => {
+    if (prevImageId.current !== imageId) {
+      setLocalAlt(draft.alt);
+      setLocalDecorative(draft.decorative);
+      setSaved(false);
+      prevImageId.current = imageId;
+    }
+  }, [imageId, draft.alt, draft.decorative]);
+
+  const hasChanges = localAlt !== draft.alt || localDecorative !== draft.decorative;
+
+  function handleSave() {
+    onSave({ alt: localAlt, decorative: localDecorative });
+    onEditingChange(false);
+    setSaved(true);
+  }
+
+  return (
+    <>
+      <label className="mt-3 flex items-center gap-2 text-xs text-[var(--ucsd-text)]">
+        <input
+          type="checkbox"
+          checked={localDecorative}
+          onChange={(event) => {
+            setLocalDecorative(event.target.checked);
+            onEditingChange(true);
+            setSaved(false);
+          }}
+        />
+        Mark as decorative
+      </label>
+      <textarea
+        value={localAlt}
+        onChange={(event) => {
+          setLocalAlt(event.target.value);
+          onEditingChange(true);
+          setSaved(false);
+        }}
+        rows={3}
+        placeholder={localDecorative ? 'Decorative image (alt not required)' : 'Describe what this image communicates'}
+        className="mt-2 w-full rounded border border-[rgba(24,43,73,0.2)] p-2 text-sm"
+        disabled={localDecorative}
+      />
+      <div className="mt-2 flex items-center gap-2">
+        {hasChanges && (
+          <button
+            type="button"
+            onClick={handleSave}
+            className="inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--ucsd-navy)]"
+          >
+            Save
+          </button>
+        )}
+        {saved && !hasChanges && (
+          <p className="rounded bg-green-50 border border-green-200 px-3 py-1.5 text-xs text-green-800">
+            Saved. Continue adding descriptions for the remaining images, then follow the instructions above to finish.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function AltTextWorkspace({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
   const updateAltTextDraft = useAppStore((state) => state.updateAltTextDraft);
@@ -45,6 +127,7 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
   );
   const summary = summarizeManualReviewState(file);
   const [showMissingOnly, setShowMissingOnly] = useState(true);
+  const [editingImageId, setEditingImageId] = useState<string | null>(null);
 
   const entries = useMemo(
     () =>
@@ -65,7 +148,9 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
     [file, images, parsed]
   );
 
-  const visibleEntries = showMissingOnly ? entries.filter((entry) => entry.needsAlt) : entries;
+  const visibleEntries = showMissingOnly
+    ? entries.filter((entry) => entry.needsAlt || entry.image.id === editingImageId)
+    : entries;
 
   const worksheetPayload = useMemo(
     () => ({
@@ -159,12 +244,29 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
       <div>
         <h2>Alt Text Workspace</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Review detected images, draft alt text, mark decorative images, and export a worksheet for manual remediation.
+          Every image in your PDF needs a short description (called &ldquo;alt text&rdquo;) so that screen readers can describe it to people who cannot see it. Decorative images like borders or background patterns can be marked as decorative instead.
         </p>
-        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Draft edits persist in this browser and block publish readiness until you validate a revised PDF.
-        </p>
+        <div className="mt-3 rounded-md border border-[rgba(0,98,155,0.15)] bg-[rgba(0,98,155,0.04)] p-3 text-sm text-[var(--ucsd-text)]">
+          <p className="font-medium text-[var(--ucsd-navy)]">How this works:</p>
+          <ol className="mt-1 ml-4 list-decimal space-y-1">
+            <li>Write a description for each image below, or check &ldquo;Mark as decorative&rdquo; if the image is purely visual.</li>
+            <li>Click <strong>Save</strong> after each description.</li>
+            <li>When you have covered all images, click <strong>Download descriptions as spreadsheet</strong> or <strong>Download descriptions as data file</strong> to save your work.</li>
+            <li>Open your PDF in Adobe Acrobat and add the descriptions to each image using the downloaded file as a reference.</li>
+            <li>Upload the updated PDF in the &ldquo;Validate revised PDF&rdquo; step below to confirm your changes.</li>
+          </ol>
+        </div>
       </div>
+
+      {summary.altText.missingCount === 0 && summary.altText.totalImages > 0 && (
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <p className="font-medium">All {summary.altText.totalImages} images are covered — great work!</p>
+          <p className="mt-1">
+            Download your descriptions using the buttons below, then open your PDF in Adobe Acrobat to add them to each image.
+            When you are done, upload the updated PDF in the &ldquo;Validate revised PDF&rdquo; step to confirm everything is correct.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
@@ -172,32 +274,34 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
           onClick={() => setShowMissingOnly((value) => !value)}
           className="rounded-md border border-[rgba(24,43,73,0.25)] px-2.5 py-1 text-[var(--ucsd-text)] hover:bg-slate-50"
         >
-          {showMissingOnly ? 'Showing missing only' : 'Showing all images'}
+          {showMissingOnly ? 'Showing images that still need descriptions' : 'Showing all images'}
         </button>
         <span className="text-[var(--ucsd-text)]">
-          Draft progress: {summary.altText.completedCount} of {summary.altText.totalImages} images covered
+          {summary.altText.completedCount} of {summary.altText.totalImages} images have descriptions
         </span>
-        <span className="text-[var(--ucsd-text)]">
-          Missing alt coverage: {summary.altText.missingCount} of {summary.altText.totalImages}
-        </span>
+        {summary.altText.missingCount > 0 && (
+          <span className="text-[var(--ucsd-text)]">
+            ({summary.altText.missingCount} still {summary.altText.missingCount === 1 ? 'needs' : 'need'} a description)
+          </span>
+        )}
         {summary.pendingRevalidation ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-            Pending re-validation
+            Needs re-validation
           </span>
         ) : null}
         <button
           type="button"
-          onClick={exportJson}
+          onClick={exportCsv}
           className="rounded-md bg-[var(--ucsd-blue)] px-2.5 py-1 text-white hover:bg-[var(--ucsd-navy)]"
         >
-          Export JSON worksheet
+          Download descriptions as spreadsheet
         </button>
         <button
           type="button"
-          onClick={exportCsv}
+          onClick={exportJson}
           className="rounded-md border border-[rgba(24,43,73,0.25)] px-2.5 py-1 text-[var(--ucsd-text)] hover:bg-slate-50"
         >
-          Export CSV worksheet
+          Download descriptions as data file
         </button>
       </div>
 
@@ -242,31 +346,12 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
                   ) : (
                     <p className="mt-2 text-xs text-[var(--ucsd-text)]">Nearby text: none detected near this image.</p>
                   )}
-                  <label className="mt-3 flex items-center gap-2 text-xs text-[var(--ucsd-text)]">
-                    <input
-                      type="checkbox"
-                      checked={entry.draft.decorative}
-                      onChange={(event) =>
-                        updateDraftForImage(entry.image, {
-                          ...entry.draft,
-                          decorative: event.target.checked
-                        })
-                      }
-                    />
-                    Mark as decorative
-                  </label>
-                  <textarea
-                    value={entry.draft.alt}
-                    onChange={(event) =>
-                      updateDraftForImage(entry.image, {
-                        ...entry.draft,
-                        alt: event.target.value
-                      })
-                    }
-                    rows={3}
-                    placeholder={entry.draft.decorative ? 'Decorative image (alt not required)' : 'Describe what this image communicates'}
-                    className="mt-2 w-full rounded border border-[rgba(24,43,73,0.2)] p-2 text-sm"
-                    disabled={entry.draft.decorative}
+                  <AltTextEditor
+                    draft={entry.draft}
+                    imageId={entry.image.id}
+                    isDecorative={entry.draft.decorative}
+                    onSave={(nextDraft) => updateDraftForImage(entry.image, nextDraft)}
+                    onEditingChange={(editing) => setEditingImageId(editing ? entry.image.id : null)}
                   />
                 </div>
               </div>

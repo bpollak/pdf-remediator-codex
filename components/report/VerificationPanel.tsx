@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { HelpTip } from './HelpTip';
 import { useAppStore } from '@/stores/app-store';
 import type { RemediationStopReason } from '@/lib/remediate/loop';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
@@ -55,24 +56,28 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
     : { pathname: '/app', hash: 'upload-revised-pdf' };
   const validationLabel =
     verificationVerdict === true
-      ? 'Passed PDF/UA validation'
+      ? 'Passed Independent accessibility check'
       : accessibilityStatus.status === 'verification-unavailable'
         ? 'Validation unavailable'
         : verification?.attempted
-          ? 'Not yet passed PDF/UA validation'
+          ? 'Not yet passed Independent accessibility check'
           : 'Validation not available yet';
 
   if (!verification) {
     return (
       <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-        <h2>PDF/UA validation</h2>
+        <h2>
+          Independent accessibility check
+          <HelpTip label="independent check">
+            PDF/UA is the international standard for accessible PDFs. This check uses an independent tool (veraPDF) to verify your PDF meets that standard. It runs separately from this app&apos;s own checks, providing a second opinion.
+          </HelpTip>
+        </h2>
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          veraPDF is an independent checker for the PDF/UA accessibility standard. When available, it validates the
-          current remediated PDF.
+          This is an independent check against the international PDF accessibility standard (PDF/UA). It runs separately from this app&apos;s own checks.
         </p>
         <p className="mt-2 text-sm font-medium text-[var(--ucsd-navy)]">Validation result: {validationLabel}</p>
         <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-          Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
+          Draft changes you make in this app won&apos;t update these results. Upload a revised PDF after making manual fixes to re-check.
         </p>
         <div className="mt-3 rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
           {remediatedGeneratedAt ? <p>Current remediated PDF generated: {remediatedGeneratedAt}</p> : null}
@@ -80,7 +85,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
         </div>
         {manualReview.pendingRevalidation ? (
           <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
+            <p>You have draft changes that haven&apos;t been verified yet. Upload a revised PDF to run another check.</p>
             <Link
               href={revalidationHref}
               className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"
@@ -95,15 +100,19 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
 
   return (
     <section className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
-      <h2>PDF/UA validation</h2>
+      <h2>
+          Independent accessibility check
+          <HelpTip label="independent check">
+            PDF/UA is the international standard for accessible PDFs. This check uses an independent tool (veraPDF) to verify your PDF meets that standard. It runs separately from this app&apos;s own checks, providing a second opinion.
+          </HelpTip>
+        </h2>
 
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        veraPDF is an independent checker for the PDF/UA accessibility standard. These results apply to the current
-        remediated PDF.
+        This is an independent check against the international PDF accessibility standard (PDF/UA). These results apply to your current improved PDF.
       </p>
       <p className="mt-2 text-sm font-medium text-[var(--ucsd-navy)]">Validation result: {validationLabel}</p>
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">
-        Manual draft edits in this app do not update this panel. Re-upload or re-validate a revised PDF after manual fixes.
+        Draft changes you make in this app won&apos;t update these results. Upload a revised PDF after making manual fixes to re-check.
       </p>
       <div className="mt-3 rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
         {remediatedGeneratedAt ? <p>Current remediated PDF generated: {remediatedGeneratedAt}</p> : null}
@@ -112,7 +121,7 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
       </div>
       {manualReview.pendingRevalidation ? (
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <p>Current draft changes are waiting for a revised PDF and another validation pass.</p>
+          <p>You have draft changes that haven&apos;t been verified yet. Upload a revised PDF to run another check.</p>
           <Link
             href={revalidationHref}
             className="mt-3 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ucsd-navy)]"

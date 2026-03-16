@@ -14,6 +14,7 @@ import { AltTextWorkspace } from '@/components/report/AltTextWorkspace';
 import { StructuralIntegrityPanel } from '@/components/report/StructuralIntegrityPanel';
 import { VerificationPanel } from '@/components/report/VerificationPanel';
 import { WorkflowStepper } from '@/components/report/WorkflowStepper';
+import { ImprovementSummary } from '@/components/report/ImprovementSummary';
 import { useAppStore } from '@/stores/app-store';
 
 export default function ComparePage({ params }: { params: { fileId: string } }) {
@@ -51,7 +52,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
   if (!hydrated) {
     return (
       <div className="space-y-3">
-        <h1>Accessibility Remediation Workflow</h1>
+        <h1>Accessibility Improvement Workflow</h1>
         <p className="text-sm text-[var(--ucsd-text)]">Loading saved results...</p>
       </div>
     );
@@ -60,15 +61,24 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="break-words">Accessibility Remediation Workflow</h1>
+        <h1 className="break-words">Accessibility Improvement Workflow</h1>
         <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
         <p className="text-sm text-[var(--ucsd-text)]">
-          Use this app for first-pass remediation, planning, and QA packaging. Finish the actual PDF edits and desktop validation in Acrobat or PAC before publishing.
+          Follow the steps below to review and finish improving your PDF. Some fixes have already been applied automatically.
         </p>
       </div>
-      <ReportStatePanel fileId={params.fileId} />
-      <RevisionDeltaPanel fileId={params.fileId} />
+      <ImprovementSummary fileId={params.fileId} />
       <WorkflowStepper fileId={params.fileId} />
+      <CollapsibleSection
+        id="status-detail"
+        title="Detailed status"
+        subtitle="Expanded view of your PDF's current validation state, draft plan, and revision history."
+      >
+        <div className="space-y-4">
+          <ReportStatePanel fileId={params.fileId} />
+          <RevisionDeltaPanel fileId={params.fileId} />
+        </div>
+      </CollapsibleSection>
 
       <div id="download-step" className="scroll-mt-24">
         <CompareActions fileId={params.fileId} />
@@ -81,7 +91,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <CollapsibleSection
         id="review-step"
         title="Review previews and findings"
-        subtitle="Confirm the document, review the automated baseline, and use the findings below to decide what still needs manual remediation."
+        subtitle="Compare your original and improved PDFs side by side, and review the detailed findings."
       >
         <div className="space-y-6">
           <EvidencePackAction fileId={params.fileId} />
@@ -89,12 +99,12 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
 
           <section className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
-              <h3>Uploaded PDF findings</h3>
+              <h3>Original PDF</h3>
               <SummaryDashboard fileId={params.fileId} variant="original" />
               <IssueList fileId={params.fileId} variant="original" />
             </div>
             <div className="space-y-4">
-              <h3>Remediated PDF findings</h3>
+              <h3>Improved PDF</h3>
               <SummaryDashboard fileId={params.fileId} variant="remediated" />
               <IssueList fileId={params.fileId} variant="remediated" />
             </div>
@@ -105,7 +115,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <CollapsibleSection
         id="alt-text-step"
         title="Prepare alt text updates"
-        subtitle="Review detected images, draft alt text, and export a worksheet for the actual edits you will make in Acrobat, PAC, or the source file."
+        subtitle="Review images that need descriptive text. You can draft descriptions here and export them for use in your editing tool."
       >
         <AltTextWorkspace fileId={params.fileId} />
       </CollapsibleSection>
@@ -113,7 +123,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <CollapsibleSection
         id="structure-step"
         title="Prepare structure fixes"
-        subtitle="Review heading and table issues here, then apply the actual structural edits in Acrobat, PAC, or the source file."
+        subtitle="Review heading and table issues. Plan your fixes here, then apply them in your editing tool or the original document."
       >
         <div className="space-y-6">
           <StructuralIntegrityPanel fileId={params.fileId} />
@@ -124,7 +134,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       <CollapsibleSection
         id="validation-step"
         title="Validate revised PDF"
-        subtitle="Confirm the PDF/UA result after you apply manual revisions and upload the revised file."
+        subtitle="After making manual fixes, upload your revised PDF here to verify it passes accessibility checks."
       >
         <VerificationPanel fileId={params.fileId} />
       </CollapsibleSection>

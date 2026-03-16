@@ -33,13 +33,10 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
       <div>
         <h2>What To Do Next</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Use this checklist to finish manual fixes after automated remediation.
+          These are the remaining items that need manual attention. The app fixed what it could automatically — the items below need you.
         </p>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          This app is the first-pass remediation workflow. Complete final tag editing and a desktop validation pass in Acrobat or PAC before publishing.
-        </p>
-        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          The automated baseline is this app&apos;s ruleset. veraPDF is an independent check against the PDF/UA standard (PDF/UA means &quot;Universal Accessibility&quot;).
+          Some fixes can be made by editing the original Word or PowerPoint file and re-exporting to PDF. Others require Adobe Acrobat Pro or the free <a href="https://pac.pdf-accessibility.org/" target="_blank" rel="noreferrer" className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]">PAC tool</a>.
         </p>
       </div>
 

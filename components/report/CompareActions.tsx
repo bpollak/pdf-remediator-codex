@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
 import { buildEvidencePack } from '@/lib/report/evidence-pack';
 import { formatTimestamp } from '@/lib/report/time-format';
 import { useAppStore } from '@/stores/app-store';
@@ -10,68 +9,67 @@ export function CompareActions({ fileId }: { fileId: string }) {
   const markWorkflowProgress = useAppStore((s) => s.markWorkflowProgress);
   const remediatedBytes = file?.remediatedBytes;
 
-  const blobUrl = useMemo(() => {
-    if (!remediatedBytes) return null;
-    return URL.createObjectURL(new Blob([remediatedBytes], { type: 'application/pdf' }));
-  }, [remediatedBytes]);
-
-  useEffect(() => {
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [blobUrl]);
-
   const downloadName = file ? `remediated-${file.name}` : 'remediated.pdf';
   const downloadedAtLabel = formatTimestamp(file?.workflowProgress?.downloadedAt);
+
+  function triggerDownload() {
+    if (!remediatedBytes) return;
+    const blob = new Blob([remediatedBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = downloadName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    markWorkflowProgress(fileId, {
+      downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
+    });
+  }
+
+  function openInNewTab() {
+    if (!remediatedBytes) return;
+    const blob = new Blob([remediatedBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }
 
   return (
     <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
       <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        This step is only complete after you click Download remediated PDF. After that, continue final tag editing and desktop
-        validation in Acrobat or PAC before publishing.
-      </p>
-      <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        Open the review sections below when you need troubleshooting context, manual follow-up guidance, or QA evidence.
+        Download the improved version of your PDF. If there are remaining issues, the sections below will guide you through fixing them.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <a
-          href={blobUrl ?? undefined}
-          download={downloadName}
-          onClick={() => {
-            if (!blobUrl) return;
-            markWorkflowProgress(fileId, {
-              downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
-            });
-          }}
+        <button
+          type="button"
+          onClick={triggerDownload}
+          disabled={!remediatedBytes}
           className={`inline-flex items-center rounded-md px-4 py-2.5 text-sm font-semibold text-white transition ${
-            blobUrl ? 'bg-[var(--ucsd-blue)] hover:bg-[var(--ucsd-navy)]' : 'pointer-events-none bg-gray-300'
+            remediatedBytes ? 'bg-[var(--ucsd-blue)] hover:bg-[var(--ucsd-navy)]' : 'pointer-events-none bg-gray-300'
           }`}
-          aria-disabled={!blobUrl}
         >
-          {downloadedAtLabel ? 'Download remediated PDF again' : 'Download remediated PDF'}
-        </a>
-        <a
-          href={blobUrl ?? undefined}
-          target="_blank"
-          rel="noreferrer"
+          {downloadedAtLabel ? 'Download improved PDF again' : 'Download improved PDF'}
+        </button>
+        <button
+          type="button"
+          onClick={openInNewTab}
+          disabled={!remediatedBytes}
           className={`inline-flex items-center rounded-md border px-4 py-2.5 text-sm font-semibold transition ${
-            blobUrl
+            remediatedBytes
               ? 'border-[rgba(24,43,73,0.35)] text-[var(--ucsd-navy)] hover:bg-white'
               : 'pointer-events-none border-gray-300 text-gray-400'
           }`}
-          aria-disabled={!blobUrl}
         >
-          Open remediated PDF in new tab
-        </a>
+          Open improved PDF in new tab
+        </button>
       </div>
 
       <div className="mt-4 rounded border border-[rgba(24,43,73,0.12)] bg-white/80 p-3 text-sm text-[var(--ucsd-text)]">
         {downloadedAtLabel ? (
-          <p>Download recorded: {downloadedAtLabel}. Review the file in Acrobat or PAC, then return here for findings, planning, and validation guidance.</p>
+          <p>Downloaded: {downloadedAtLabel}. Continue with the review steps below, or open the PDF in your editing tool to start manual fixes.</p>
         ) : (
-          <p>The workflow stays on Step 1 until you click Download remediated PDF.</p>
+          <p>Click the download button above to save your improved PDF and move to the next step.</p>
         )}
       </div>
     </section>

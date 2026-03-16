@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { PdfCanvasViewer } from '@/components/preview/PdfCanvasViewer';
 import { PdfRegionThumbnail } from '@/components/report/PdfRegionThumbnail';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 import { useAppStore } from '@/stores/app-store';
@@ -23,13 +24,6 @@ function scoreTone(score: number | undefined): string {
   if (score >= 70) return 'text-[var(--ucsd-blue)]';
   if (score >= 40) return 'text-amber-700';
   return 'text-red-700';
-}
-
-function useBlobUrl(bytes?: ArrayBuffer) {
-  return useMemo(() => {
-    if (!bytes) return null;
-    return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-  }, [bytes]);
 }
 
 function DocumentSelectorCard({
@@ -78,9 +72,6 @@ export function SideBySide({ fileId }: { fileId: string }) {
   const [selectedVariant, setSelectedVariant] = useState<PreviewVariant>('remediated');
   const [isMounted, setIsMounted] = useState(false);
 
-  const originalBlobUrl = useBlobUrl(file?.uploadedBytes);
-  const remediatedBlobUrl = useBlobUrl(file?.remediatedBytes);
-
   const originalScore = computeDisplayedAutomatedScore({
     auditResult: file?.auditResult,
     variant: 'original'
@@ -96,13 +87,6 @@ export function SideBySide({ fileId }: { fileId: string }) {
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
-      if (remediatedBlobUrl) URL.revokeObjectURL(remediatedBlobUrl);
-    };
-  }, [originalBlobUrl, remediatedBlobUrl]);
-
-  useEffect(() => {
     if (!previewFocus?.variant) return;
     setSelectedVariant(previewFocus.variant);
   }, [previewFocus?.variant]);
@@ -113,14 +97,13 @@ export function SideBySide({ fileId }: { fileId: string }) {
 
   const activeVariant: PreviewVariant =
     selectedVariant === 'remediated' && !file?.remediatedBytes ? 'original' : selectedVariant;
-  const activeTitle = activeVariant === 'remediated' ? 'Updated document review viewer' : 'Uploaded document review viewer';
+  const activeTitle = activeVariant === 'remediated' ? 'Viewing: Updated PDF' : 'Viewing: Uploaded PDF (original)';
   const activeBytes = activeVariant === 'remediated' ? file?.remediatedBytes : file?.uploadedBytes;
-  const activeBlobUrl = activeVariant === 'remediated' ? remediatedBlobUrl : originalBlobUrl;
   const activeScore = activeVariant === 'remediated' ? remediatedScore : originalScore;
+  const otherScore = activeVariant === 'remediated' ? originalScore : remediatedScore;
   const activeFileName =
     activeVariant === 'remediated' ? (file ? `remediated-${file.name}` : 'remediated.pdf') : file?.name ?? 'original.pdf';
   const pageFocus = previewFocus && previewFocus.variant === activeVariant ? previewFocus.page : undefined;
-  const iframeSrc = activeBlobUrl ? (pageFocus ? `${activeBlobUrl}#page=${pageFocus}` : activeBlobUrl) : undefined;
 
   return (
     <section className="space-y-4">
@@ -152,10 +135,37 @@ export function SideBySide({ fileId }: { fileId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">{activeTitle}</p>
-            <div className="mt-3 rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Automated baseline</p>
-              <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(activeScore)}`}>{scoreValue(activeScore)}</p>
+            <div className="mt-3 flex flex-wrap items-end gap-4">
+              <div className="rounded-md bg-[rgba(0,98,155,0.08)] px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
+                  {activeVariant === 'remediated' ? 'Updated PDF score' : 'Original PDF score'}
+                </p>
+                <p className={`mt-1 text-3xl font-bold leading-none ${scoreTone(activeScore)}`}>{scoreValue(activeScore)}</p>
+              </div>
+              {typeof otherScore === 'number' && (
+                <div className="rounded-md border border-[rgba(24,43,73,0.12)] bg-slate-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
+                    {activeVariant === 'remediated' ? 'Original PDF score' : 'Updated PDF score'}
+                  </p>
+                  <p className={`mt-1 text-xl font-bold leading-none ${scoreTone(otherScore)}`}>{scoreValue(otherScore)}</p>
+                </div>
+              )}
             </div>
+            {activeVariant === 'original' && typeof remediatedScore === 'number' && file?.remediatedBytes && (
+              <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                <p>
+                  Your updated PDF scored <strong>{remediatedScore}%</strong> (up from {typeof originalScore === 'number' ? `${originalScore}%` : 'the original'}).{' '}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVariant('remediated')}
+                    className="font-medium underline hover:no-underline"
+                  >
+                    Switch to the updated PDF
+                  </button>{' '}
+                  to review it.
+                </p>
+              </div>
+            )}
             <p className="mt-2 text-sm text-[var(--ucsd-text)]">
               Accessibility fixes often do not change visible rendering. Use this viewer to confirm page context while reviewing findings and manual edits.
             </p>
@@ -177,31 +187,44 @@ export function SideBySide({ fileId }: { fileId: string }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={activeBlobUrl ?? undefined}
-              download={activeFileName}
+            <button
+              type="button"
+              onClick={() => {
+                if (!activeBytes) return;
+                const blob = new Blob([activeBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = activeFileName;
+                anchor.click();
+                URL.revokeObjectURL(url);
+              }}
+              disabled={!activeBytes}
               className={`inline-flex items-center rounded-md px-4 py-2 text-sm font-medium transition ${
-                activeBlobUrl
+                activeBytes
                   ? 'bg-[var(--ucsd-blue)] text-white hover:bg-[var(--ucsd-navy)]'
                   : 'pointer-events-none bg-gray-300 text-white'
               }`}
-              aria-disabled={!activeBlobUrl}
             >
               Download this PDF
-            </a>
-            <a
-              href={iframeSrc}
-              target="_blank"
-              rel="noreferrer"
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!activeBytes) return;
+                const blob = new Blob([activeBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+              }}
+              disabled={!activeBytes}
               className={`inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition ${
-                activeBlobUrl
+                activeBytes
                   ? 'border-[rgba(24,43,73,0.25)] text-[var(--ucsd-text)] hover:bg-slate-50'
                   : 'pointer-events-none border-gray-300 text-gray-400'
               }`}
-              aria-disabled={!activeBlobUrl}
             >
               Open in new tab
-            </a>
+            </button>
           </div>
         </div>
 
@@ -227,15 +250,15 @@ export function SideBySide({ fileId }: { fileId: string }) {
           </div>
         ) : null}
 
-        {!activeBlobUrl ? (
+        {!activeBytes ? (
           <div className="rounded border border-[rgba(24,43,73,0.15)] bg-slate-50 p-4 text-sm text-[var(--ucsd-text)]">
             This preview is unavailable right now. Upload or process the file in this browser session, then open Compare again.
           </div>
         ) : (
-          <iframe
-            src={iframeSrc}
-            title={activeTitle}
-            className="h-[78vh] w-full rounded border border-[rgba(24,43,73,0.2)]"
+          <PdfCanvasViewer
+            bytes={activeBytes}
+            focusPage={pageFocus}
+            className="h-[78vh]"
           />
         )}
       </article>

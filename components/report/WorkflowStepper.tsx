@@ -26,9 +26,9 @@ export function WorkflowStepper({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>Remediation workflow</h2>
+        <h2>Your progress</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Follow the recommended order below, but you can open any step at any time. Each card reflects what you have actually done in this workflow, not just what the app has generated.
+          Follow these steps in order. You can jump ahead or go back at any time.
         </p>
       </div>
 

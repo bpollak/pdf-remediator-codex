@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    typedRoutes: true
+    typedRoutes: false
   },
   async headers() {
     return [
@@ -26,7 +26,7 @@ const nextConfig = {
               "connect-src 'self' blob: https://cdn.jsdelivr.net",
               "img-src 'self' data: blob: https://cdn.ucsd.edu",
               "frame-src blob:",
-              "object-src 'none'",
+              "object-src blob:",
               "base-uri 'self'"
             ].join('; ')
           }

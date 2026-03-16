@@ -31,10 +31,9 @@ export function ReportStatePanel({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>Current workflow state</h2>
+        <h2>Where you are</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          This separates the validated PDF from any saved draft plan so it is always clear what has already been verified
-          and what still needs another upload.
+          A quick summary of your PDF&apos;s current status and what to do next.
         </p>
       </div>
 

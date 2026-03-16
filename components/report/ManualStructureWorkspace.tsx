@@ -92,26 +92,31 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>Manual Structure Workspace</h2>
+        <h2>Structure Review</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Review heading, bookmark, and table suggestions. You can change heading level and order here before applying
-          the final PDF tags in Acrobat or PAC.
+          A well-structured PDF has clear headings (like a table of contents) and properly marked tables. This helps screen readers navigate the document and present information in the right order.
         </p>
-        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          These edits persist as a review plan. They do not directly rewrite the PDF tag tree or update the automated
-          baseline until you validate a revised PDF.
-        </p>
+        <div className="mt-3 rounded-md border border-[rgba(0,98,155,0.15)] bg-[rgba(0,98,155,0.04)] p-3 text-sm text-[var(--ucsd-text)]">
+          <p className="font-medium text-[var(--ucsd-navy)]">How this works:</p>
+          <ol className="mt-1 ml-4 list-decimal space-y-1">
+            <li>Review the <strong>headings</strong> we detected below. Check or uncheck each one to include it in your document&rsquo;s outline. You can also change the heading level (H1 is the main title, H2 is a section, H3 is a subsection, etc.).</li>
+            <li>Review any <strong>tables</strong> we detected. Confirm each one is a real table, or mark it if it was incorrectly detected.</li>
+            <li>When you are done reviewing, click <strong>Download structure plan</strong> to save your decisions.</li>
+            <li>Open your PDF in Adobe Acrobat and update the headings and table tags using your downloaded plan as a guide.</li>
+            <li>Upload the updated PDF in the &ldquo;Validate revised PDF&rdquo; step to confirm your changes.</li>
+          </ol>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--ucsd-text)]">
-        <span>Detected outlines: {parsed.outlines.length}</span>
-        <span>Heading suggestions: {summary.structure.headingSuggestions}</span>
-        <span>Structure edits saved: {summary.structure.headingOverrides}</span>
-        <span>Table suggestions: {summary.structure.tableSuggestions}</span>
-        <span>Table decisions reviewed: {summary.structure.reviewedTables} of {summary.structure.tableSuggestions}</span>
+        <span>{summary.structure.headingSuggestions} {summary.structure.headingSuggestions === 1 ? 'heading' : 'headings'} found</span>
+        <span>{summary.structure.tableSuggestions} {summary.structure.tableSuggestions === 1 ? 'table' : 'tables'} found</span>
+        {summary.structure.reviewedTables > 0 && (
+          <span>({summary.structure.reviewedTables} of {summary.structure.tableSuggestions} tables reviewed)</span>
+        )}
         {summary.pendingRevalidation ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-            Pending re-validation
+            Needs re-validation
           </span>
         ) : null}
         <button
@@ -124,7 +129,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
           }}
           className="rounded-md bg-[var(--ucsd-blue)] px-2.5 py-1 text-white hover:bg-[var(--ucsd-navy)]"
         >
-          Export structure plan
+          Download structure plan
         </button>
         {summary.structure.headingOrderCustomized ? (
           <button
@@ -141,15 +146,15 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
         <article className="rounded border border-[rgba(24,43,73,0.15)] p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Heading and bookmark plan</h4>
+              <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Choose your headings</h4>
               <p className="mt-1 text-xs text-[var(--ucsd-text)]">
-                Include or exclude candidates, change the intended heading level, and reorder the reading outline.
+                Check or uncheck each heading to include it in your document&rsquo;s outline. You can also change the level or reorder them.
               </p>
             </div>
           </div>
 
           {orderedHeadings.length === 0 ? (
-            <p className="mt-2 text-sm text-[var(--ucsd-text)]">No heading candidates detected.</p>
+            <p className="mt-2 text-sm text-[var(--ucsd-text)]">We did not find any headings in this document.</p>
           ) : (
             <div className="mt-3 max-h-[34rem] space-y-2 overflow-auto pr-1">
               {orderedHeadings.map((heading, index) => {
@@ -170,8 +175,8 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                             {index + 1}. {heading.text}
                           </span>
                           <span className="mt-1 block text-xs text-[var(--ucsd-text)]">
-                            Page {heading.page} · detected as H{heading.level}
-                            {levelChanged ? ` · edited to H${heading.editedLevel}` : ''}
+                            Page {heading.page} · Level {heading.level} heading
+                            {levelChanged ? ` · changed to level ${heading.editedLevel}` : ''}
                           </span>
                         </span>
                       </label>
@@ -198,7 +203,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <label className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
-                        Intended heading level
+                        Change heading level
                       </label>
                       <select
                         value={heading.editedLevel === heading.level ? '' : String(heading.editedLevel)}
@@ -211,10 +216,10 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                         }
                         className="rounded border border-[rgba(24,43,73,0.2)] px-2 py-1 text-sm text-[var(--ucsd-text)]"
                       >
-                        <option value="">Use detected level (H{heading.level})</option>
+                        <option value="">Keep current level ({heading.level})</option>
                         {headingLevels.map((level) => (
                           <option key={level} value={level}>
-                            H{level}
+                            Level {level}{level === 1 ? ' (main title)' : level === 2 ? ' (section)' : level === 3 ? ' (subsection)' : ''}
                           </option>
                         ))}
                       </select>
@@ -228,12 +233,12 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
 
         <div className="space-y-3">
           <article className="rounded border border-[rgba(24,43,73,0.15)] p-3">
-            <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Hierarchy preview</h4>
+            <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Outline preview</h4>
             <p className="mt-1 text-xs text-[var(--ucsd-text)]">
-              This is the intended heading outline after your saved edits.
+              This shows how your document&rsquo;s table of contents will look based on your choices.
             </p>
             {selectedHeadings.length === 0 ? (
-              <p className="mt-3 text-sm text-[var(--ucsd-text)]">No headings are currently included in the review plan.</p>
+              <p className="mt-3 text-sm text-[var(--ucsd-text)]">No headings are included yet. Check the boxes on the left to add headings to your outline.</p>
             ) : (
               <ol className="mt-3 space-y-2">
                 {selectedHeadings.map((heading, index) => (
@@ -243,7 +248,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                     style={{ paddingLeft: `${0.75 + (heading.editedLevel - 1) * 1.1}rem` }}
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
-                      {index + 1}. H{heading.editedLevel} · Page {heading.page}
+                      {index + 1}. Level {heading.editedLevel} heading · Page {heading.page}
                     </p>
                     <p className="mt-1 text-sm text-[var(--ucsd-navy)]">{heading.text}</p>
                   </li>
@@ -253,9 +258,12 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
           </article>
 
           <article className="rounded border border-[rgba(24,43,73,0.15)] p-3">
-            <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Table confidence review</h4>
+            <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">Review detected tables</h4>
+            <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+              We found what looks like tables in your document. For each one, confirm it is a real table, mark it if it was detected incorrectly, or flag it for later review.
+            </p>
             {tableSuggestions.length === 0 ? (
-              <p className="mt-2 text-sm text-[var(--ucsd-text)]">No table candidates detected.</p>
+              <p className="mt-2 text-sm text-[var(--ucsd-text)]">No tables were found in this document.</p>
             ) : (
               <div className="mt-2 max-h-[24rem] space-y-2 overflow-auto pr-1">
                 {tableSuggestions.map((table, index) => {
@@ -264,7 +272,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                   return (
                     <div key={key} className="rounded border border-[rgba(24,43,73,0.12)] p-2 text-sm">
                       <p className="font-medium text-[var(--ucsd-navy)]">
-                        Page {table.page}: {table.rows.length} rows x {table.rows[0]?.cells.length ?? 0} columns
+                        Table on page {table.page} ({table.rows.length} rows, {table.rows[0]?.cells.length ?? 0} columns)
                       </p>
                       <div className="mt-1 flex flex-wrap gap-2">
                         <button
@@ -276,7 +284,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                           }`}
                           onClick={() => updateStructureTableDraft(fileId, key, 'confirm')}
                         >
-                          Confirm table
+                          Yes, this is a table
                         </button>
                         <button
                           type="button"
@@ -287,7 +295,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                           }`}
                           onClick={() => updateStructureTableDraft(fileId, key, 'reject')}
                         >
-                          Mark as non-table
+                          Not a table
                         </button>
                         <button
                           type="button"
@@ -298,7 +306,7 @@ export function ManualStructureWorkspace({ fileId }: { fileId: string }) {
                           }`}
                           onClick={() => updateStructureTableDraft(fileId, key, 'review')}
                         >
-                          Needs review
+                          Not sure — review later
                         </button>
                       </div>
                     </div>

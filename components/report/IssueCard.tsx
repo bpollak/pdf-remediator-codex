@@ -65,9 +65,12 @@ export function IssueCard({
           </span>
         )}
       </div>
-      <p className="mt-2 text-xs text-gray-500">
-        Technical reference: {finding.ruleId} • WCAG {finding.wcagCriterion}
-      </p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">Technical details</summary>
+        <p className="mt-1 text-xs text-gray-500">
+          Rule: {finding.ruleId} · WCAG {finding.wcagCriterion}
+        </p>
+      </details>
       <button
         type="button"
         onClick={reviewInPreview}

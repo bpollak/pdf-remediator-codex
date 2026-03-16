@@ -110,9 +110,12 @@ function GroupedIssueCard({
             {instances.length} {instances.length === 1 ? 'instance' : 'instances'}
           </span>
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Technical reference: {representative.ruleId} • WCAG {representative.wcagCriterion}
-        </p>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">Technical details</summary>
+          <p className="mt-1 text-xs text-gray-500">
+            Rule: {representative.ruleId} · WCAG {representative.wcagCriterion}
+          </p>
+        </details>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
