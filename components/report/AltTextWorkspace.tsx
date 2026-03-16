@@ -35,13 +35,11 @@ function csvEscape(value: string) {
 function AltTextEditor({
   draft,
   imageId,
-  isDecorative,
   onSave,
   onEditingChange
 }: {
   draft: { alt: string; decorative: boolean };
   imageId: string;
-  isDecorative: boolean;
   onSave: (next: { alt: string; decorative: boolean }) => void;
   onEditingChange: (editing: boolean) => void;
 }) {
@@ -349,7 +347,6 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
                   <AltTextEditor
                     draft={entry.draft}
                     imageId={entry.image.id}
-                    isDecorative={entry.draft.decorative}
                     onSave={(nextDraft) => updateDraftForImage(entry.image, nextDraft)}
                     onEditingChange={(editing) => setEditingImageId(editing ? entry.image.id : null)}
                   />
