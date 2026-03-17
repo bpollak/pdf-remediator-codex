@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/stores/app-store';
 import { validatePdfFile } from '@/lib/utils/file-helpers';
@@ -9,18 +9,18 @@ export function DropZone() {
   const addFiles = useAppStore((s) => s.addFiles);
   const files = useAppStore((s) => s.files);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const revalidateFor = searchParams.get('revalidateFor');
   const baseFile = revalidateFor ? files.find((file) => file.id === revalidateFor) : undefined;
 
-  const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const processFiles = useCallback(async (fileList: File[]) => {
     setValidationErrors([]);
-    const files = Array.from(event.target.files ?? []);
     const accepted: File[] = [];
     const rejected: string[] = [];
 
-    for (const file of files) {
+    for (const file of fileList) {
       const result = await validatePdfFile(file);
       if (result.ok) {
         accepted.push(file);
@@ -51,13 +51,41 @@ export function DropZone() {
     if (rejected.length > 0) {
       setValidationErrors(rejected);
     }
+  }, [addFiles, baseFile, router]);
 
+  const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    await processFiles(Array.from(event.target.files ?? []));
     event.target.value = '';
   };
 
+  const onDrop = useCallback(async (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      await processFiles(droppedFiles);
+    }
+  }, [processFiles]);
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const onDragLeave = useCallback((event: React.DragEvent) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
   return (
     <div className="space-y-3">
-      <label className="group block cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-white py-10 px-6 text-center shadow-sm transition hover:border-[var(--ucsd-blue)] hover:bg-gray-50 focus-within:border-[var(--ucsd-blue)] focus-within:ring-2 focus-within:ring-[var(--ucsd-blue)] focus-within:ring-offset-2">
+      <label
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        className={`group block cursor-pointer rounded-lg border-2 border-dashed py-10 px-6 text-center shadow-sm transition focus-within:border-[var(--ucsd-blue)] focus-within:ring-2 focus-within:ring-[var(--ucsd-blue)] focus-within:ring-offset-2 ${isDragOver ? 'border-[var(--ucsd-blue)] bg-blue-50' : 'border-gray-300 bg-white hover:border-[var(--ucsd-blue)] hover:bg-gray-50'}`}
+      >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="mx-auto mb-3 h-8 w-8 text-gray-400 transition group-hover:text-[var(--ucsd-blue)]" aria-hidden="true">
           <path fillRule="evenodd" d="M11.47 2.47a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06l-3.22-3.22V16.5a.75.75 0 0 1-1.5 0V4.81L8.03 8.03a.75.75 0 0 1-1.06-1.06l4.5-4.5ZM3 15.75a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
         </svg>
