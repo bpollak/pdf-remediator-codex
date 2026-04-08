@@ -194,7 +194,13 @@ function resolveTaggedLayerItems(
 
 function beginMarkedContentSequence(tag: string, mcid: number, context: PDFDocument['context']): PDFOperator {
   const props = context.obj({ MCID: PDFNumber.of(mcid) }) as PDFDict;
-  return PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of(tag), props as unknown as PDFName]);
+  // pdf-lib's PDFOperator.of types the second element as PDFName, but the
+  // PDF spec expects a dictionary here.  The cast is required because
+  // pdf-lib doesn't model BDC operator arguments precisely.
+  return PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [
+    PDFName.of(tag),
+    props as unknown as PDFName
+  ]);
 }
 
 async function embedTaggedInvisibleTextLayer(

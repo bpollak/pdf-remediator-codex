@@ -80,7 +80,7 @@ function PdfPage({
         const textContent = await page.getTextContent();
         if (cancelled) return;
 
-        textLayerDiv.innerHTML = '';
+        textLayerDiv.replaceChildren();
         const textLayer = new pdfjs.TextLayer({
           textContentSource: textContent,
           container: textLayerDiv,

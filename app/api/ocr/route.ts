@@ -14,8 +14,27 @@ function getConfiguredTimeoutMs(): number {
   return Math.min(raw, MAX_OCR_TIMEOUT_MS);
 }
 
+function resolveClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  return 'unknown';
+}
+
+function assertServiceUrlSafe(url: string): void {
+  if (url.startsWith('https://') || url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
+    return;
+  }
+  if (process.env.NODE_ENV === 'development') return;
+  throw new Error('OCR_SERVICE_URL must use HTTPS in production.');
+}
+
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const ip = resolveClientIp(request);
   const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -29,6 +48,13 @@ export async function POST(request: NextRequest) {
       { error: 'OCR service is not configured (set OCR_SERVICE_URL).' },
       { status: 503 }
     );
+  }
+
+  try {
+    assertServiceUrlSafe(serviceUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Invalid OCR_SERVICE_URL configuration.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const formData = await request.formData().catch(() => null);

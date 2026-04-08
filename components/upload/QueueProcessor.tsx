@@ -37,19 +37,33 @@ function remediationModeForParsed(parsed: ParsedPDF): RemediationMode {
   return parsed.structureBinding?.hasContentBinding ? 'content-bound' : 'analysis-only';
 }
 
+// If an async operation takes longer than this, assume it is stuck and
+// allow the queue to move on.  This prevents permanent deadlocks when an
+// unhandled error leaves a file ID in the processing set.
+const STALE_PROCESSING_TIMEOUT_MS = 120_000;
+
 export function QueueProcessor() {
   const files = useAppStore((s) => s.files);
   const hydrated = useAppStore((s) => s.hydrated);
   const updateFile = useAppStore((s) => s.updateFile);
-  const processing = useRef(new Set<string>());
+  const processing = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (!hydrated) return;
+
+    // Evict stale entries that have been processing for too long.
+    const now = Date.now();
+    for (const [id, startedAt] of processing.current) {
+      if (now - startedAt > STALE_PROCESSING_TIMEOUT_MS) {
+        processing.current.delete(id);
+      }
+    }
+
     if (processing.current.size > 0) return;
     const next = files.find((file) => file.status === 'queued' && !processing.current.has(file.id));
     if (!next) return;
 
-    processing.current.add(next.id);
+    processing.current.set(next.id, Date.now());
 
     (async () => {
       try {
@@ -231,6 +245,7 @@ export function QueueProcessor() {
         });
       } finally {
         processing.current.delete(next.id);
+        // Trigger a re-render so the effect picks up the next queued file.
       }
     })();
   }, [files, hydrated, updateFile]);

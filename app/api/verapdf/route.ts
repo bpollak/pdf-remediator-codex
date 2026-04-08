@@ -138,8 +138,30 @@ export async function GET() {
   );
 }
 
+function resolveClientIp(request: NextRequest): string {
+  // On Vercel, x-forwarded-for is set by the platform and is trustworthy.
+  // For other environments, this is a best-effort heuristic.
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  // x-real-ip is set by some reverse proxies (nginx, Cloudflare).
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  return 'unknown';
+}
+
+function assertServiceUrlSafe(url: string): void {
+  if (url.startsWith('https://') || url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
+    return;
+  }
+  if (process.env.NODE_ENV === 'development') return;
+  throw new Error('VERAPDF_SERVICE_URL must use HTTPS in production.');
+}
+
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const ip = resolveClientIp(request);
   const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -175,9 +197,11 @@ export async function POST(request: NextRequest) {
   const profile = getConfiguredProfile();
   let upstreamUrl: string;
   try {
+    assertServiceUrlSafe(serviceUrl);
     upstreamUrl = resolveValidationUrl(serviceUrl, profile);
-  } catch {
-    return NextResponse.json({ error: 'Invalid VERAPDF_SERVICE_URL configuration.' }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Invalid VERAPDF_SERVICE_URL configuration.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const upstreamForm = new FormData();

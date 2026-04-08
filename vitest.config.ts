@@ -8,7 +8,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['lib/**/*.ts', 'stores/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/*.test.tsx']
+      exclude: ['**/*.test.ts', '**/*.test.tsx'],
+      thresholds: {
+        lines: 55,
+        functions: 55,
+        branches: 45
+      }
     }
   },
   resolve: {

@@ -80,7 +80,14 @@ export async function loadPersistedFiles(): Promise<FileEntry[]> {
     const transaction = database.transaction([FILE_STORE, ASSET_STORE], 'readonly');
     const fileStore = transaction.objectStore(FILE_STORE);
     const assetStore = transaction.objectStore(ASSET_STORE);
-    const fileRecords = await requestToPromise(fileStore.getAll()) as PersistedFileRecord[];
+    const rawRecords = await requestToPromise(fileStore.getAll());
+    const fileRecords = (Array.isArray(rawRecords) ? rawRecords : []).filter(
+      (record): record is PersistedFileRecord =>
+        record != null &&
+        typeof record === 'object' &&
+        typeof (record as { id?: unknown }).id === 'string' &&
+        typeof (record as { uploadedAssetKey?: unknown }).uploadedAssetKey === 'string'
+    );
 
     const hydratedFiles = await Promise.all(
       fileRecords.map(async (record) => {

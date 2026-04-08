@@ -337,7 +337,10 @@ function isPdfNumberLike(value: unknown): value is PDFNumber {
 function safeLookup(context: PDFDocument['context'], value: unknown): unknown {
   if (value === undefined || value === null) return undefined;
   try {
-    return context.lookup(value as any);
+    // pdf-lib's context.lookup expects a PDFRef but callers pass opaque
+    // references from the PDF structure tree.  The cast is unavoidable here
+    // because the internal reference type is not exposed by pdf-lib's API.
+    return context.lookup(value as Parameters<typeof context.lookup>[0]);
   } catch {
     return undefined;
   }
@@ -534,10 +537,10 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
 }
 
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
-  // Clone bytes for each loader so caller-owned buffers stay reusable across OCR,
-  // remediation, preview, and verification steps.
+  // pdf.js may transfer the underlying buffer; clone so the caller's copy
+  // stays usable for OCR, remediation, preview, and verification steps.
   const parseBytes = bytes.slice(0);
-  const structureBindingPromise = inspectStructureBinding(bytes);
+  const structureBindingPromise = inspectStructureBinding(parseBytes);
   ensurePdfJsWorkerConfigured();
   const loadingTask = getDocument({ data: parseBytes });
   const doc = await loadingTask.promise;
@@ -607,8 +610,9 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
           discoveredImages.push(...imageItems);
         }
 
-        for (let annotationIndex = 0; annotationIndex < (annotations as any[]).length; annotationIndex += 1) {
-          const annotation = (annotations as any[])[annotationIndex];
+        const annotationList = annotations as Array<Record<string, unknown>>;
+        for (let annotationIndex = 0; annotationIndex < annotationList.length; annotationIndex += 1) {
+          const annotation = annotationList[annotationIndex];
           const subtype = cleanText(annotation?.subtype);
           if (subtype === 'Link') {
             const destPage = await resolveDestinationPage(doc, annotation?.dest);
@@ -644,11 +648,12 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
       metadata['pdfuaid:part'] = manifest.pdfUaPart;
     }
 
+    const metadataObj = (metadataResult as { metadata?: { get?: (key: string) => unknown } }).metadata;
     const metadataLang =
       cleanText(metadata.Language) ??
       cleanText(metadata.Lang) ??
-      (typeof (metadataResult as any)?.metadata?.get === 'function'
-        ? cleanText((metadataResult as any).metadata.get('dc:language'))
+      (typeof metadataObj?.get === 'function'
+        ? cleanText(metadataObj.get('dc:language'))
         : undefined);
 
     return {

@@ -215,7 +215,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     );
 
     set((state) => ({ files: [...state.files, ...entries], hydrated: true }));
-    void Promise.all(entries.map((entry) => saveFileEntry(entry))).catch(() => undefined);
+    void Promise.all(entries.map((entry) => saveFileEntry(entry))).catch((err) => {
+      console.error('[app-store] Failed to persist new file entries:', err);
+    });
   },
   updateFile: (id, patch) => {
     let updatedEntry: FileEntry | undefined;
@@ -232,7 +234,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
 
     if (updatedEntry && shouldPersistPatch(patch)) {
-      void saveFileEntry(updatedEntry, { persistAssets: shouldPersistAssetsForPatch(patch) }).catch(() => undefined);
+      void saveFileEntry(updatedEntry, { persistAssets: shouldPersistAssetsForPatch(patch) }).catch((err) => {
+        console.error(`[app-store] Failed to persist update for file ${id}:`, err);
+      });
     }
   },
   removeFile: (id) => {
@@ -254,7 +258,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       };
     });
 
-    void deleteFileEntries(fileIdsToRemove).catch(() => undefined);
+    void deleteFileEntries(fileIdsToRemove).catch((err) => {
+      console.error('[app-store] Failed to delete persisted file entries:', err);
+    });
   },
   updateAltTextDraft: (fileId, imageId, draft) => {
     const file = get().files.find((entry) => entry.id === fileId);
