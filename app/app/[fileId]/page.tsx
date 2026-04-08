@@ -1,13 +1,15 @@
 'use client';
 
+import { use } from 'react';
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { IssueList } from '@/components/report/IssueList';
 import { StructuralIntegrityPanel } from '@/components/report/StructuralIntegrityPanel';
 import { useAppStore } from '@/stores/app-store';
 
-export default function FileReportPage({ params }: { params: { fileId: string } }) {
+export default function FileReportPage({ params }: { params: Promise<{ fileId: string }> }) {
+  const { fileId } = use(params);
   const hydrated = useAppStore((s) => s.hydrated);
-  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === fileId)?.name);
 
   if (!hydrated) {
     return (
@@ -27,9 +29,9 @@ export default function FileReportPage({ params }: { params: { fileId: string } 
           Review the uploaded PDF findings here. Use the compare workflow for download, manual follow-up, and publish guidance.
         </p>
       </div>
-      <SummaryDashboard fileId={params.fileId} />
-      <StructuralIntegrityPanel fileId={params.fileId} />
-      <IssueList fileId={params.fileId} />
+      <SummaryDashboard fileId={fileId} />
+      <StructuralIntegrityPanel fileId={fileId} />
+      <IssueList fileId={fileId} />
     </div>
   );
 }

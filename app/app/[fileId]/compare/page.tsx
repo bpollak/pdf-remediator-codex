@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { use, useEffect } from 'react';
 import { SideBySide } from '@/components/preview/SideBySide';
 import { CompareActions, EvidencePackAction } from '@/components/report/CompareActions';
 import { CollapsibleSection } from '@/components/report/CollapsibleSection';
@@ -17,11 +17,12 @@ import { WorkflowStepper } from '@/components/report/WorkflowStepper';
 import { ImprovementSummary } from '@/components/report/ImprovementSummary';
 import { useAppStore } from '@/stores/app-store';
 
-export default function ComparePage({ params }: { params: { fileId: string } }) {
+export default function ComparePage({ params }: { params: Promise<{ fileId: string }> }) {
+  const { fileId } = use(params);
   const hydrated = useAppStore((s) => s.hydrated);
   const markWorkflowProgress = useAppStore((s) => s.markWorkflowProgress);
-  const reviewedAt = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.workflowProgress?.reviewedAt);
-  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === params.fileId)?.name);
+  const reviewedAt = useAppStore((s) => s.files.find((entry) => entry.id === fileId)?.workflowProgress?.reviewedAt);
+  const documentName = useAppStore((s) => s.files.find((entry) => entry.id === fileId)?.name);
 
   useEffect(() => {
     if (!hydrated || reviewedAt || typeof window === 'undefined') return;
@@ -33,7 +34,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting || entry.intersectionRatio < 0.35) continue;
-          markWorkflowProgress(params.fileId, {
+          markWorkflowProgress(fileId, {
             reviewedAt: new Date().toISOString()
           });
           observer.disconnect();
@@ -47,7 +48,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
 
     observer.observe(reviewSection);
     return () => observer.disconnect();
-  }, [hydrated, markWorkflowProgress, params.fileId, reviewedAt]);
+  }, [hydrated, markWorkflowProgress, fileId, reviewedAt]);
 
   if (!hydrated) {
     return (
@@ -67,25 +68,25 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
           Follow the steps below to review and finish improving your PDF. Some fixes have already been applied automatically.
         </p>
       </div>
-      <ImprovementSummary fileId={params.fileId} />
-      <WorkflowStepper fileId={params.fileId} />
+      <ImprovementSummary fileId={fileId} />
+      <WorkflowStepper fileId={fileId} />
       <CollapsibleSection
         id="status-detail"
         title="Detailed status"
         subtitle="Expanded view of your PDF's current validation state, draft plan, and revision history."
       >
         <div className="space-y-4">
-          <ReportStatePanel fileId={params.fileId} />
-          <RevisionDeltaPanel fileId={params.fileId} />
+          <ReportStatePanel fileId={fileId} />
+          <RevisionDeltaPanel fileId={fileId} />
         </div>
       </CollapsibleSection>
 
       <div id="download-step" className="scroll-mt-24">
-        <CompareActions fileId={params.fileId} />
+        <CompareActions fileId={fileId} />
       </div>
 
       <div id="next-steps-step" className="scroll-mt-24">
-        <NextStepsPanel fileId={params.fileId} />
+        <NextStepsPanel fileId={fileId} />
       </div>
 
       <CollapsibleSection
@@ -94,19 +95,19 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         subtitle="Compare your original and improved PDFs side by side, and review the detailed findings."
       >
         <div className="space-y-6">
-          <EvidencePackAction fileId={params.fileId} />
-          <SideBySide fileId={params.fileId} />
+          <EvidencePackAction fileId={fileId} />
+          <SideBySide fileId={fileId} />
 
           <section className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <h3>Original PDF</h3>
-              <SummaryDashboard fileId={params.fileId} variant="original" />
-              <IssueList fileId={params.fileId} variant="original" />
+              <SummaryDashboard fileId={fileId} variant="original" />
+              <IssueList fileId={fileId} variant="original" />
             </div>
             <div className="space-y-4">
               <h3>Improved PDF</h3>
-              <SummaryDashboard fileId={params.fileId} variant="remediated" />
-              <IssueList fileId={params.fileId} variant="remediated" />
+              <SummaryDashboard fileId={fileId} variant="remediated" />
+              <IssueList fileId={fileId} variant="remediated" />
             </div>
           </section>
         </div>
@@ -117,7 +118,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         title="Prepare alt text updates"
         subtitle="Review images that need descriptive text. You can draft descriptions here and export them for use in your editing tool."
       >
-        <AltTextWorkspace fileId={params.fileId} />
+        <AltTextWorkspace fileId={fileId} />
       </CollapsibleSection>
 
       <CollapsibleSection
@@ -126,8 +127,8 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         subtitle="Review heading and table issues. Plan your fixes here, then apply them in your editing tool or the original document."
       >
         <div className="space-y-6">
-          <StructuralIntegrityPanel fileId={params.fileId} />
-          <ManualStructureWorkspace fileId={params.fileId} />
+          <StructuralIntegrityPanel fileId={fileId} />
+          <ManualStructureWorkspace fileId={fileId} />
         </div>
       </CollapsibleSection>
 
@@ -136,7 +137,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
         title="Validate revised PDF"
         subtitle="After making manual fixes, upload your revised PDF here to verify it passes accessibility checks."
       >
-        <VerificationPanel fileId={params.fileId} />
+        <VerificationPanel fileId={fileId} />
       </CollapsibleSection>
     </div>
   );

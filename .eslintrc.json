@@ -1,6 +1,6 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
-  "ignorePatterns": ["**/* 2.ts", "**/* 2.tsx"],
+  "ignorePatterns": ["e2e/**"],
   "overrides": [
     {
       "files": ["lib/pdf/parser.ts"],
