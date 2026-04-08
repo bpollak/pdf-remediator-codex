@@ -430,13 +430,18 @@ The following items from the plan above have been implemented:
   download button, non-PDF rejection) with `playwright.config.ts`
 - Added 10 veraPDF normalize edge-case tests (@-prefixed keys, string coercion,
   XML fallback, statement inference, self-closing tags)
+- Added 20 veraPDF result verdict/unavailable-reason tests
+- Added 7 remediation extractor tests (plan shape, metadata passthrough, column reorder)
+- Added 6 tagger tests (Document root, headings, lists, tables, sections, paragraphs)
+- Added 22 finding-copy tests (ensureSentence, all rule-ID titles, description, details)
+- Added 7 contrast-ratio tests (black/white, identical, AA threshold, color pairs)
 
 ### Remaining Items
 
 - **1.1** `npm audit fix` (requires CI network access)
 - **1.2** Next.js 14 -> 15+ migration (breaking change, separate PR)
-- **2.4** Explicit CORS headers (low priority for same-origin Vercel app)
-- **5.3** IndexedDB persistence tests (requires fake-indexeddb polyfill)
+- **Note:** If `skipLibCheck: false` causes build failures from upstream `.d.ts` bugs
+  (e.g. `pdfjs-dist`, `pdf-lib`), revert to `skipLibCheck: true` and file upstream
 
 ---
 
