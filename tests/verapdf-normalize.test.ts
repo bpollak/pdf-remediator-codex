@@ -100,6 +100,89 @@ describe('normalizeVerapdfPayload', () => {
     expect(result.summary?.failedRules).toBe(0);
   });
 
+  it('returns reason for unparseable non-JSON non-XML payload', () => {
+    const result = normalizeVerapdfPayload('random garbage', 'text/plain');
+    expect(result.reason).toContain('Unable to parse');
+  });
+
+  it('handles @-prefixed keys from XML-to-JSON conversion', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        '@isCompliant': 'true',
+        '@profileName': 'PDF/UA-1',
+        details: { '@passedRules': '50', '@failedRules': '0' }
+      }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.compliant).toBe(true);
+    expect(result.profile).toBe('PDF/UA-1');
+    expect(result.summary?.passedRules).toBe(50);
+    expect(result.summary?.failedRules).toBe(0);
+  });
+
+  it('treats numeric strings as numbers in summary', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        details: { failedRules: '3', passedRules: '47' }
+      }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.summary?.failedRules).toBe(3);
+    expect(result.summary?.passedRules).toBe(47);
+  });
+
+  it('treats boolean strings as booleans', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: { isCompliant: 'false' }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.compliant).toBe(false);
+  });
+
+  it('returns undefined summary when no rule/check counts exist', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: { isCompliant: true, profileName: 'Custom' }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.compliant).toBe(true);
+    expect(result.summary).toBeUndefined();
+  });
+
+  it('parses self-closing XML validationReport tag', () => {
+    const xml = '<validationReport isCompliant="true" profileName="PDF/UA-1"/>';
+    const result = normalizeVerapdfPayload(xml, 'application/xml');
+    expect(result.compliant).toBe(true);
+    expect(result.profile).toBe('PDF/UA-1');
+  });
+
+  it('infers compliance from statement containing "compliant"', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        statement: 'The document is compliant with PDF/UA requirements.'
+      }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.compliant).toBe(true);
+  });
+
+  it('infers non-compliance from statement containing "fails"', () => {
+    const jsonReport = JSON.stringify({
+      validationReport: {
+        statement: 'The document fails PDF/UA validation.'
+      }
+    });
+    const result = normalizeVerapdfPayload(jsonReport, 'application/json');
+    expect(result.compliant).toBe(false);
+  });
+
+  it('falls back to XML parser when JSON parse fails', () => {
+    const xml = '<validationReport isCompliant="true" profileName="PDF/UA-1"><details passedRules="10" failedRules="0"/></validationReport>';
+    // Content-type says JSON but payload is XML
+    const result = normalizeVerapdfPayload(xml, 'application/json');
+    expect(result.compliant).toBe(true);
+    expect(result.profile).toBe('PDF/UA-1');
+  });
+
   it('extracts compliance data from veraPDF REST validationResult payloads', () => {
     const jsonReport = JSON.stringify({
       report: {

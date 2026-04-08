@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PdfCanvasViewer } from '@/components/preview/PdfCanvasViewer';
 import { PdfRegionThumbnail } from '@/components/report/PdfRegionThumbnail';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
@@ -69,8 +69,19 @@ export function SideBySide({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
   const previewFocus = useAppStore((state) => state.previewFocusByFileId[fileId]);
   const setPreviewFocus = useAppStore((state) => state.setPreviewFocus);
+  const ensureUploadedBytes = useAppStore((state) => state.ensureUploadedBytes);
   const [selectedVariant, setSelectedVariant] = useState<PreviewVariant>('remediated');
   const [isMounted, setIsMounted] = useState(false);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
+
+  // Lazy-reload uploaded bytes from IndexedDB when the user switches to original.
+  const reloadOriginalIfNeeded = useCallback(async () => {
+    if (file && !file.uploadedBytes && !loadingOriginal) {
+      setLoadingOriginal(true);
+      await ensureUploadedBytes(fileId);
+      setLoadingOriginal(false);
+    }
+  }, [file, fileId, loadingOriginal, ensureUploadedBytes]);
 
   const originalScore = computeDisplayedAutomatedScore({
     auditResult: file?.auditResult,
@@ -90,6 +101,12 @@ export function SideBySide({ fileId }: { fileId: string }) {
     if (!previewFocus?.variant) return;
     setSelectedVariant(previewFocus.variant);
   }, [previewFocus?.variant]);
+
+  useEffect(() => {
+    if (selectedVariant === 'original') {
+      void reloadOriginalIfNeeded();
+    }
+  }, [selectedVariant, reloadOriginalIfNeeded]);
 
   if (!isMounted) {
     return null;
@@ -120,7 +137,10 @@ export function SideBySide({ fileId }: { fileId: string }) {
           score={originalScore}
           bytes={file?.uploadedBytes}
           active={activeVariant === 'original'}
-          onSelect={() => setSelectedVariant('original')}
+          onSelect={() => {
+            setSelectedVariant('original');
+            void reloadOriginalIfNeeded();
+          }}
         />
         <DocumentSelectorCard
           title="Updated PDF"

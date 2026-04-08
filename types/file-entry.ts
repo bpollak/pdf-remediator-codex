@@ -40,7 +40,8 @@ export interface FileEntry {
   id: string;
   name: string;
   size: number;
-  uploadedBytes: ArrayBuffer;
+  /** May be undefined after memory release; reload via loadAssetBytes(). */
+  uploadedBytes?: ArrayBuffer;
   uploadIntent?: UploadIntent;
   derivedFromFileId?: string;
   status: 'queued' | 'parsing' | 'ocr' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';

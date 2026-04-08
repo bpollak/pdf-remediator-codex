@@ -138,10 +138,12 @@ export async function saveFileEntry(entry: FileEntry, options: SaveFileEntryOpti
     } satisfies PersistedFileRecord);
 
     if (options.persistAssets !== false) {
-      assetStore.put({
-        key: nextUploadedAssetKey,
-        bytes: uploadedBytes
-      } satisfies PersistedAssetRecord);
+      if (uploadedBytes) {
+        assetStore.put({
+          key: nextUploadedAssetKey,
+          bytes: uploadedBytes
+        } satisfies PersistedAssetRecord);
+      }
 
       if (remediatedBytes && nextRemediatedAssetKey) {
         assetStore.put({

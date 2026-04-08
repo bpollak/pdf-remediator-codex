@@ -9,7 +9,7 @@ import {
   getParsedReviewBase,
   normalizeManualReviewDrafts
 } from '@/lib/report/manual-review';
-import { deleteFileEntries, loadPersistedFiles, saveFileEntry } from '@/lib/persistence/file-store';
+import { deleteFileEntries, loadAssetBytes, loadPersistedFiles, saveFileEntry } from '@/lib/persistence/file-store';
 import type {
   FileEntry,
   ManualAltTextDraft,
@@ -55,6 +55,8 @@ interface AppStore {
   moveStructureHeading: (fileId: string, key: string, direction: 'up' | 'down') => void;
   resetStructureHeadingOrder: (fileId: string) => void;
   updateStructureTableDraft: (fileId: string, key: string, decision: ManualStructureTableDecision) => void;
+  releaseUploadedBytes: (fileId: string) => void;
+  ensureUploadedBytes: (fileId: string) => Promise<ArrayBuffer | undefined>;
   markWorkflowProgress: (fileId: string, patch: Partial<WorkflowProgress>) => void;
   setPreviewFocus: (fileId: string, focus: PreviewFocus | undefined) => void;
 }
@@ -395,6 +397,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
         structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
       })
     });
+  },
+  releaseUploadedBytes: (fileId) => {
+    set((state) => ({
+      files: state.files.map((file) => {
+        if (file.id !== fileId) return file;
+        // Replace in-memory buffer with undefined; bytes remain in IndexedDB.
+        return { ...file, uploadedBytes: undefined };
+      })
+    }));
+  },
+  ensureUploadedBytes: async (fileId) => {
+    const file = get().files.find((entry) => entry.id === fileId);
+    if (file?.uploadedBytes) return file.uploadedBytes;
+    // Lazy-reload from IndexedDB.
+    const bytes = await loadAssetBytes(fileId, 'uploaded');
+    if (bytes) {
+      set((state) => ({
+        files: state.files.map((f) => (f.id === fileId ? { ...f, uploadedBytes: bytes } : f))
+      }));
+    }
+    return bytes;
   },
   markWorkflowProgress: (fileId, patch) => {
     const file = get().files.find((entry) => entry.id === fileId);

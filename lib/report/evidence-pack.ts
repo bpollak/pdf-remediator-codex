@@ -45,7 +45,7 @@ export function buildEvidencePack(file: FileEntry) {
       id: file.id,
       name: file.name,
       sizeBytes: file.size,
-      uploadedFingerprint: createByteFingerprint(file.uploadedBytes),
+      uploadedFingerprint: file.uploadedBytes ? createByteFingerprint(file.uploadedBytes) : 'released',
       remediatedFingerprint: file.remediatedBytes ? createByteFingerprint(file.remediatedBytes) : undefined
     },
     sourceAssessment: {

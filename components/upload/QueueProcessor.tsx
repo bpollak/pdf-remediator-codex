@@ -46,6 +46,8 @@ export function QueueProcessor() {
   const files = useAppStore((s) => s.files);
   const hydrated = useAppStore((s) => s.hydrated);
   const updateFile = useAppStore((s) => s.updateFile);
+  const releaseUploadedBytes = useAppStore((s) => s.releaseUploadedBytes);
+  const ensureUploadedBytes = useAppStore((s) => s.ensureUploadedBytes);
   const processing = useRef(new Map<string, number>());
 
   useEffect(() => {
@@ -68,7 +70,11 @@ export function QueueProcessor() {
     (async () => {
       try {
         updateFile(next.id, { status: 'parsing', progress: 10 });
-        const uploadedBytes = next.uploadedBytes;
+        // Bytes may have been released from memory; reload from IndexedDB if needed.
+        const uploadedBytes = next.uploadedBytes ?? await ensureUploadedBytes(next.id);
+        if (!uploadedBytes) {
+          throw new Error('Uploaded bytes are unavailable for processing.');
+        }
         const originalParsedData = await parsePdfInWorker(next.id, uploadedBytes);
         const sourceAssessment = classifyPdfSource(next.name, originalParsedData);
         let remediationSourceBytes = uploadedBytes;
@@ -237,6 +243,10 @@ export function QueueProcessor() {
           remediationIterations,
           remediationStopReason
         });
+        // Release the original uploaded bytes from memory now that remediation is
+        // complete.  They remain in IndexedDB and can be lazy-loaded if the user
+        // views the "Uploaded PDF" side in the comparison viewer.
+        releaseUploadedBytes(next.id);
       } catch (error) {
         updateFile(next.id, {
           status: 'error',
@@ -248,7 +258,7 @@ export function QueueProcessor() {
         // Trigger a re-render so the effect picks up the next queued file.
       }
     })();
-  }, [files, hydrated, updateFile]);
+  }, [files, hydrated, updateFile, releaseUploadedBytes, ensureUploadedBytes]);
 
   return null;
 }

@@ -422,16 +422,21 @@ The following items from the plan above have been implemented:
 - **5.4** Added 9 OCR client + 8 veraPDF client error-path tests
 - **5.5** Added coverage thresholds (55% lines/functions, 45% branches)
 - Added 10 scoring tests for compliance score computation
+- **3.1** Full lazy-load buffer architecture: `uploadedBytes` made optional,
+  `releaseUploadedBytes()` frees memory after remediation, `ensureUploadedBytes()`
+  reloads from IndexedDB on demand (SideBySide auto-reloads when viewing originals)
+- **4.5** Enabled `skipLibCheck: false` in tsconfig for stricter type checking
+- **5.6** Added Playwright E2E skeleton (5 tests: page load, upload, processing,
+  download button, non-PDF rejection) with `playwright.config.ts`
+- Added 10 veraPDF normalize edge-case tests (@-prefixed keys, string coercion,
+  XML fallback, statement inference, self-closing tags)
 
 ### Remaining Items
 
 - **1.1** `npm audit fix` (requires CI network access)
 - **1.2** Next.js 14 -> 15+ migration (breaking change, separate PR)
 - **2.4** Explicit CORS headers (low priority for same-origin Vercel app)
-- **4.5** Enable `skipLibCheck: false` in tsconfig
-- **5.3** IndexedDB persistence tests (requires browser-like test env)
-- **5.6** Playwright E2E tests
-- **5.7** Additional error-path tests
+- **5.3** IndexedDB persistence tests (requires fake-indexeddb polyfill)
 
 ---
 
