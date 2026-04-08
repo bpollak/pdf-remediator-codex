@@ -52,8 +52,8 @@ export function VerificationPanel({ fileId }: { fileId: string }) {
   const validationUpdatedAt = formatTimestamp(file?.validationCompletedAt);
   const draftUpdatedAt = formatTimestamp(manualReview.updatedAt);
   const revalidationHref = file
-    ? { pathname: '/app', query: { revalidateFor: file.id }, hash: 'upload-revised-pdf' }
-    : { pathname: '/app', hash: 'upload-revised-pdf' };
+    ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf`
+    : '/app#upload-revised-pdf';
   const validationLabel =
     verificationVerdict === true
       ? 'Passed Independent accessibility check'
