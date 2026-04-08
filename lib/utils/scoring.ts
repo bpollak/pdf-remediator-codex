@@ -31,7 +31,7 @@ const SCORE_CAPS: Record<string, number> = {
   'DOC-005': 35,  // unbound structure tree — tags are not connected to content
 };
 
-export function computeComplianceScore(_totalRules: number, findings: AuditFinding[]): number {
+export function computeComplianceScore(findings: AuditFinding[]): number {
   if (findings.length === 0) return 100;
 
   // Group findings by rule ID and take the highest severity per rule

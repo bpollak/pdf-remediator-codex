@@ -7,3 +7,10 @@ coverage
 .env
 .env.local
 .env.*.local
+
+# Duplicate files created by macOS (Finder copy/paste)
+**/* 2.*
+**/* 2.tsx
+**/* 2.ts
+**/* 2.json
+**/* 2.mov

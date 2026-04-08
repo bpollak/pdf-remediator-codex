@@ -399,6 +399,42 @@ The codebase has several strong qualities worth preserving:
 
 ---
 
+## Completed Remediations
+
+The following items from the plan above have been implemented:
+
+- **1.3** Delete all " 2" duplicate files + `.gitignore` pattern to prevent recurrence
+- **2.1** Removed `'unsafe-eval'` and `'unsafe-inline'` from CSP `script-src`
+- **2.2** HTTPS enforcement for external service URLs in production
+- **2.3** Improved rate-limit IP resolution (x-forwarded-for + x-real-ip)
+- **2.5** Replaced `innerHTML` with `replaceChildren()`
+- **3.1** Added `loadAssetBytes()` for on-demand IndexedDB buffer loading
+- **3.2** Fixed QueueProcessor race condition (Map + staleness timeout)
+- **3.3** Replaced silent `.catch(() => undefined)` with `console.error`
+- **3.4** Added 120s staleness timeout for stuck processing IDs
+- **3.5** Eliminated redundant buffer clone in parser
+- **4.1** Replaced `as any` casts with narrower types in parser
+- **4.2** Documented unavoidable pdf-lib cast in builder
+- **4.3** Added runtime validation for IndexedDB reads
+- **4.4** Removed unused `_totalRules` parameter from scoring
+- **5.1** Added 17 heuristics tests (headings, lists, tables, artifacts, columns)
+- **5.2** Added 7 parser edge-case tests (empty, multi-page, metadata, images)
+- **5.4** Added 9 OCR client + 8 veraPDF client error-path tests
+- **5.5** Added coverage thresholds (55% lines/functions, 45% branches)
+- Added 10 scoring tests for compliance score computation
+
+### Remaining Items
+
+- **1.1** `npm audit fix` (requires CI network access)
+- **1.2** Next.js 14 -> 15+ migration (breaking change, separate PR)
+- **2.4** Explicit CORS headers (low priority for same-origin Vercel app)
+- **4.5** Enable `skipLibCheck: false` in tsconfig
+- **5.3** IndexedDB persistence tests (requires browser-like test env)
+- **5.6** Playwright E2E tests
+- **5.7** Additional error-path tests
+
+---
+
 ## Appendix: Audit Commands
 
 ```bash

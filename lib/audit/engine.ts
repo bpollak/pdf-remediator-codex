@@ -5,6 +5,6 @@ import { computeComplianceScore } from '@/lib/utils/scoring';
 
 export function runAudit(parsed: ParsedPDF): AuditResult {
   const findings = allRules.flatMap((rule) => rule.evaluate({ parsed }));
-  const score = computeComplianceScore(allRules.length, findings);
+  const score = computeComplianceScore(findings);
   return { findings, score };
 }

@@ -159,6 +159,24 @@ export async function saveFileEntry(entry: FileEntry, options: SaveFileEntryOpti
   }
 }
 
+/**
+ * Load a single asset (uploaded or remediated bytes) from IndexedDB on demand.
+ * Use this to lazy-load large buffers instead of keeping them in memory.
+ */
+export async function loadAssetBytes(fileId: string, variant: 'uploaded' | 'remediated'): Promise<ArrayBuffer | undefined> {
+  const key = variant === 'uploaded' ? uploadedAssetKey(fileId) : remediatedAssetKey(fileId);
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction([ASSET_STORE], 'readonly');
+    const assetStore = transaction.objectStore(ASSET_STORE);
+    const asset = await requestToPromise(assetStore.get(key)) as PersistedAssetRecord | undefined;
+    return asset?.bytes;
+  } finally {
+    database.close();
+  }
+}
+
 export async function deleteFileEntries(fileIds: string[]): Promise<void> {
   const uniqueIds = [...new Set(fileIds)];
   if (uniqueIds.length === 0) return;
