@@ -3,6 +3,8 @@ import { detectHeadings, detectTables } from '@/lib/remediate/heuristics';
 import type {
   FileEntry,
   ManualAltTextDraft,
+  ManualCustomElementCategory,
+  ManualCustomElementDraft,
   ManualReviewDrafts,
   ManualStructureHeadingDraft,
   ManualStructureTableDecision
@@ -18,6 +20,7 @@ interface LegacyManualStructureDrafts {
 interface LegacyManualReviewDrafts {
   altText?: Record<string, ManualAltTextDraft>;
   structure?: LegacyManualStructureDrafts;
+  customElements?: ManualCustomElementDraft[];
   lastUpdatedAt?: string;
 }
 
@@ -35,7 +38,8 @@ function emptyDrafts(): ManualReviewDrafts {
       headings: {},
       headingOrder: [],
       tableDecisions: {}
-    }
+    },
+    customElements: []
   };
 }
 
@@ -73,6 +77,54 @@ function uniqueStrings(values: string[] | undefined): string[] {
   return ordered;
 }
 
+const customElementCategories = new Set<ManualCustomElementCategory>([
+  'alt-text',
+  'structure',
+  'reading-order',
+  'table',
+  'form-field',
+  'metadata',
+  'other'
+]);
+
+function normalizeCustomElements(values: ManualCustomElementDraft[] | undefined): ManualCustomElementDraft[] {
+  if (!Array.isArray(values)) return [];
+
+  const seen = new Set<string>();
+  const normalized: ManualCustomElementDraft[] = [];
+
+  for (const value of values) {
+    if (!value || typeof value.id !== 'string' || seen.has(value.id)) continue;
+
+    const title = typeof value.title === 'string' ? value.title.trim() : '';
+    if (!title) continue;
+
+    const category = customElementCategories.has(value.category) ? value.category : 'other';
+    const status = value.status === 'done' ? 'done' : 'todo';
+    const createdAt = typeof value.createdAt === 'string' && value.createdAt ? value.createdAt : value.updatedAt;
+    const updatedAt = typeof value.updatedAt === 'string' && value.updatedAt ? value.updatedAt : createdAt;
+    const note = typeof value.note === 'string' ? value.note.trim() : '';
+    const completedAt =
+      status === 'done' && typeof value.completedAt === 'string' && value.completedAt
+        ? value.completedAt
+        : undefined;
+
+    seen.add(value.id);
+    normalized.push({
+      id: value.id,
+      title,
+      category,
+      status,
+      createdAt: createdAt || updatedAt || '',
+      updatedAt: updatedAt || createdAt || '',
+      ...(note ? { note } : {}),
+      ...(completedAt ? { completedAt } : {})
+    });
+  }
+
+  return normalized;
+}
+
 export function normalizeManualReviewDrafts(
   drafts: ManualReviewDrafts | LegacyManualReviewDrafts | undefined
 ): ManualReviewDrafts | undefined {
@@ -101,12 +153,14 @@ export function normalizeManualReviewDrafts(
     )
   ) as Record<string, ManualStructureTableDecision>;
   const headingOrder = uniqueStrings(structure.headingOrder);
+  const customElements = normalizeCustomElements(drafts.customElements);
 
   if (
     Object.keys(altText).length === 0 &&
     Object.keys(headings).length === 0 &&
     headingOrder.length === 0 &&
-    Object.keys(tableDecisions).length === 0
+    Object.keys(tableDecisions).length === 0 &&
+    customElements.length === 0
   ) {
     return undefined;
   }
@@ -118,6 +172,7 @@ export function normalizeManualReviewDrafts(
       headingOrder,
       tableDecisions
     },
+    customElements,
     lastUpdatedAt: drafts.lastUpdatedAt
   };
 }
@@ -250,7 +305,8 @@ export function hasPendingManualReviewChanges(file: FileEntry | undefined): bool
   return (
     Object.keys(drafts.altText).length > 0 ||
     hasHeadingDraftChanges(file) ||
-    Object.keys(drafts.structure.tableDecisions).length > 0
+    Object.keys(drafts.structure.tableDecisions).length > 0 ||
+    drafts.customElements.length > 0
   );
 }
 
@@ -273,6 +329,10 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
         headingOrderCustomized: false,
         tableSuggestions: 0,
         reviewedTables: 0
+      },
+      customElements: {
+        totalCount: drafts.customElements.length,
+        completedCount: drafts.customElements.filter((item) => item.status === 'done').length
       },
       updatedAt: drafts.lastUpdatedAt
     };
@@ -314,7 +374,41 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
       tableSuggestions: tableSuggestions.length,
       reviewedTables
     },
+    customElements: {
+      totalCount: drafts.customElements.length,
+      completedCount: drafts.customElements.filter((item) => item.status === 'done').length
+    },
     updatedAt: drafts.lastUpdatedAt
+  };
+}
+
+export function summarizeManualCompletion(file: FileEntry | undefined) {
+  const review = summarizeManualReviewState(file);
+  const altTextTotal = review.altText.totalImages;
+  const altTextCompleted = review.altText.completedCount;
+  const tableTotal = review.structure.tableSuggestions;
+  const tableCompleted = review.structure.reviewedTables;
+  const customTotal = review.customElements.totalCount;
+  const customCompleted = review.customElements.completedCount;
+  const total = altTextTotal + tableTotal + customTotal;
+  const completed = altTextCompleted + tableCompleted + customCompleted;
+
+  return {
+    total,
+    completed,
+    percent: total === 0 ? 100 : Math.round((completed / total) * 100),
+    altText: {
+      total: altTextTotal,
+      completed: altTextCompleted
+    },
+    tables: {
+      total: tableTotal,
+      completed: tableCompleted
+    },
+    customElements: {
+      total: customTotal,
+      completed: customCompleted
+    }
   };
 }
 

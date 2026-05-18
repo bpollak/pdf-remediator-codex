@@ -5,6 +5,15 @@ import type { RemediationIterationSummary, RemediationStopReason } from '@/lib/r
 import type { SourceType, SourceTypeConfidence } from '@/lib/pdf/source-type';
 
 export type ManualStructureTableDecision = 'confirm' | 'reject' | 'review';
+export type ManualCustomElementCategory =
+  | 'alt-text'
+  | 'structure'
+  | 'reading-order'
+  | 'table'
+  | 'form-field'
+  | 'metadata'
+  | 'other';
+export type ManualCustomElementStatus = 'todo' | 'done';
 export type UploadIntent = 'new-upload' | 'revalidation';
 
 export interface ManualAltTextDraft {
@@ -23,9 +32,21 @@ export interface ManualStructureDrafts {
   tableDecisions: Record<string, ManualStructureTableDecision>;
 }
 
+export interface ManualCustomElementDraft {
+  id: string;
+  title: string;
+  category: ManualCustomElementCategory;
+  status: ManualCustomElementStatus;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
 export interface ManualReviewDrafts {
   altText: Record<string, ManualAltTextDraft>;
   structure: ManualStructureDrafts;
+  customElements: ManualCustomElementDraft[];
   lastUpdatedAt?: string;
 }
 

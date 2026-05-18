@@ -13,6 +13,8 @@ import { deleteFileEntries, loadAssetBytes, loadPersistedFiles, saveFileEntry } 
 import type {
   FileEntry,
   ManualAltTextDraft,
+  ManualCustomElementCategory,
+  ManualCustomElementDraft,
   ManualReviewDrafts,
   ManualStructureHeadingDraft,
   ManualStructureTableDecision,
@@ -55,6 +57,16 @@ interface AppStore {
   moveStructureHeading: (fileId: string, key: string, direction: 'up' | 'down') => void;
   resetStructureHeadingOrder: (fileId: string) => void;
   updateStructureTableDraft: (fileId: string, key: string, decision: ManualStructureTableDecision) => void;
+  addManualCustomElement: (
+    fileId: string,
+    input: { title: string; category: ManualCustomElementCategory; note?: string }
+  ) => void;
+  updateManualCustomElement: (
+    fileId: string,
+    itemId: string,
+    patch: Partial<Pick<ManualCustomElementDraft, 'title' | 'category' | 'note' | 'status'>>
+  ) => void;
+  removeManualCustomElement: (fileId: string, itemId: string) => void;
   releaseUploadedBytes: (fileId: string) => void;
   ensureUploadedBytes: (fileId: string) => Promise<ArrayBuffer | undefined>;
   markWorkflowProgress: (fileId: string, patch: Partial<WorkflowProgress>) => void;
@@ -117,12 +129,14 @@ function buildManualReviewDrafts(
   options: {
     altText?: Record<string, ManualAltTextDraft>;
     structure?: ManualReviewDrafts['structure'];
+    customElements?: ManualCustomElementDraft[];
   }
 ): ManualReviewDrafts | undefined {
   const drafts = getManualReviewDrafts(file);
   return normalizeManualReviewDrafts({
     altText: options.altText ?? drafts.altText,
     structure: options.structure ?? drafts.structure,
+    customElements: options.customElements ?? drafts.customElements,
     lastUpdatedAt: new Date().toISOString()
   });
 }
@@ -395,6 +409,76 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }),
       workflowProgress: mergeWorkflowProgress(file, {
         structurePreparedAt: file.workflowProgress?.structurePreparedAt ?? new Date().toISOString()
+      })
+    });
+  },
+  addManualCustomElement: (fileId, input) => {
+    const file = get().files.find((entry) => entry.id === fileId);
+    const title = input.title.trim();
+    if (!file || !title) return;
+
+    const drafts = getManualReviewDrafts(file);
+    const now = new Date().toISOString();
+    const note = input.note?.trim();
+
+    get().updateFile(fileId, {
+      manualReviewDrafts: buildManualReviewDrafts(file, {
+        customElements: [
+          ...drafts.customElements,
+          {
+            id: crypto.randomUUID(),
+            title,
+            category: input.category,
+            status: 'todo',
+            createdAt: now,
+            updatedAt: now,
+            ...(note ? { note } : {})
+          }
+        ]
+      })
+    });
+  },
+  updateManualCustomElement: (fileId, itemId, patch) => {
+    const file = get().files.find((entry) => entry.id === fileId);
+    if (!file) return;
+
+    const drafts = getManualReviewDrafts(file);
+    const now = new Date().toISOString();
+    const nextCustomElements = drafts.customElements.map((item) => {
+      if (item.id !== itemId) return item;
+
+      const nextStatus = patch.status ?? item.status;
+      const completedAt =
+        nextStatus === 'done'
+          ? item.completedAt ?? now
+          : undefined;
+      const note = patch.note !== undefined ? patch.note.trim() : item.note;
+
+      return {
+        ...item,
+        ...patch,
+        title: patch.title !== undefined ? patch.title.trim() : item.title,
+        note,
+        status: nextStatus,
+        updatedAt: now,
+        completedAt
+      };
+    });
+
+    get().updateFile(fileId, {
+      manualReviewDrafts: buildManualReviewDrafts(file, {
+        customElements: nextCustomElements
+      })
+    });
+  },
+  removeManualCustomElement: (fileId, itemId) => {
+    const file = get().files.find((entry) => entry.id === fileId);
+    if (!file) return;
+
+    const drafts = getManualReviewDrafts(file);
+    get().updateFile(fileId, {
+      manualReviewDrafts: buildManualReviewDrafts(file, {
+        customElements: drafts.customElements.filter((item) => item.id !== itemId)
       })
     });
   },

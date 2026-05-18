@@ -1,6 +1,6 @@
 import { createByteFingerprint } from '@/lib/remediate/loop';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
-import { summarizeManualReviewState } from '@/lib/report/manual-review';
+import { summarizeManualCompletion, summarizeManualReviewState } from '@/lib/report/manual-review';
 import type { FileEntry } from '@/stores/app-store';
 
 function summarizeFindings(file: FileEntry, variant: 'original' | 'remediated') {
@@ -29,6 +29,7 @@ function summarizeStructure(file: FileEntry, variant: 'original' | 'remediated')
 
 export function buildEvidencePack(file: FileEntry) {
   const manualReview = summarizeManualReviewState(file);
+  const manualCompletion = summarizeManualCompletion(file);
   const originalDisplayedScore = computeDisplayedAutomatedScore({
     auditResult: file.auditResult,
     variant: 'original'
@@ -69,7 +70,9 @@ export function buildEvidencePack(file: FileEntry) {
       pendingRevalidation: manualReview.pendingRevalidation,
       updatedAt: manualReview.updatedAt,
       altText: manualReview.altText,
-      structure: manualReview.structure
+      structure: manualReview.structure,
+      customElements: manualReview.customElements,
+      completion: manualCompletion
     },
     scoring: {
       originalInternalScore: file.auditResult?.score,

@@ -162,6 +162,7 @@ describe('getAccessibilityStatus', () => {
             headingOrder: [],
             tableDecisions: {}
           },
+          customElements: [],
           lastUpdatedAt: '2026-03-06T10:00:00.000Z'
         }
       })

@@ -75,6 +75,7 @@ describe('getReportStateSnapshot', () => {
             headingOrder: [],
             tableDecisions: {}
           },
+          customElements: [],
           lastUpdatedAt: '2026-03-07T18:00:00.000Z'
         }
       })

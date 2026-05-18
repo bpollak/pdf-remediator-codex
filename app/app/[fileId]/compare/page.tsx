@@ -6,6 +6,7 @@ import { CompareActions, EvidencePackAction } from '@/components/report/CompareA
 import { CollapsibleSection } from '@/components/report/CollapsibleSection';
 import { IssueList } from '@/components/report/IssueList';
 import { ManualStructureWorkspace } from '@/components/report/ManualStructureWorkspace';
+import { ManualCompletionTracker } from '@/components/report/ManualCompletionTracker';
 import { NextStepsPanel } from '@/components/report/NextStepsPanel';
 import { ReportStatePanel } from '@/components/report/ReportStatePanel';
 import { RevisionDeltaPanel } from '@/components/report/RevisionDeltaPanel';
@@ -69,6 +70,7 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
       </div>
       <ImprovementSummary fileId={params.fileId} />
       <WorkflowStepper fileId={params.fileId} />
+      <ManualCompletionTracker fileId={params.fileId} />
       <CollapsibleSection
         id="status-detail"
         title="Detailed status"

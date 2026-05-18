@@ -3,6 +3,7 @@ import {
   getNearbyTextSnippet,
   hasPendingManualReviewChanges,
   normalizeManualReviewDrafts,
+  summarizeManualCompletion,
   summarizeManualReviewState
 } from '@/lib/report/manual-review';
 import type { FileEntry } from '@/stores/app-store';
@@ -108,6 +109,7 @@ describe('manual review utilities', () => {
           headingOrder: [],
           tableDecisions: {}
         },
+        customElements: [],
         lastUpdatedAt: '2026-03-06T10:00:00.000Z'
       }
     });
@@ -133,6 +135,7 @@ describe('manual review utilities', () => {
           headingOrder: [],
           tableDecisions: {}
         },
+        customElements: [],
         lastUpdatedAt: '2026-03-06T10:00:00.000Z'
       }
     });
@@ -153,6 +156,7 @@ describe('manual review utilities', () => {
           headingOrder: ['h-1-1-2', 'h-0-1-1', 'h-2-1-3'],
           tableDecisions: {}
         },
+        customElements: [],
         lastUpdatedAt: '2026-03-06T10:00:00.000Z'
       }
     });
@@ -187,7 +191,60 @@ describe('manual review utilities', () => {
         headingOrder: [],
         tableDecisions: {}
       },
+      customElements: [],
       lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+    });
+  });
+
+  it('includes custom manual items in pending state and completion percentage', () => {
+    const file = makeFile({
+      manualReviewDrafts: {
+        altText: {
+          'img-1-1': {
+            alt: 'Campus accessibility map.',
+            decorative: false
+          }
+        },
+        structure: {
+          headings: {},
+          headingOrder: [],
+          tableDecisions: {}
+        },
+        customElements: [
+          {
+            id: 'custom-1',
+            title: 'Repair reading order on page 1',
+            category: 'reading-order',
+            status: 'done',
+            createdAt: '2026-03-06T10:00:00.000Z',
+            updatedAt: '2026-03-06T10:05:00.000Z',
+            completedAt: '2026-03-06T10:05:00.000Z'
+          },
+          {
+            id: 'custom-2',
+            title: 'Add document title metadata',
+            category: 'metadata',
+            status: 'todo',
+            createdAt: '2026-03-06T10:00:00.000Z',
+            updatedAt: '2026-03-06T10:00:00.000Z'
+          }
+        ],
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
+    });
+
+    const summary = summarizeManualReviewState(file);
+    const completion = summarizeManualCompletion(file);
+
+    expect(hasPendingManualReviewChanges(file)).toBe(true);
+    expect(summary.customElements).toEqual({
+      totalCount: 2,
+      completedCount: 1
+    });
+    expect(completion).toMatchObject({
+      total: 3,
+      completed: 2,
+      percent: 67
     });
   });
 
