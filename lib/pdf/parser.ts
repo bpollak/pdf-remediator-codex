@@ -185,15 +185,34 @@ function dedupeForms(forms: ParsedPDF['forms']): ParsedPDF['forms'] {
   for (const form of forms) {
     const name = cleanText(form.name) ?? '';
     if (!name) continue;
-    if (seen.has(name)) continue;
-    seen.add(name);
+    const key = `${name}|${form.page ?? ''}|${Math.round(form.x ?? 0)}|${Math.round(form.y ?? 0)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     deduped.push({
       name,
       label: cleanText(form.label),
-      required: Boolean(form.required)
+      required: Boolean(form.required),
+      page: form.page,
+      x: form.x,
+      y: form.y,
+      width: form.width,
+      height: form.height
     });
   }
   return deduped;
+}
+
+function rectBounds(value: unknown): { x: number; y: number; width: number; height: number } | undefined {
+  if (!Array.isArray(value) || value.length < 4) return undefined;
+  const [x1, y1, x2, y2] = value.map((item) => asFiniteNumber(item, Number.NaN));
+  if ([x1, y1, x2, y2].some((item) => Number.isNaN(item))) return undefined;
+
+  return {
+    x: Math.min(x1!, x2!),
+    y: Math.min(y1!, y2!),
+    width: Math.abs(x2! - x1!),
+    height: Math.abs(y2! - y1!)
+  };
 }
 
 function dedupeOutlines(outlines: ParsedPDF['outlines']): ParsedPDF['outlines'] {
@@ -628,10 +647,13 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
 
           if (subtype === 'Widget') {
             const fieldFlags = typeof annotation?.fieldFlags === 'number' ? annotation.fieldFlags : 0;
+            const bounds = rectBounds(annotation?.rect);
             discoveredForms.push({
               name: cleanText(annotation?.fieldName) ?? cleanText(annotation?.id) ?? `field-${pageNumber}-${annotationIndex + 1}`,
               label: cleanText(annotation?.alternativeText),
-              required: Boolean(fieldFlags & 0x2)
+              required: Boolean(fieldFlags & 0x2),
+              page: pageNumber,
+              ...bounds
             });
           }
         }

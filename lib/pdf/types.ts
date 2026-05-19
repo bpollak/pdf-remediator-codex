@@ -53,5 +53,14 @@ export interface ParsedPDF {
   images: ImageItem[];
   links: Array<{ text: string; url: string; page: number }>;
   outlines: Array<{ title: string; page: number }>;
-  forms: Array<{ name: string; label?: string; required?: boolean }>;
+  forms: Array<{
+    name: string;
+    label?: string;
+    required?: boolean;
+    page?: number;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  }>;
 }

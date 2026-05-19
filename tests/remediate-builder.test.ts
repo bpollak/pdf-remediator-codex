@@ -160,4 +160,69 @@ describe('buildRemediatedPdf', () => {
     expect(keywordLengthPass2).toBeLessThanOrEqual(keywordLengthPass1 + 128);
   });
 
+  it('creates bookmarks from detected headings when a long document has no outline', async () => {
+    const sourcePdf = await PDFDocument.create();
+    for (let index = 0; index < 5; index += 1) {
+      sourcePdf.addPage([612, 792]).drawText(`Section ${index + 1}`, { x: 72, y: 700, size: 18 });
+    }
+    const sourceBytes = await sourcePdf.save();
+
+    const parsed: ParsedPDF = {
+      pageCount: 5,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [
+        { text: 'Program Overview', x: 72, y: 700, width: 180, height: 18, fontName: 'Helvetica-Bold', fontSize: 18, bold: true, page: 1 },
+        { text: 'Eligibility', x: 72, y: 700, width: 120, height: 18, fontName: 'Helvetica-Bold', fontSize: 18, bold: true, page: 2 },
+        { text: 'Normal paragraph text for body size', x: 72, y: 660, width: 260, height: 11, fontName: 'Helvetica', fontSize: 11, page: 2 }
+      ],
+      images: [],
+      links: [],
+      outlines: [],
+      forms: []
+    };
+
+    const remediatedBytes = await buildRemediatedPdf(parsed, 'en-US', sourceBytes);
+    const remediatedParsed = await parsePdfBytes(remediatedBytes.slice(0));
+
+    expect(remediatedParsed.outlines.map((outline) => outline.title)).toEqual(
+      expect.arrayContaining(['Program Overview', 'Eligibility'])
+    );
+  });
+
+  it('infers missing form tooltips from nearby labels', async () => {
+    const sourcePdf = await PDFDocument.create();
+    const page = sourcePdf.addPage([612, 792]);
+    page.drawText('Email address', { x: 72, y: 704, size: 12 });
+    const form = sourcePdf.getForm();
+    const email = form.createTextField('email');
+    email.addToPage(page, { x: 170, y: 696, width: 180, height: 24 });
+    const sourceBytes = await sourcePdf.save();
+
+    const parsed: ParsedPDF = {
+      pageCount: 1,
+      metadata: {},
+      hasStructTree: false,
+      tags: [],
+      textItems: [
+        { text: 'Email address', x: 72, y: 704, width: 80, height: 12, fontName: 'Helvetica', fontSize: 12, page: 1 }
+      ],
+      images: [],
+      links: [],
+      outlines: [],
+      forms: [{ name: 'email', page: 1, x: 170, y: 696, width: 180, height: 24 }]
+    };
+
+    const remediatedBytes = await buildRemediatedPdf(parsed, 'en-US', sourceBytes);
+    const remediatedParsed = await parsePdfBytes(remediatedBytes.slice(0));
+
+    expect(remediatedParsed.forms).toContainEqual(
+      expect.objectContaining({
+        name: 'email',
+        label: 'Email address'
+      })
+    );
+  });
+
 });

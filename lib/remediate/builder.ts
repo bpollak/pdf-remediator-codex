@@ -7,6 +7,7 @@ import {
   PDFNumber,
   PDFOperator,
   PDFOperatorNames,
+  PDFString,
   StandardFonts,
   TextRenderingMode,
   beginText,
@@ -98,6 +99,90 @@ function shortMatchKey(value: string): string {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+function cleanLabelText(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalized = value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[:：]\s*$/, '')
+    .trim();
+  if (normalized.length < 2 || normalized.length > 120) return undefined;
+  return normalized;
+}
+
+function humanizeFormName(name: string): string | undefined {
+  const normalized = name
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\b(txt|fld|field|input|form)\b/gi, ' ')
+    .replace(/\d+$/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const label = cleanLabelText(normalized);
+  if (!label || /^(text|button|checkbox|radio|choice|unknown)$/i.test(label)) return undefined;
+
+  return label.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number]): string | undefined {
+  if (
+    typeof form.page !== 'number' ||
+    typeof form.x !== 'number' ||
+    typeof form.y !== 'number' ||
+    typeof form.width !== 'number' ||
+    typeof form.height !== 'number'
+  ) {
+    return undefined;
+  }
+
+  const formCenterY = form.y + form.height / 2;
+  const formCenterX = form.x + form.width / 2;
+
+  const candidates = parsed.textItems
+    .filter((item) => item.page === form.page)
+    .map((item) => {
+      const text = cleanLabelText(item.text);
+      if (!text) return undefined;
+
+      const itemCenterY = item.y + item.height / 2;
+      const itemCenterX = item.x + item.width / 2;
+      const verticalOverlap = Math.abs(itemCenterY - formCenterY);
+      const leftOfField = item.x + item.width <= form.x + 8 && form.x - (item.x + item.width) <= 180;
+      const aboveField =
+        item.y >= form.y + form.height - 4 &&
+        item.y - (form.y + form.height) <= 42 &&
+        Math.abs(itemCenterX - formCenterX) <= Math.max(120, form.width);
+
+      if (!leftOfField && !aboveField) return undefined;
+
+      return {
+        text,
+        score:
+          (leftOfField ? 0 : 80) +
+          Math.abs(itemCenterY - formCenterY) +
+          Math.max(0, form.x - (item.x + item.width)) / 4
+      };
+    })
+    .filter((item): item is { text: string; score: number } => Boolean(item))
+    .sort((a, b) => a.score - b.score);
+
+  return candidates[0]?.text;
+}
+
+function inferFormLabels(parsed: ParsedPDF): Map<string, string> {
+  const labels = new Map<string, string>();
+
+  for (const form of parsed.forms) {
+    if (cleanLabelText(form.label)) continue;
+    const label = inferNearbyFormLabel(parsed, form) ?? humanizeFormName(form.name);
+    if (!label) continue;
+    labels.set(form.name, label);
+  }
+
+  return labels;
 }
 
 function parseColor(color?: string) {
@@ -371,6 +456,208 @@ function injectBoundStructTreeFromBindings(pdf: PDFDocument, bindings: TaggedBin
   return true;
 }
 
+function applyStructureTabOrder(pdf: PDFDocument): void {
+  for (const page of pdf.getPages()) {
+    page.node.set(PDFName.of('Tabs'), PDFName.of('S'));
+  }
+}
+
+function normalizeBoundStructureHeadings(pdf: PDFDocument): boolean {
+  const structTreeRoot = lookupMaybeDict(pdf, pdf.catalog.get(PDFName.of('StructTreeRoot')));
+  if (!structTreeRoot) return false;
+
+  const visited = new Set<PDFDict>();
+  let previousLevel = 1;
+  let headingCount = 0;
+  let changed = false;
+
+  function visit(value: unknown): void {
+    const array = lookupMaybeArray(pdf, value);
+    if (array) {
+      for (let index = 0; index < array.size(); index += 1) {
+        visit(array.get(index));
+      }
+      return;
+    }
+
+    const dict = lookupMaybeDict(pdf, value);
+    if (!dict || visited.has(dict)) return;
+    visited.add(dict);
+
+    const role = dict.get(PDFName.of('S'));
+    if (role instanceof PDFName) {
+      const match = role.toString().match(/^\/H([1-6])$/);
+      if (match) {
+        const originalLevel = Number(match[1]);
+        const nextLevel = headingCount === 0 ? 1 : Math.min(originalLevel, previousLevel + 1);
+        if (nextLevel !== originalLevel) {
+          dict.set(PDFName.of('S'), PDFName.of(`H${nextLevel}`));
+          changed = true;
+        }
+        previousLevel = nextLevel;
+        headingCount += 1;
+      }
+    }
+
+    visit(dict.get(PDFName.of('K')));
+  }
+
+  visit(structTreeRoot.get(PDFName.of('K')));
+  return changed;
+}
+
+function createDestinationArray(pdf: PDFDocument, pageNumber: number): PDFArray | undefined {
+  const pageRef = pdf.getPages()[pageNumber - 1]?.ref;
+  if (!pageRef) return undefined;
+
+  const destination = PDFArray.withContext(pdf.context);
+  destination.push(pageRef);
+  destination.push(PDFName.of('Fit'));
+  return destination;
+}
+
+function injectOutlineFromHeadings(pdf: PDFDocument, headings: Array<{ text: string; page: number }>): boolean {
+  if (pdf.catalog.get(PDFName.of('Outlines'))) return false;
+
+  const outlineEntries = headings
+    .map((heading) => ({
+      title: cleanLabelText(heading.text),
+      page: heading.page
+    }))
+    .filter((heading): heading is { title: string; page: number } => Boolean(heading.title))
+    .filter((heading) => heading.page >= 1 && heading.page <= pdf.getPageCount())
+    .slice(0, 200);
+
+  if (outlineEntries.length === 0) return false;
+
+  const context = pdf.context;
+  const outlinesDict = context.obj({ Type: 'Outlines' }) as PDFDict;
+  const outlinesRef = context.register(outlinesDict);
+  const itemRefs: ReturnType<typeof context.register>[] = [];
+
+  for (const entry of outlineEntries) {
+    const dest = createDestinationArray(pdf, entry.page);
+    if (!dest) continue;
+
+    const itemDict = context.obj({
+      Title: PDFString.of(entry.title),
+      Parent: outlinesRef,
+      Dest: dest
+    }) as PDFDict;
+    itemRefs.push(context.register(itemDict));
+  }
+
+  if (itemRefs.length === 0) return false;
+
+  for (let index = 0; index < itemRefs.length; index += 1) {
+    const itemDict = context.lookup(itemRefs[index]!, PDFDict);
+    const previousRef = itemRefs[index - 1];
+    const nextRef = itemRefs[index + 1];
+    if (previousRef) itemDict.set(PDFName.of('Prev'), previousRef);
+    if (nextRef) itemDict.set(PDFName.of('Next'), nextRef);
+  }
+
+  outlinesDict.set(PDFName.of('First'), itemRefs[0]!);
+  outlinesDict.set(PDFName.of('Last'), itemRefs[itemRefs.length - 1]!);
+  outlinesDict.set(PDFName.of('Count'), PDFNumber.of(itemRefs.length));
+  pdf.catalog.set(PDFName.of('Outlines'), outlinesRef);
+  pdf.catalog.set(PDFName.of('PageMode'), PDFName.of('UseOutlines'));
+
+  return true;
+}
+
+function lookupMaybeDict(pdf: PDFDocument, value: unknown): PDFDict | undefined {
+  if (!value) return undefined;
+  if (value instanceof PDFDict) return value;
+
+  try {
+    const lookedUp = pdf.context.lookup(value as Parameters<typeof pdf.context.lookup>[0]);
+    return lookedUp instanceof PDFDict ? lookedUp : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function lookupMaybeArray(pdf: PDFDocument, value: unknown): PDFArray | undefined {
+  if (!value) return undefined;
+  if (value instanceof PDFArray) return value;
+
+  try {
+    const lookedUp = pdf.context.lookup(value as Parameters<typeof pdf.context.lookup>[0]);
+    return lookedUp instanceof PDFArray ? lookedUp : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readPdfText(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as { decodeText?: () => string };
+  if (typeof candidate.decodeText !== 'function') return undefined;
+
+  try {
+    return cleanLabelText(candidate.decodeText());
+  } catch {
+    return undefined;
+  }
+}
+
+function isPdfName(value: unknown, name: string): boolean {
+  return value instanceof PDFName && value.toString() === `/${name}`;
+}
+
+function readWidgetFieldName(pdf: PDFDocument, widget: PDFDict): string | undefined {
+  const ownName = readPdfText(widget.get(PDFName.of('T')));
+  if (ownName) return ownName;
+
+  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
+  return parent ? readPdfText(parent.get(PDFName.of('T'))) : undefined;
+}
+
+function hasWidgetTooltip(pdf: PDFDocument, widget: PDFDict): boolean {
+  if (readPdfText(widget.get(PDFName.of('TU')))) return true;
+  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
+  return Boolean(parent && readPdfText(parent.get(PDFName.of('TU'))));
+}
+
+function setWidgetTooltip(pdf: PDFDocument, widget: PDFDict, label: string): void {
+  const encodedLabel = PDFString.of(label);
+  widget.set(PDFName.of('TU'), encodedLabel);
+
+  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
+  if (parent && !readPdfText(parent.get(PDFName.of('TU')))) {
+    parent.set(PDFName.of('TU'), encodedLabel);
+  }
+}
+
+function applyFormLabelTooltips(pdf: PDFDocument, labels: Map<string, string>): boolean {
+  if (labels.size === 0) return false;
+  let changed = false;
+
+  for (const page of pdf.getPages()) {
+    const annotations = lookupMaybeArray(pdf, page.node.get(PDFName.of('Annots')));
+    if (!annotations) continue;
+
+    for (let index = 0; index < annotations.size(); index += 1) {
+      const widget = lookupMaybeDict(pdf, annotations.get(index));
+      if (!widget) continue;
+
+      const subtype = widget.get(PDFName.of('Subtype'));
+      if (!isPdfName(subtype, 'Widget')) continue;
+      if (hasWidgetTooltip(pdf, widget)) continue;
+
+      const fieldName = readWidgetFieldName(pdf, widget);
+      const label = fieldName ? labels.get(fieldName) : undefined;
+      if (!label) continue;
+
+      setWidgetTooltip(pdf, widget, label);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 export interface BuildRemediatedPdfOptions {
   addInvisibleTextLayer?: boolean;
   strictPdfUa?: boolean;
@@ -473,6 +760,20 @@ export async function buildRemediatedPdf(
       injectBoundStructTreeFromBindings(pdf, bindings);
     }
   }
+
+  if (hasBoundStructure || pdf.catalog.get(PDFName.of('StructTreeRoot'))) {
+    applyStructureTabOrder(pdf);
+  }
+
+  if (hasBoundStructure) {
+    normalizeBoundStructureHeadings(pdf);
+  }
+
+  if (parsed.outlines.length === 0) {
+    injectOutlineFromHeadings(pdf, plan.headings);
+  }
+
+  applyFormLabelTooltips(pdf, inferFormLabels(parsed));
 
   const existingKeywords = new Set(
     [...splitKeywords(safeReadPdfMetadata(() => pdf.getKeywords())), ...splitKeywords(parsed.metadata.Keywords)].filter(

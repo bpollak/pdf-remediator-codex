@@ -8,6 +8,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-05-19-extra-automation-passes',
+    versionLabel: 'Release 2026.05.19',
+    deployedOn: 'May 19, 2026',
+    summary: 'Additional safe remediation passes now automate more navigation and form-label work without weakening structure guardrails.',
+    highlights: [
+      'Added bookmark generation from confident detected headings when long documents do not already include outlines.',
+      'Added conservative form tooltip remediation that fills missing labels from nearby visible text or clear field names.',
+      'Added safe structure repairs so PDFs with trustworthy bound structure consistently set page tab order and normalize skipped heading levels.',
+      'Kept analysis-only guardrails in place for PDFs where full content-bound semantic tagging still cannot be proven automatically.'
+    ]
+  },
+  {
     id: '2026-05-18-manual-completion-tracking',
     versionLabel: 'Release 2026.05.18',
     deployedOn: 'May 18, 2026',
