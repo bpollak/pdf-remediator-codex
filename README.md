@@ -23,6 +23,9 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `VERAPDF_SERVICE_TOKEN` (optional): Bearer token for veraPDF backend auth.
 - `VERAPDF_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for veraPDF backend auth.
 - `VERAPDF_TIMEOUT_MS` (optional): veraPDF request timeout in milliseconds (default `120000`).
+- `LITELLM_API_KEY` (optional): TritonAI LiteLLM gateway key for AI-assisted alt-text suggestions.
+- `LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL (default `https://tritonai-api.ucsd.edu`).
+- `LITELLM_MODEL` (optional): model for alt-text suggestions (default `gpt-5.5`).
 
 If `OCR_SERVICE_URL` is not configured, the backend OCR step is unavailable.
 When no backend is configured, local browser OCR fallback is attempted automatically for likely scanned PDFs.
@@ -74,7 +77,7 @@ Current remediation policy:
 On the compare page, the app now includes:
 
 - `Structural Integrity` panel (source-type assessment + StructTree/MCID/ParentTree trust signals).
-- `Alt Text Workspace` (draft/export alt-text worksheet JSON/CSV).
+- `Alt Text Workspace` (draft/export alt-text worksheet JSON/CSV, with optional TritonAI suggestions when configured).
 - `Manual Structure Workspace` (heading/bookmark suggestions + table-confidence review + exportable plan).
 - `QA Evidence Pack` export for before/after findings, structure metrics, and verification results.
 

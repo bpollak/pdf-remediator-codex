@@ -1,0 +1,126 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
+import {
+  requestTritonAiAltText,
+  validateImageDataUrl,
+  type AltTextSuggestionInput
+} from '@/lib/alt-text/tritonai';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_IMAGE_DATA_URL_LENGTH = 2_500_000;
+const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
+const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
+const DEFAULT_TIMEOUT_MS = 45_000;
+
+function resolveClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  return 'unknown';
+}
+
+function getApiKey(): string | undefined {
+  return process.env.LITELLM_API_KEY?.trim() || process.env.TRITONAI_API_KEY?.trim();
+}
+
+function getBaseUrl(): string {
+  return process.env.LITELLM_BASE_URL?.trim() || process.env.TRITONAI_BASE_URL?.trim() || DEFAULT_LITELLM_BASE_URL;
+}
+
+function getModel(): string {
+  return process.env.LITELLM_MODEL?.trim() || process.env.TRITONAI_MODEL?.trim() || DEFAULT_LITELLM_MODEL;
+}
+
+function getTimeoutMs(): number {
+  const raw = Number(process.env.LITELLM_TIMEOUT_MS ?? process.env.TRITONAI_TIMEOUT_MS);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_TIMEOUT_MS;
+  return Math.min(Math.max(raw, 5_000), 55_000);
+}
+
+function normalizeBody(value: unknown): AltTextSuggestionInput | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const body = value as Record<string, unknown>;
+  const imageDataUrl = validateImageDataUrl(body.imageDataUrl);
+  const imageLabel = typeof body.imageLabel === 'string' ? body.imageLabel.trim().slice(0, 120) : '';
+
+  if (!imageDataUrl || imageDataUrl.length > MAX_IMAGE_DATA_URL_LENGTH || !imageLabel) {
+    return undefined;
+  }
+
+  return {
+    imageDataUrl,
+    imageLabel,
+    documentName: typeof body.documentName === 'string' ? body.documentName.trim().slice(0, 180) : undefined,
+    nearbyText: typeof body.nearbyText === 'string' ? body.nearbyText.trim().slice(0, 800) : undefined,
+    page: typeof body.page === 'number' && Number.isFinite(body.page) ? body.page : undefined
+  };
+}
+
+export async function POST(request: NextRequest) {
+  const ip = resolveClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'TritonAI is not configured. Set LITELLM_API_KEY or TRITONAI_API_KEY.' },
+      { status: 503 }
+    );
+  }
+
+  const input = normalizeBody(await request.json().catch(() => null));
+  if (!input) {
+    return NextResponse.json({ error: 'Expected imageDataUrl and imageLabel fields.' }, { status: 400 });
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), getTimeoutMs());
+
+  try {
+    const suggestion = await requestTritonAiAltText(input, {
+      apiKey,
+      baseUrl: getBaseUrl(),
+      model: getModel(),
+      signal: controller.signal
+    });
+
+    return NextResponse.json(suggestion, {
+      status: 200,
+      headers: {
+        'cache-control': 'no-store'
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json({ error: 'TritonAI alt-text request timed out.' }, { status: 504 });
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Failed to generate alt-text recommendation.',
+        ...(process.env.NODE_ENV === 'development'
+          ? { detail: error instanceof Error ? error.message : 'Unknown error' }
+          : {})
+      },
+      { status: 502 }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+

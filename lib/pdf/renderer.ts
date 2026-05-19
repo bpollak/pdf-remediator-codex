@@ -78,3 +78,20 @@ export async function renderPdfRegionToCanvas(input: {
   destinationContext.lineWidth = 2;
   destinationContext.strokeRect(highlightX, highlightY, highlightWidth, highlightHeight);
 }
+
+export async function renderPdfRegionToDataUrl(input: {
+  bytes: ArrayBuffer;
+  pageNumber: number;
+  bounds: { x: number; y: number; width: number; height: number };
+  maxWidth?: number;
+  maxHeight?: number;
+}): Promise<string> {
+  const canvas = document.createElement('canvas');
+  await renderPdfRegionToCanvas({
+    ...input,
+    canvas,
+    maxWidth: input.maxWidth ?? 640,
+    maxHeight: input.maxHeight ?? 640
+  });
+  return canvas.toDataURL('image/png');
+}

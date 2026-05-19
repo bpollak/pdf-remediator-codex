@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PdfRegionThumbnail } from './PdfRegionThumbnail';
+import { renderPdfRegionToDataUrl } from '@/lib/pdf/renderer';
 import { useAppStore } from '@/stores/app-store';
 import {
   getAltTextDraftForImage,
@@ -32,6 +33,17 @@ function csvEscape(value: string) {
   return value;
 }
 
+interface AltTextSuggestion {
+  alt: string;
+  decorative: boolean;
+  rationale?: string;
+}
+
+type SuggestionState =
+  | { status: 'loading' }
+  | { status: 'ready'; suggestion: AltTextSuggestion }
+  | { status: 'error'; error: string };
+
 function AltTextEditor({
   draft,
   imageId,
@@ -47,14 +59,20 @@ function AltTextEditor({
   const [localDecorative, setLocalDecorative] = useState(draft.decorative);
   const [saved, setSaved] = useState(false);
   const prevImageId = useRef(imageId);
+  const prevDraft = useRef(draft);
 
-  // Sync from store when the draft changes externally (e.g. switching images)
+  // Sync from store when the draft changes externally (e.g. switching images or applying a suggestion).
   useEffect(() => {
-    if (prevImageId.current !== imageId) {
+    if (
+      prevImageId.current !== imageId ||
+      prevDraft.current.alt !== draft.alt ||
+      prevDraft.current.decorative !== draft.decorative
+    ) {
       setLocalAlt(draft.alt);
       setLocalDecorative(draft.decorative);
       setSaved(false);
       prevImageId.current = imageId;
+      prevDraft.current = draft;
     }
   }, [imageId, draft.alt, draft.decorative]);
 
@@ -126,6 +144,7 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
   const summary = summarizeManualReviewState(file);
   const [showMissingOnly, setShowMissingOnly] = useState(true);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Record<string, SuggestionState>>({});
 
   const entries = useMemo(
     () =>
@@ -178,6 +197,67 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
     const normalizedAlt = nextDraft.alt;
     const matchesOriginal = normalizedAlt === (image.alt ?? '') && nextDraft.decorative === Boolean(image.decorative);
     updateAltTextDraft(fileId, image.id, matchesOriginal ? undefined : { alt: normalizedAlt, decorative: nextDraft.decorative });
+  }
+
+  async function suggestAltText(entry: (typeof entries)[number]) {
+    if (!sourceBytes) {
+      setSuggestions((state) => ({
+        ...state,
+        [entry.image.id]: { status: 'error', error: 'PDF bytes are unavailable for this browser session.' }
+      }));
+      return;
+    }
+
+    setSuggestions((state) => ({ ...state, [entry.image.id]: { status: 'loading' } }));
+
+    try {
+      const imageDataUrl = await renderPdfRegionToDataUrl({
+        bytes: sourceBytes,
+        pageNumber: entry.image.page,
+        bounds: {
+          x: entry.image.x,
+          y: entry.image.y,
+          width: entry.image.width,
+          height: entry.image.height
+        }
+      });
+      const response = await fetch('/api/alt-text', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          imageDataUrl,
+          imageLabel: entry.label,
+          documentName: file?.name,
+          nearbyText: entry.nearbyText,
+          page: entry.image.page
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(typeof payload.error === 'string' ? payload.error : `Alt-text request failed (${response.status})`);
+      }
+
+      setSuggestions((state) => ({
+        ...state,
+        [entry.image.id]: {
+          status: 'ready',
+          suggestion: {
+            alt: typeof payload.alt === 'string' ? payload.alt : '',
+            decorative: payload.decorative === true,
+            rationale: typeof payload.rationale === 'string' ? payload.rationale : undefined
+          }
+        }
+      }));
+    } catch (error) {
+      setSuggestions((state) => ({
+        ...state,
+        [entry.image.id]: {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Could not generate an alt-text recommendation.'
+        }
+      }));
+    }
   }
 
   function jumpToPreview(entry: (typeof entries)[number]) {
@@ -307,53 +387,97 @@ export function AltTextWorkspace({ fileId }: { fileId: string }) {
         <p className="text-sm text-[var(--ucsd-text)]">No images match the current filter.</p>
       ) : (
         <div className="max-h-[60vh] space-y-3 overflow-auto pr-1">
-          {visibleEntries.map((entry) => (
-            <article key={entry.image.id} className="rounded border border-[rgba(24,43,73,0.15)] p-3">
-              <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="space-y-2">
-                  <PdfRegionThumbnail
-                    bytes={sourceBytes}
-                    page={entry.image.page}
-                    bounds={{
-                      x: entry.image.x,
-                      y: entry.image.y,
-                      width: entry.image.width,
-                      height: entry.image.height
-                    }}
-                    label={entry.label}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => jumpToPreview(entry)}
-                    className="inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
-                  >
-                    Jump to reference preview
-                  </button>
-                </div>
+          {visibleEntries.map((entry) => {
+            const suggestionState = suggestions[entry.image.id];
+            return (
+              <article key={entry.image.id} className="rounded border border-[rgba(24,43,73,0.15)] p-3">
+                <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    <PdfRegionThumbnail
+                      bytes={sourceBytes}
+                      page={entry.image.page}
+                      bounds={{
+                        x: entry.image.x,
+                        y: entry.image.y,
+                        width: entry.image.width,
+                        height: entry.image.height
+                      }}
+                      label={entry.label}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => jumpToPreview(entry)}
+                      className="inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
+                    >
+                      Jump to reference preview
+                    </button>
+                  </div>
 
-                <div>
-                  <p className="text-sm font-medium text-[var(--ucsd-navy)]">{entry.label}</p>
-                  <p className="mt-1 text-xs text-[var(--ucsd-text)]">
-                    Stable ID: {entry.image.id} · Bounds: x {Math.round(entry.image.x)}, y {Math.round(entry.image.y)}, w{' '}
-                    {Math.round(entry.image.width)}, h {Math.round(entry.image.height)}
-                  </p>
-                  {entry.nearbyText ? (
-                    <p className="mt-2 rounded bg-slate-50 px-2 py-1 text-xs text-[var(--ucsd-text)]">
-                      Nearby text: {entry.nearbyText}
+                  <div>
+                    <p className="text-sm font-medium text-[var(--ucsd-navy)]">{entry.label}</p>
+                    <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+                      Stable ID: {entry.image.id} · Bounds: x {Math.round(entry.image.x)}, y {Math.round(entry.image.y)}, w{' '}
+                      {Math.round(entry.image.width)}, h {Math.round(entry.image.height)}
                     </p>
-                  ) : (
-                    <p className="mt-2 text-xs text-[var(--ucsd-text)]">Nearby text: none detected near this image.</p>
-                  )}
-                  <AltTextEditor
-                    draft={entry.draft}
-                    imageId={entry.image.id}
-                    onSave={(nextDraft) => updateDraftForImage(entry.image, nextDraft)}
-                    onEditingChange={(editing) => setEditingImageId(editing ? entry.image.id : null)}
-                  />
+                    {entry.nearbyText ? (
+                      <p className="mt-2 rounded bg-slate-50 px-2 py-1 text-xs text-[var(--ucsd-text)]">
+                        Nearby text: {entry.nearbyText}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-[var(--ucsd-text)]">Nearby text: none detected near this image.</p>
+                    )}
+                    <div className="mt-3 rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => suggestAltText(entry)}
+                          disabled={suggestionState?.status === 'loading'}
+                          className="inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {suggestionState?.status === 'loading' ? 'Suggesting...' : 'Suggest with TritonAI'}
+                        </button>
+                        <p className="text-xs text-[var(--ucsd-text)]">
+                          Review generated suggestions before saving them.
+                        </p>
+                      </div>
+
+                      {suggestionState?.status === 'ready' ? (
+                        <div className="mt-2 rounded border border-green-200 bg-white p-2 text-xs text-[var(--ucsd-text)]">
+                          <p className="font-medium text-green-800">
+                            {suggestionState.suggestion.decorative
+                              ? 'Suggested as decorative'
+                              : suggestionState.suggestion.alt}
+                          </p>
+                          {suggestionState.suggestion.rationale ? (
+                            <p className="mt-1">{suggestionState.suggestion.rationale}</p>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => updateDraftForImage(entry.image, suggestionState.suggestion)}
+                            className="mt-2 inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--ucsd-navy)]"
+                          >
+                            Apply suggestion
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {suggestionState?.status === 'error' ? (
+                        <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">
+                          {suggestionState.error}
+                        </p>
+                      ) : null}
+                    </div>
+                    <AltTextEditor
+                      draft={entry.draft}
+                      imageId={entry.image.id}
+                      onSave={(nextDraft) => updateDraftForImage(entry.image, nextDraft)}
+                      onEditingChange={(editing) => setEditingImageId(editing ? entry.image.id : null)}
+                    />
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

@@ -108,6 +108,7 @@ export default function AboutPage() {
           <li>Rewrites vague link text (like &ldquo;click here&rdquo;) to clearer wording.</li>
           <li>Adds missing form labels based on field names when possible.</li>
           <li>Detects real PDF image content from page rendering data and flags missing alt text.</li>
+          <li>Offers TritonAI-assisted alt-text suggestions for reviewers when the LiteLLM gateway is configured.</li>
           <li>Stores compact immutable remediation metadata to improve repeat-run consistency.</li>
           <li>Adds searchable text support for scanned PDFs.</li>
           <li>Tries to improve reading order in some multi-column layouts.</li>
