@@ -138,8 +138,12 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
     return undefined;
   }
 
-  const formCenterY = form.y + form.height / 2;
-  const formCenterX = form.x + form.width / 2;
+  const formX = form.x;
+  const formY = form.y;
+  const formWidth = form.width;
+  const formHeight = form.height;
+  const formCenterY = formY + formHeight / 2;
+  const formCenterX = formX + formWidth / 2;
 
   const candidates = parsed.textItems
     .filter((item) => item.page === form.page)
@@ -149,11 +153,11 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
 
       const itemCenterY = item.y + item.height / 2;
       const itemCenterX = item.x + item.width / 2;
-      const leftOfField = item.x + item.width <= form.x + 8 && form.x - (item.x + item.width) <= 180;
+      const leftOfField = item.x + item.width <= formX + 8 && formX - (item.x + item.width) <= 180;
       const aboveField =
-        item.y >= form.y + form.height - 4 &&
-        item.y - (form.y + form.height) <= 42 &&
-        Math.abs(itemCenterX - formCenterX) <= Math.max(120, form.width);
+        item.y >= formY + formHeight - 4 &&
+        item.y - (formY + formHeight) <= 42 &&
+        Math.abs(itemCenterX - formCenterX) <= Math.max(120, formWidth);
 
       if (!leftOfField && !aboveField) return undefined;
 
@@ -162,7 +166,7 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
         score:
           (leftOfField ? 0 : 80) +
           Math.abs(itemCenterY - formCenterY) +
-          Math.max(0, form.x - (item.x + item.width)) / 4
+          Math.max(0, formX - (item.x + item.width)) / 4
       };
     })
     .filter((item): item is { text: string; score: number } => Boolean(item))
