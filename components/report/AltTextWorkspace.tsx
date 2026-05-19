@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PdfRegionThumbnail } from './PdfRegionThumbnail';
 import { renderPdfRegionToDataUrl } from '@/lib/pdf/renderer';
 import { useAppStore } from '@/stores/app-store';
@@ -58,22 +58,12 @@ function AltTextEditor({
   const [localAlt, setLocalAlt] = useState(draft.alt);
   const [localDecorative, setLocalDecorative] = useState(draft.decorative);
   const [saved, setSaved] = useState(false);
-  const prevImageId = useRef(imageId);
-  const prevDraft = useRef(draft);
 
   // Sync from store when the draft changes externally (e.g. switching images or applying a suggestion).
   useEffect(() => {
-    if (
-      prevImageId.current !== imageId ||
-      prevDraft.current.alt !== draft.alt ||
-      prevDraft.current.decorative !== draft.decorative
-    ) {
-      setLocalAlt(draft.alt);
-      setLocalDecorative(draft.decorative);
-      setSaved(false);
-      prevImageId.current = imageId;
-      prevDraft.current = draft;
-    }
+    setLocalAlt(draft.alt);
+    setLocalDecorative(draft.decorative);
+    setSaved(false);
   }, [imageId, draft.alt, draft.decorative]);
 
   const hasChanges = localAlt !== draft.alt || localDecorative !== draft.decorative;

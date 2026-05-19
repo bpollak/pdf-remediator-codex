@@ -149,7 +149,6 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
 
       const itemCenterY = item.y + item.height / 2;
       const itemCenterX = item.x + item.width / 2;
-      const verticalOverlap = Math.abs(itemCenterY - formCenterY);
       const leftOfField = item.x + item.width <= form.x + 8 && form.x - (item.x + item.width) <= 180;
       const aboveField =
         item.y >= form.y + form.height - 4 &&
