@@ -16,6 +16,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Added a TritonAI-powered alt-text suggestion route using the campus LiteLLM gateway configuration.',
       'Added Suggest with TritonAI actions in the Alt Text Workspace so reviewers can generate, inspect, and apply draft descriptions.',
       'Rendered cropped PDF image regions for the model so recommendations are based on the actual PDF content plus nearby text context.',
+      'Added clearer TritonAI upstream diagnostics so production configuration or model compatibility issues can be resolved quickly.',
       'Kept generated alt text as a draft only; reviewers still apply or edit suggestions before the worksheet is considered ready.'
     ]
   },

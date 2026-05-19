@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import {
   requestTritonAiAltText,
+  TritonAiRequestError,
   validateImageDataUrl,
   type AltTextSuggestionInput
 } from '@/lib/alt-text/tritonai';
@@ -110,6 +111,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'TritonAI alt-text request timed out.' }, { status: 504 });
     }
 
+    if (error instanceof TritonAiRequestError) {
+      const model = getModel();
+      console.error('TritonAI alt-text upstream request failed', {
+        status: error.status,
+        model,
+        detail: error.detail
+      });
+
+      const hint =
+        error.status === 401 || error.status === 403
+          ? 'TritonAI rejected the configured API key.'
+          : error.status === 404
+            ? `TritonAI could not find model "${model}".`
+            : error.status === 400
+              ? `TritonAI rejected the alt-text request for model "${model}".`
+              : 'TritonAI returned an upstream error.';
+
+      return NextResponse.json(
+        {
+          error: 'Failed to generate alt-text recommendation.',
+          hint,
+          upstreamStatus: error.status
+        },
+        { status: 502 }
+      );
+    }
+
+    console.error('TritonAI alt-text recommendation failed', error);
+
     return NextResponse.json(
       {
         error: 'Failed to generate alt-text recommendation.',
@@ -123,4 +153,3 @@ export async function POST(request: NextRequest) {
     clearTimeout(timer);
   }
 }
-

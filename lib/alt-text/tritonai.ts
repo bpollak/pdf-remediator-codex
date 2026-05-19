@@ -23,6 +23,17 @@ const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
 const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
 const MAX_ALT_TEXT_LENGTH = 240;
 
+export class TritonAiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly detail?: string
+  ) {
+    super(message);
+    this.name = 'TritonAiRequestError';
+  }
+}
+
 function supportsCustomTemperature(model: string): boolean {
   return !model.startsWith('gpt-5');
 }
@@ -153,10 +164,13 @@ export async function requestTritonAiAltText(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new Error(`TritonAI request failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+    throw new TritonAiRequestError(
+      `TritonAI request failed (${response.status})`,
+      response.status,
+      detail ? detail.slice(0, 600) : undefined
+    );
   }
 
   const payload = await response.json();
   return parseAltTextSuggestion(payload?.choices?.[0]?.message?.content);
 }
-
