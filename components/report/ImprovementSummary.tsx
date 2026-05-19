@@ -22,7 +22,45 @@ export function ImprovementSummary({ fileId }: { fileId: string }) {
   const fixedIssues = originalIssues - remainingIssues;
   const improved = remediatedScore > originalScore;
 
-  if (fixedIssues <= 0 && !improved) return null;
+  if (file?.sourceType === 'checker-report-artifact') {
+    return (
+      <section className="rounded-lg border-2 border-amber-200 bg-amber-50 p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <svg className="h-8 w-8 shrink-0 text-amber-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.515 2.625H3.72c-1.345 0-2.188-1.458-1.515-2.625L8.485 2.495ZM10 5.25a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0V6a.75.75 0 0 1 .75-.75Zm0 8.25a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-lg font-semibold text-amber-900">
+              This looks like a checker report, not the source PDF.
+            </p>
+            <p className="mt-0.5 text-sm text-amber-900">
+              The app can analyze this file, but the resulting PDF is not publishable remediation output. Upload the original content PDF to run meaningful fixes.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (fixedIssues <= 0 && !improved) {
+    return (
+      <section className="rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <svg className="h-8 w-8 shrink-0 text-[var(--ucsd-blue)]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M4.5 2.75a.75.75 0 0 1 .75.75v1.344a6.5 6.5 0 1 1-1.604 6.364.75.75 0 1 1 1.408-.516 5 5 0 1 0 1.274-5.059h1.422a.75.75 0 0 1 0 1.5h-3.25a.75.75 0 0 1-.75-.75V3.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-lg font-semibold text-[var(--ucsd-navy)]">
+              No additional automated fixes were found.
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--ucsd-text)]">
+              Running this PDF through the automation again did not improve the automated score. Continue with the manual completion and validation steps below.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-lg border-2 border-green-200 bg-green-50 p-5 shadow-sm">

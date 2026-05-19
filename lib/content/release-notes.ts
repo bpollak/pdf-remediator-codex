@@ -11,11 +11,13 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     id: '2026-05-18-manual-completion-tracking',
     versionLabel: 'Release 2026.05.18',
     deployedOn: 'May 18, 2026',
-    summary: 'Manual remediation work is easier to track from the compare workflow.',
+    summary: 'Manual remediation work is easier to track from the compare workflow, and iterative remediation reports are clearer.',
     highlights: [
       'Added a Manual completion panel with a live percentage based on alt-text coverage, reviewed tables, and custom manual items.',
       'Added persisted custom manual items so reviewers can track unautomated work such as reading order, form labels, metadata, or tag repairs.',
-      'Kept pending manual work tied to the existing revised-PDF validation flow so users can apply fixes externally and then re-check the updated file.'
+      'Kept pending manual work tied to the existing revised-PDF validation flow so users can apply fixes externally and then re-check the updated file.',
+      'Changed second-pass remediation results to say when no additional automated fixes were found instead of leaving the improvement summary blank.',
+      'Changed checker/report artifact results so they do not present as successful publishable remediation output.'
     ]
   },
   {

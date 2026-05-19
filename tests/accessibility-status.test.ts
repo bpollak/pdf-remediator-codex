@@ -147,6 +147,20 @@ describe('getAccessibilityStatus', () => {
     });
   });
 
+  it('blocks Accessible for checker/report artifacts even with a perfect score', () => {
+    const result = getAccessibilityStatus(
+      file({
+        sourceType: 'checker-report-artifact'
+      })
+    );
+
+    expect(result.status).toBe('not-yet-accessible');
+    expect(result.reasons).toContainEqual({
+      code: 'source-artifact',
+      label: 'Source looks like a checker or report PDF'
+    });
+  });
+
   it('returns Not yet accessible when manual draft changes are waiting for re-validation', () => {
     const result = getAccessibilityStatus(
       file({
