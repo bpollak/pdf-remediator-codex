@@ -12,9 +12,9 @@ const toneClasses: Record<ReportStateTone, string> = {
   neutral: 'border-[rgba(24,43,73,0.18)] bg-white'
 };
 
-function statusLabel(done: boolean, unavailable = false) {
+function statusLabel(done: boolean, unavailable = false, pendingLabel = 'Next') {
   if (unavailable) return 'Not needed';
-  return done ? 'Done' : 'Next';
+  return done ? 'Done' : pendingLabel;
 }
 
 export function ResultsOverview({ fileId }: { fileId: string }) {
@@ -74,7 +74,7 @@ export function ResultsOverview({ fileId }: { fileId: string }) {
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-[var(--ucsd-navy)]">1. Download</h3>
             <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-[var(--ucsd-text)]">
-              {statusLabel(Boolean(downloadedAtLabel), !file?.remediatedBytes)}
+              {statusLabel(Boolean(downloadedAtLabel), false, file?.remediatedBytes ? 'Next' : 'Pending')}
             </span>
           </div>
           <p className="mt-1 text-sm text-[var(--ucsd-text)]">
