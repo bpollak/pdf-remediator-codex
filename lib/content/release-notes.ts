@@ -8,6 +8,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-05-22-tritonai-ocr-primary',
+    versionLabel: 'Release 2026.05.22',
+    deployedOn: 'May 22, 2026',
+    summary: 'Scanned PDF OCR can now use TritonAI as the primary OCR path before falling back to other options.',
+    highlights: [
+      'Added a TritonAI OCR route for the on-prem api-lightonocr-1b model.',
+      'Changed scanned-PDF processing to try TritonAI OCR before the optional PDF-native OCR service and browser fallback.',
+      'Reuse the existing invisible text-layer remediation so TritonAI OCR output can become searchable PDF text.',
+      'Documented the OCR_LITELLM_* Vercel variables needed to configure the OCR model separately from alt-text suggestions.'
+    ]
+  },
+  {
     id: '2026-05-22-minimal-results-page',
     versionLabel: 'Release 2026.05.22',
     deployedOn: 'May 22, 2026',

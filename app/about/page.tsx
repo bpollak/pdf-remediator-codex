@@ -146,8 +146,9 @@ export default function AboutPage() {
         </p>
         <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>Files stay in browser memory during your session and are cleared when you refresh or close the page.</li>
-          <li>If an OCR backend is configured, the file is sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
-          <li>If backend OCR is unavailable, local OCR fallback can run in your browser using Tesseract.</li>
+          <li>If TritonAI OCR is configured, scanned page images are sent through <code>/api/ocr/tritonai</code> to extract searchable text.</li>
+          <li>If a PDF-native OCR backend is configured, the file may also be sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
+          <li>If configured OCR services are unavailable, local OCR fallback can run in your browser using Tesseract.</li>
           <li>If veraPDF verification is enabled, the remediated PDF is sent through <code>/api/verapdf</code> and forwarded to the configured veraPDF service.</li>
           <li>When you export a remediated PDF, worksheet, or evidence pack, it is downloaded locally to your device.</li>
         </ul>

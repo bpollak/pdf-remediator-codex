@@ -81,32 +81,57 @@ export function QueueProcessor() {
         let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
         let ocrApplied = false;
-        let localOcrApplied = false;
+        let ocrTextLayerApplied = false;
         let ocrReason: string | undefined;
 
         if (isLikelyScannedPdf(originalParsedData)) {
           ocrAttempted = true;
           updateFile(next.id, { status: 'ocr', progress: 30 });
-          const ocrResult = await runOcrViaApi(remediationSourceBytes, next.name, originalParsedData.language);
-          let upstreamOcrFailureReason = ocrResult.reason;
+          const { runTritonAiOcr } = await import('@/lib/ocr/tritonai');
+          const tritonOcr = await runTritonAiOcr(
+            remediationParsedData,
+            remediationSourceBytes,
+            next.name,
+            remediationParsedData.language
+          );
+          let upstreamOcrFailureReason = tritonOcr.reason;
 
-          if (ocrResult.bytes) {
-            try {
-              const candidateParsed = await parsePdfInWorker(`${next.id}-ocr`, ocrResult.bytes);
-              const candidateAssessment = assessOcrTextGain(originalParsedData, candidateParsed);
+          if (tritonOcr.applied && tritonOcr.parsed) {
+            const tritonAssessment = assessOcrTextGain(originalParsedData, tritonOcr.parsed);
+            if (tritonAssessment.accepted) {
+              remediationParsedData = tritonOcr.parsed;
+              ocrApplied = true;
+              ocrTextLayerApplied = true;
+              ocrReason = 'Used TritonAI OCR';
+              upstreamOcrFailureReason = undefined;
+            } else {
+              upstreamOcrFailureReason = [upstreamOcrFailureReason, tritonAssessment.reason].filter(Boolean).join('; ') || undefined;
+            }
+          }
 
-              if (candidateAssessment.accepted) {
-                remediationSourceBytes = ocrResult.bytes;
-                remediationParsedData = candidateParsed;
-                ocrApplied = true;
-                ocrReason = undefined;
-                upstreamOcrFailureReason = undefined;
-              } else {
-                upstreamOcrFailureReason = candidateAssessment.reason;
+          if (!ocrApplied) {
+            const ocrResult = await runOcrViaApi(remediationSourceBytes, next.name, originalParsedData.language);
+            upstreamOcrFailureReason = [upstreamOcrFailureReason, ocrResult.reason].filter(Boolean).join('; ') || undefined;
+
+            if (ocrResult.bytes) {
+              try {
+                const candidateParsed = await parsePdfInWorker(`${next.id}-ocr`, ocrResult.bytes);
+                const candidateAssessment = assessOcrTextGain(originalParsedData, candidateParsed);
+
+                if (candidateAssessment.accepted) {
+                  remediationSourceBytes = ocrResult.bytes;
+                  remediationParsedData = candidateParsed;
+                  ocrApplied = true;
+                  ocrReason = 'Used OCR service';
+                  upstreamOcrFailureReason = undefined;
+                } else {
+                  upstreamOcrFailureReason = [upstreamOcrFailureReason, candidateAssessment.reason].filter(Boolean).join('; ') || undefined;
+                }
+              } catch (error) {
+                const parseFailure =
+                  error instanceof Error ? `OCR output could not be parsed (${error.message})` : 'OCR output could not be parsed';
+                upstreamOcrFailureReason = [upstreamOcrFailureReason, parseFailure].filter(Boolean).join('; ') || undefined;
               }
-            } catch (error) {
-              upstreamOcrFailureReason =
-                error instanceof Error ? `OCR output could not be parsed (${error.message})` : 'OCR output could not be parsed';
             }
           }
 
@@ -120,7 +145,7 @@ export function QueueProcessor() {
             if (localOcr.applied && localOcr.parsed) {
               remediationParsedData = localOcr.parsed;
               ocrApplied = true;
-              localOcrApplied = true;
+              ocrTextLayerApplied = true;
               ocrReason = upstreamOcrFailureReason ? `${upstreamOcrFailureReason}; used local OCR fallback` : 'Used local OCR fallback';
             } else {
               ocrReason = upstreamOcrFailureReason ?? localOcr.reason;
@@ -160,7 +185,7 @@ export function QueueProcessor() {
             language: currentParsedData.language ?? originalParsedData.language ?? 'en-US',
             sourceBytes: currentSourceBytes,
             options: {
-              addInvisibleTextLayer: localOcrApplied,
+              addInvisibleTextLayer: ocrTextLayerApplied,
               strictPdfUa: iteration > 1,
               verapdfFeedback: latestVerapdfResult
             }

@@ -1,0 +1,207 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
+import { validateImageDataUrl } from '@/lib/alt-text/tritonai';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
+const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
+const DEFAULT_OCR_MODEL = 'api-lightonocr-1b';
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_LINES = 120;
+const MAX_LINE_LENGTH = 240;
+
+interface OcrLine {
+  text: string;
+}
+
+function resolveClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  return 'unknown';
+}
+
+function stripJsonFences(value: string): string {
+  const trimmed = value.trim();
+  const fence = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+  return (fence ? fence[1] : trimmed).trim();
+}
+
+function normalizeLine(value: unknown): OcrLine | undefined {
+  const raw = typeof value === 'string' ? value : value && typeof value === 'object' ? (value as Record<string, unknown>).text : '';
+  if (typeof raw !== 'string') return undefined;
+  const text = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_LINE_LENGTH);
+  if (!text || text.length < 2) return undefined;
+  return { text };
+}
+
+function parseOcrResponse(content: unknown): OcrLine[] {
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('TritonAI returned an empty OCR response.');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripJsonFences(content));
+  } catch {
+    const lines = content
+      .split(/\r?\n/)
+      .map(normalizeLine)
+      .filter((line): line is OcrLine => Boolean(line));
+    if (lines.length) return lines.slice(0, MAX_LINES);
+    throw new Error('TritonAI returned OCR text that could not be parsed.');
+  }
+
+  const record = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  const rawLines = Array.isArray(record.lines)
+    ? record.lines
+    : typeof record.text === 'string'
+      ? record.text.split(/\r?\n/)
+      : [];
+  const lines = rawLines.map(normalizeLine).filter((line): line is OcrLine => Boolean(line));
+
+  if (!lines.length) {
+    throw new Error('TritonAI did not return usable OCR text.');
+  }
+
+  return lines.slice(0, MAX_LINES);
+}
+
+function buildOcrPrompt(page: number, documentName?: string, language?: string) {
+  return [
+    'Extract the visible text from this PDF page image for OCR.',
+    'Return only text that is actually visible on the page.',
+    'Preserve reading order as separate lines.',
+    'Do not summarize, correct, translate, or describe the page.',
+    '',
+    `Document: ${documentName?.trim() || 'uploaded PDF'}`,
+    `Page: ${page}`,
+    language?.trim() ? `Language hint: ${language.trim()}` : undefined,
+    '',
+    'Return JSON only: {"lines":[{"text":"first visible line"},{"text":"second visible line"}]}.'
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildTritonOcrRequest(input: {
+  imageDataUrl: string;
+  page: number;
+  documentName?: string;
+  language?: string;
+  model: string;
+}) {
+  return {
+    model: input.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are an OCR engine. Extract visible page text only and return strict JSON.'
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: buildOcrPrompt(input.page, input.documentName, input.language)
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: input.imageDataUrl
+            }
+          }
+        ]
+      }
+    ],
+    max_tokens: 1800,
+    response_format: { type: 'json_object' }
+  };
+}
+
+export async function POST(request: NextRequest) {
+  const ip = resolveClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const apiKey = process.env.OCR_LITELLM_API_KEY || process.env.LITELLM_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'TritonAI OCR is not configured (set OCR_LITELLM_API_KEY or LITELLM_API_KEY).' },
+      { status: 503 }
+    );
+  }
+
+  const body = await request.json().catch(() => null);
+  const imageDataUrl = validateImageDataUrl(body?.imageDataUrl);
+  const page = Number(body?.page);
+  const documentName = typeof body?.documentName === 'string' ? body.documentName : undefined;
+  const language = typeof body?.language === 'string' ? body.language : undefined;
+
+  if (!imageDataUrl || !Number.isFinite(page) || page < 1) {
+    return NextResponse.json({ error: 'Expected imageDataUrl and page.' }, { status: 400 });
+  }
+
+  const baseUrl = (process.env.OCR_LITELLM_BASE_URL || process.env.LITELLM_BASE_URL || DEFAULT_LITELLM_BASE_URL).replace(/\/+$/, '');
+  const model = process.env.OCR_LITELLM_MODEL || DEFAULT_OCR_MODEL;
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(
+      buildTritonOcrRequest({
+        imageDataUrl,
+        page,
+        documentName,
+        language,
+        model
+      })
+    ),
+    cache: 'no-store'
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    return NextResponse.json(
+      {
+        error: `TritonAI OCR failed with status ${response.status}.`,
+        ...(process.env.NODE_ENV === 'development' ? { detail: detail.slice(0, 600) } : {})
+      },
+      { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
+    );
+  }
+
+  const payload = await response.json().catch(() => null);
+  let lines: OcrLine[];
+  try {
+    lines = parseOcrResponse(payload?.choices?.[0]?.message?.content);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'TritonAI OCR returned unusable text.'
+      },
+      { status: 502 }
+    );
+  }
+
+  return NextResponse.json({
+    model,
+    lines,
+    text: lines.map((line) => line.text).join('\n')
+  });
+}

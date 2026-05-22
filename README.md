@@ -7,14 +7,17 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 ### How it works
 
 1. Upload pipeline parses the PDF and checks if it appears scan-only (very low text density).
-2. If likely scanned, the client calls `POST /api/ocr`.
-3. The API route forwards the file to an OCR backend and expects a PDF response with an OCR text layer.
+2. If likely scanned, the client first calls `POST /api/ocr/tritonai` and uses TritonAI `api-lightonocr-1b` to extract text from page images.
+3. If TritonAI OCR is unavailable, the client can call `POST /api/ocr` for a configured PDF-native OCR backend.
 4. If backend OCR is unavailable, the browser falls back to local Tesseract OCR (first pages only).
-5. Remediation runs against OCR-enriched content when OCR adds usable searchable text; the original findings view still reports the uploaded PDF baseline.
+5. Remediation runs against OCR-enriched content when OCR adds usable searchable text.
 
 ### Environment variables
 
-- `OCR_SERVICE_URL` (required for OCR): URL of your OCR backend endpoint.
+- `OCR_LITELLM_API_KEY` (optional): TritonAI key for OCR. If omitted, `LITELLM_API_KEY` is used.
+- `OCR_LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL for OCR (default `https://tritonai-api.ucsd.edu` or `LITELLM_BASE_URL`).
+- `OCR_LITELLM_MODEL` (optional): TritonAI OCR model (default `api-lightonocr-1b`).
+- `OCR_SERVICE_URL` (optional): URL of a PDF-native OCR backend endpoint.
 - `OCR_SERVICE_TOKEN` (optional): Bearer token for OCR backend auth.
 - `OCR_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for OCR backend auth.
 - `OCR_TIMEOUT_MS` (optional): OCR request timeout in milliseconds (default `240000`).
@@ -27,8 +30,8 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL (default `https://tritonai-api.ucsd.edu`).
 - `LITELLM_MODEL` (optional): model for alt-text suggestions (default `gpt-5.5`).
 
-If `OCR_SERVICE_URL` is not configured, the backend OCR step is unavailable.
-When no backend is configured, local browser OCR fallback is attempted automatically for likely scanned PDFs.
+TritonAI OCR is the primary production OCR path when `OCR_LITELLM_API_KEY` or `LITELLM_API_KEY` is configured.
+If TritonAI OCR and `OCR_SERVICE_URL` are unavailable, local browser OCR fallback is attempted automatically for likely scanned PDFs.
 
 If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
 can show an external PDF/UA check with rule/check counts.
