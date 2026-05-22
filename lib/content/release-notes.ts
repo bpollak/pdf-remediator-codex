@@ -14,9 +14,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     summary: 'Scanned PDF OCR can now use TritonAI as the primary OCR path before falling back to other options.',
     highlights: [
       'Added a TritonAI OCR route for the on-prem api-lightonocr-1b model.',
+      'Added OCR and alt-text model fallbacks so production can recover when a configured TritonAI model rejects the key or returns unusable output.',
       'Changed scanned-PDF processing to try TritonAI OCR before the optional PDF-native OCR service and browser fallback.',
       'Reuse the existing invisible text-layer remediation so TritonAI OCR output can become searchable PDF text.',
-      'Documented the OCR_LITELLM_* Vercel variables needed to configure the OCR model separately from alt-text suggestions.'
+      'Documented the OCR_LITELLM_* Vercel variables and optional fallback model lists needed to configure OCR separately from alt-text suggestions.'
     ]
   },
   {

@@ -16,6 +16,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 2_500_000;
 const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
 const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
+const DEFAULT_ALT_TEXT_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 function resolveClientIp(request: NextRequest): string {
@@ -39,6 +40,27 @@ function getBaseUrl(): string {
 
 function getModel(): string {
   return process.env.LITELLM_MODEL?.trim() || process.env.TRITONAI_MODEL?.trim() || DEFAULT_LITELLM_MODEL;
+}
+
+function uniqueValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function getModelCandidates(): string[] {
+  const configured = getModel();
+  const fallbackModels = process.env.LITELLM_FALLBACK_MODELS || process.env.TRITONAI_FALLBACK_MODELS;
+  return uniqueValues([
+    configured,
+    ...(fallbackModels ? fallbackModels.split(',') : DEFAULT_ALT_TEXT_FALLBACK_MODELS)
+  ]);
 }
 
 function getTimeoutMs(): number {
@@ -93,19 +115,50 @@ export async function POST(request: NextRequest) {
   const timer = setTimeout(() => controller.abort(), getTimeoutMs());
 
   try {
-    const suggestion = await requestTritonAiAltText(input, {
-      apiKey,
-      baseUrl: getBaseUrl(),
-      model: getModel(),
-      signal: controller.signal
-    });
+    const baseUrl = getBaseUrl();
+    const failures: Array<{ model: string; status?: number; detail?: string }> = [];
 
-    return NextResponse.json(suggestion, {
-      status: 200,
-      headers: {
-        'cache-control': 'no-store'
+    for (const model of getModelCandidates()) {
+      try {
+        const suggestion = await requestTritonAiAltText(input, {
+          apiKey,
+          baseUrl,
+          model,
+          signal: controller.signal
+        });
+
+        return NextResponse.json(suggestion, {
+          status: 200,
+          headers: {
+            'cache-control': 'no-store'
+          }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        if (error instanceof TritonAiRequestError) {
+          failures.push({ model, status: error.status, detail: error.detail });
+        } else {
+          failures.push({
+            model,
+            detail: error instanceof Error ? error.message : 'Unknown alt-text model error'
+          });
+        }
       }
-    });
+    }
+
+    console.error('TritonAI alt-text failed for all model candidates', failures);
+
+    return NextResponse.json(
+      {
+        error: 'Failed to generate alt-text recommendation.',
+        hint: 'All configured TritonAI alt-text models failed.',
+        attemptedModels: failures.map((failure) => ({
+          model: failure.model,
+          status: failure.status
+        }))
+      },
+      { status: 502 }
+    );
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return NextResponse.json({ error: 'TritonAI alt-text request timed out.' }, { status: 504 });

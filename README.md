@@ -17,6 +17,7 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `OCR_LITELLM_API_KEY` (optional): TritonAI key for OCR. If omitted, `LITELLM_API_KEY` is used.
 - `OCR_LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL for OCR (default `https://tritonai-api.ucsd.edu` or `LITELLM_BASE_URL`).
 - `OCR_LITELLM_MODEL` (optional): TritonAI OCR model (default `api-lightonocr-1b`).
+- `OCR_LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback OCR models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
 - `OCR_SERVICE_URL` (optional): URL of a PDF-native OCR backend endpoint.
 - `OCR_SERVICE_TOKEN` (optional): Bearer token for OCR backend auth.
 - `OCR_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for OCR backend auth.
@@ -29,6 +30,7 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `LITELLM_API_KEY` (optional): TritonAI LiteLLM gateway key for AI-assisted alt-text suggestions.
 - `LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL (default `https://tritonai-api.ucsd.edu`).
 - `LITELLM_MODEL` (optional): model for alt-text suggestions (default `gpt-5.5`).
+- `LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback alt-text models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
 
 TritonAI OCR is the primary production OCR path when `OCR_LITELLM_API_KEY` or `LITELLM_API_KEY` is configured.
 If TritonAI OCR and `OCR_SERVICE_URL` are unavailable, local browser OCR fallback is attempted automatically for likely scanned PDFs.

@@ -8,6 +8,7 @@ export const maxDuration = 120;
 
 const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
 const DEFAULT_OCR_MODEL = 'api-lightonocr-1b';
+const DEFAULT_OCR_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_LINES = 120;
@@ -126,6 +127,26 @@ function buildTritonOcrRequest(input: {
   };
 }
 
+function uniqueValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function getModelCandidates(): string[] {
+  const configured = process.env.OCR_LITELLM_MODEL || DEFAULT_OCR_MODEL;
+  const fallbackModels = process.env.OCR_LITELLM_FALLBACK_MODELS
+    ? process.env.OCR_LITELLM_FALLBACK_MODELS.split(',')
+    : DEFAULT_OCR_FALLBACK_MODELS;
+  return uniqueValues([configured, ...fallbackModels]);
+}
+
 export async function POST(request: NextRequest) {
   const ip = resolveClientIp(request);
   const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
@@ -155,53 +176,65 @@ export async function POST(request: NextRequest) {
   }
 
   const baseUrl = (process.env.OCR_LITELLM_BASE_URL || process.env.LITELLM_BASE_URL || DEFAULT_LITELLM_BASE_URL).replace(/\/+$/, '');
-  const model = process.env.OCR_LITELLM_MODEL || DEFAULT_OCR_MODEL;
+  const models = getModelCandidates();
+  const failures: Array<{ model: string; status?: number; message: string }> = [];
 
-  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`
+  for (const model of models) {
+    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(
+        buildTritonOcrRequest({
+          imageDataUrl,
+          page,
+          documentName,
+          language,
+          model
+        })
+      ),
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      failures.push({
+        model,
+        status: response.status,
+        message: detail ? detail.slice(0, 300) : `HTTP ${response.status}`
+      });
+      continue;
+    }
+
+    const payload = await response.json().catch(() => null);
+    try {
+      const lines = parseOcrResponse(payload?.choices?.[0]?.message?.content);
+      return NextResponse.json({
+        model,
+        lines,
+        text: lines.map((line) => line.text).join('\n')
+      });
+    } catch (error) {
+      failures.push({
+        model,
+        status: 502,
+        message: error instanceof Error ? error.message : 'TritonAI OCR returned unusable text.'
+      });
+    }
+  }
+
+  console.error('TritonAI OCR failed for all model candidates', failures);
+
+  return NextResponse.json(
+    {
+      error: 'TritonAI OCR failed for all configured model candidates.',
+      attemptedModels: failures.map((failure) => ({
+        model: failure.model,
+        status: failure.status
+      }))
     },
-    body: JSON.stringify(
-      buildTritonOcrRequest({
-        imageDataUrl,
-        page,
-        documentName,
-        language,
-        model
-      })
-    ),
-    cache: 'no-store'
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    return NextResponse.json(
-      {
-        error: `TritonAI OCR failed with status ${response.status}.`,
-        ...(process.env.NODE_ENV === 'development' ? { detail: detail.slice(0, 600) } : {})
-      },
-      { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
-    );
-  }
-
-  const payload = await response.json().catch(() => null);
-  let lines: OcrLine[];
-  try {
-    lines = parseOcrResponse(payload?.choices?.[0]?.message?.content);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'TritonAI OCR returned unusable text.'
-      },
-      { status: 502 }
-    );
-  }
-
-  return NextResponse.json({
-    model,
-    lines,
-    text: lines.map((line) => line.text).join('\n')
-  });
+    { status: 502 }
+  );
 }
