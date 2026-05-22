@@ -8,15 +8,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
-    id: '2026-05-22-simplified-results-screen',
+    id: '2026-05-22-minimal-results-page',
     versionLabel: 'Release 2026.05.22',
     deployedOn: 'May 22, 2026',
-    summary: 'The compare screen now leads with one recommended next action instead of making users interpret several panels at once.',
+    summary: 'The results page was rebuilt around only the actions a reviewer needs to finish the PDF.',
     highlights: [
-      'Added a simplified results overview that tells reviewers exactly what to do next.',
-      'Kept manual completion percentage visible in the top results summary.',
-      'Moved the full workflow checklist and manual item tracker into secondary expandable sections.',
-      'Renamed the remaining-work section so it is clearer when manual PDF work is actually required.'
+      'Reduced the results screen to download, manual edits, and revised-PDF upload.',
+      'Removed technical status panels, evidence downloads, score comparisons, and detailed validation counts from the main results path.',
+      'Added a plain-language manual edit list for image descriptions, table confirmation, and custom reviewer tasks.',
+      'Kept completion percentage visible without requiring users to understand the internal workflow.'
     ]
   },
   {
