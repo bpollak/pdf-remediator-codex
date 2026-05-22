@@ -22,7 +22,7 @@ const categoryLabels: Record<ManualCustomElementCategory, string> = {
 
 const categoryOptions = Object.entries(categoryLabels) as Array<[ManualCustomElementCategory, string]>;
 
-export function ManualCompletionTracker({ fileId }: { fileId: string }) {
+export function ManualCompletionTracker({ fileId, embedded = false }: { fileId: string; embedded?: boolean }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
   const addManualCustomElement = useAppStore((state) => state.addManualCustomElement);
   const updateManualCustomElement = useAppStore((state) => state.updateManualCustomElement);
@@ -45,7 +45,7 @@ export function ManualCompletionTracker({ fileId }: { fileId: string }) {
   }
 
   return (
-    <section className="space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
+    <section className={embedded ? 'space-y-4' : 'space-y-4 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm'}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div>
           <h2>Manual completion</h2>

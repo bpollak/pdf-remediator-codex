@@ -18,13 +18,13 @@ const stateClasses: Record<WorkflowStepState, string> = {
   'not-needed': 'border-slate-200 bg-slate-50'
 };
 
-export function WorkflowStepper({ fileId }: { fileId: string }) {
+export function WorkflowStepper({ fileId, embedded = false }: { fileId: string; embedded?: boolean }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
 
   const steps = useMemo(() => buildWorkflowSteps(file), [file]);
 
   return (
-    <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
+    <section className={embedded ? 'space-y-3' : 'space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm'}>
       <div>
         <h2>Your progress</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">

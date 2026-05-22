@@ -10,6 +10,7 @@ import { ManualCompletionTracker } from '@/components/report/ManualCompletionTra
 import { NextStepsPanel } from '@/components/report/NextStepsPanel';
 import { ReportStatePanel } from '@/components/report/ReportStatePanel';
 import { RevisionDeltaPanel } from '@/components/report/RevisionDeltaPanel';
+import { ResultsOverview } from '@/components/report/ResultsOverview';
 import { SummaryDashboard } from '@/components/report/SummaryDashboard';
 import { AltTextWorkspace } from '@/components/report/AltTextWorkspace';
 import { StructuralIntegrityPanel } from '@/components/report/StructuralIntegrityPanel';
@@ -62,15 +63,31 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="break-words">Accessibility Improvement Workflow</h1>
+        <h1 className="break-words">PDF Results</h1>
         <p className="break-words text-sm text-[var(--ucsd-text)]">Document: {documentName ?? 'Uploaded PDF'}</p>
         <p className="text-sm text-[var(--ucsd-text)]">
-          Follow the steps below to review and finish improving your PDF. Some fixes have already been applied automatically.
+          Start with the recommended next action. Detailed review tools are below when you need them.
         </p>
       </div>
       <ImprovementSummary fileId={params.fileId} />
-      <WorkflowStepper fileId={params.fileId} />
-      <ManualCompletionTracker fileId={params.fileId} />
+      <ResultsOverview fileId={params.fileId} />
+
+      <CollapsibleSection
+        id="workflow-checklist"
+        title="Full workflow checklist"
+        subtitle="Use this when you want to see every step in sequence."
+      >
+        <WorkflowStepper fileId={params.fileId} embedded />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="manual-progress"
+        title="Track manual fixes"
+        subtitle="Add custom items and update the completion percentage as you work."
+      >
+        <ManualCompletionTracker fileId={params.fileId} embedded />
+      </CollapsibleSection>
+
       <CollapsibleSection
         id="status-detail"
         title="Detailed status"

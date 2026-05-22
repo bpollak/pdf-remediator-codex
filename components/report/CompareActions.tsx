@@ -35,9 +35,9 @@ export function CompareActions({ fileId }: { fileId: string }) {
 
   return (
     <section className="rounded border-2 border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.04)] p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download Your Updated PDF</h2>
+      <h2 className="text-2xl font-semibold leading-tight text-[var(--ucsd-navy)]">Download updated PDF</h2>
       <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-        Download the improved version of your PDF. If there are remaining issues, the sections below will guide you through fixing them.
+        Save the current automated output. If manual work is still required, make those edits in your PDF tool or source document.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

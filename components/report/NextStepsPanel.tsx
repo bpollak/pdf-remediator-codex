@@ -31,12 +31,9 @@ export function NextStepsPanel({ fileId }: { fileId: string }) {
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>What To Do Next</h2>
+        <h2>Remaining manual items</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          These are the remaining items that need manual attention. The app fixed what it could automatically — the items below need you.
-        </p>
-        <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          Some fixes can be made by editing the original Word or PowerPoint file and re-exporting to PDF. Others require Adobe Acrobat Pro or the free <a href="https://pac.pdf-accessibility.org/" target="_blank" rel="noreferrer" className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]">PAC tool</a>.
+          The app already applied the safe automatic fixes. Work through these items only when they appear, then upload a revised PDF for validation.
         </p>
       </div>
 

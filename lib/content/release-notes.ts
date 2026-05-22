@@ -8,6 +8,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-05-22-simplified-results-screen',
+    versionLabel: 'Release 2026.05.22',
+    deployedOn: 'May 22, 2026',
+    summary: 'The compare screen now leads with one recommended next action instead of making users interpret several panels at once.',
+    highlights: [
+      'Added a simplified results overview that tells reviewers exactly what to do next.',
+      'Kept manual completion percentage visible in the top results summary.',
+      'Moved the full workflow checklist and manual item tracker into secondary expandable sections.',
+      'Renamed the remaining-work section so it is clearer when manual PDF work is actually required.'
+    ]
+  },
+  {
     id: '2026-05-19-tritonai-alt-text-suggestions',
     versionLabel: 'Release 2026.05.19',
     deployedOn: 'May 19, 2026',
