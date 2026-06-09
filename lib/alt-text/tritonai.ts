@@ -137,7 +137,16 @@ export function buildAltTextPrompt(input: AltTextSuggestionInput): string {
     .join('\n');
 }
 
-export function buildTritonAiRequest(input: AltTextSuggestionInput, config: Pick<TritonAiConfig, 'model'> = {}) {
+// Reasoning models can spend most of the budget on hidden reasoning tokens
+// before emitting content, so the budget must be far larger than the visible
+// JSON answer.
+const DEFAULT_MAX_TOKENS = 2500;
+const RETRY_MAX_TOKENS = 5000;
+
+export function buildTritonAiRequest(
+  input: AltTextSuggestionInput,
+  config: Pick<TritonAiConfig, 'model'> & { maxTokens?: number } = {}
+) {
   const model = config.model || DEFAULT_LITELLM_MODEL;
 
   return {
@@ -164,16 +173,17 @@ export function buildTritonAiRequest(input: AltTextSuggestionInput, config: Pick
         ]
       }
     ],
-    max_tokens: 800,
+    max_tokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
     response_format: { type: 'json_object' },
     ...(supportsCustomTemperature(model) ? { temperature: 0.2 } : {})
   };
 }
 
-export async function requestTritonAiAltText(
+async function requestTritonAiAltTextOnce(
   input: AltTextSuggestionInput,
-  config: TritonAiConfig
-): Promise<AltTextSuggestion> {
+  config: TritonAiConfig,
+  maxTokens: number
+): Promise<{ content: unknown; finishReason?: string }> {
   const baseUrl = (config.baseUrl || DEFAULT_LITELLM_BASE_URL).replace(/\/+$/, '');
   const model = config.model || DEFAULT_LITELLM_MODEL;
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -182,7 +192,7 @@ export async function requestTritonAiAltText(
       'content-type': 'application/json',
       authorization: `Bearer ${config.apiKey}`
     },
-    body: JSON.stringify(buildTritonAiRequest(input, { model })),
+    body: JSON.stringify(buildTritonAiRequest(input, { model, maxTokens })),
     signal: config.signal,
     cache: 'no-store'
   });
@@ -198,5 +208,23 @@ export async function requestTritonAiAltText(
 
   const payload = await response.json();
   const choice = payload?.choices?.[0];
-  return parseAltTextSuggestion(choice?.message?.content, choice?.finish_reason);
+  return { content: choice?.message?.content, finishReason: choice?.finish_reason };
+}
+
+function isBudgetExhausted(content: unknown, finishReason?: string): boolean {
+  return finishReason === 'length' && (typeof content !== 'string' || !content.trim());
+}
+
+export async function requestTritonAiAltText(
+  input: AltTextSuggestionInput,
+  config: TritonAiConfig
+): Promise<AltTextSuggestion> {
+  let { content, finishReason } = await requestTritonAiAltTextOnce(input, config, DEFAULT_MAX_TOKENS);
+
+  if (isBudgetExhausted(content, finishReason)) {
+    // The model spent the whole budget on reasoning tokens; retry once with more room.
+    ({ content, finishReason } = await requestTritonAiAltTextOnce(input, config, RETRY_MAX_TOKENS));
+  }
+
+  return parseAltTextSuggestion(content, finishReason);
 }
