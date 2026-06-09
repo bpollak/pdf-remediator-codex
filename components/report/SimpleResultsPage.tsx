@@ -148,7 +148,9 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(typeof payload.error === 'string' ? payload.error : 'Could not suggest text for this image.');
+        const baseMessage = typeof payload.error === 'string' ? payload.error : 'Could not suggest text for this image.';
+        const hint = typeof payload.hint === 'string' ? ` ${payload.hint}` : '';
+        throw new Error(`${baseMessage}${hint} You can still write the description yourself below.`);
       }
       setSuggestions((state) => ({
         ...state,
