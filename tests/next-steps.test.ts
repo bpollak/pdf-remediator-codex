@@ -23,7 +23,7 @@ describe('buildManualNextSteps', () => {
       remediationMode: 'analysis-only'
     });
 
-    expect(steps[0]?.title).toContain('Complete structural tagging manually');
+    expect(steps[0]?.title).toContain('Add document tags manually');
     expect(steps[0]?.severity).toBe('high');
   });
 

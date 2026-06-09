@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileQueue } from '@/components/upload/FileQueue';
+import { ProcessingNotice } from '@/components/upload/ProcessingNotice';
 import { QueueProcessor } from '@/components/upload/QueueProcessor';
 import { useAppStore } from '@/stores/app-store';
 
@@ -60,6 +61,7 @@ function AppPageContent() {
         </div>
       ) : null}
       <DropZone />
+      <ProcessingNotice />
       <QueueProcessor />
       <FileQueue />
     </div>

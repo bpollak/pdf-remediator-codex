@@ -72,9 +72,9 @@ export function buildManualNextSteps(input: {
 
   if (remediationMode === 'analysis-only') {
     steps.push({
-      title: 'Complete structural tagging manually in Acrobat or PAC',
+      title: 'Add document tags manually in Acrobat or PAC',
       description:
-        'This output is marked analysis-only because content-bound PDF tags were not guaranteed. Complete MCID/ParentTree-backed tagging manually before publishing.',
+        'This file could be analyzed but not safely auto-tagged. The hidden structure tags that screen readers rely on must be added manually in Adobe Acrobat or the free PAC tool before publishing.',
       severity: 'high'
     });
   }
@@ -136,7 +136,8 @@ export function buildManualNextSteps(input: {
       description: 'No remaining internal findings were detected, and external verification did not report actionable failures.',
       severity: 'low'
     });
-  } else {
+  } else if (!pendingManualReview) {
+    // When pendingManualReview is set, a re-validation step is already listed above.
     steps.push({
       title: 'Run one final verification before publishing',
       description: 'After manual updates, upload the revised PDF and confirm both the automated baseline and veraPDF result improve.',

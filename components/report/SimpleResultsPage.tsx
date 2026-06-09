@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
+import { HelpTip } from '@/components/report/HelpTip';
 import { PdfRegionThumbnail } from '@/components/report/PdfRegionThumbnail';
 import { renderPdfRegionToDataUrl } from '@/lib/pdf/renderer';
 import { detectTables } from '@/lib/remediate/heuristics';
+import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import {
   getAltTextDraftForImage,
   getManualReviewDrafts,
@@ -39,6 +41,13 @@ function manualStatusLabel(remaining: number) {
   if (remaining === 1) return '1 manual edit left';
   return `${remaining} manual edits left`;
 }
+
+const statusToneClasses: Record<ReturnType<typeof getAccessibilityStatus>['status'], string> = {
+  accessible: 'border-green-200 bg-green-50',
+  'not-yet-accessible': 'border-amber-200 bg-amber-50',
+  'verification-unavailable': 'border-amber-200 bg-amber-50',
+  processing: 'border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.06)]'
+};
 
 export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
@@ -189,12 +198,63 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     );
   }
 
+  const accessibility = getAccessibilityStatus(file);
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="break-words">Finish your PDF</h1>
         <p className="break-words text-sm text-[var(--ucsd-text)]">{file.name}</p>
       </div>
+
+      <section className={`rounded-lg border p-5 shadow-sm ${statusToneClasses[accessibility.status]}`}>
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
+          Is this PDF ready to publish?
+        </p>
+        <p className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{accessibility.label}</p>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">{accessibility.message}</p>
+        {accessibility.reasons.length > 0 ? (
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {accessibility.reasons.map((reason) => (
+              <li
+                key={reason.code}
+                className="inline-flex items-center rounded-full border border-[rgba(24,43,73,0.2)] bg-white px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-navy)]"
+              >
+                {reason.label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {file.remediationMode === 'analysis-only' ? (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+            <span className="font-semibold">Analysis-only result</span>
+            <HelpTip label="analysis-only result">
+              Analysis-only means the app could check this document but could not safely add the hidden structure
+              tags that screen readers rely on. Those tags must be added manually before the PDF can be considered
+              accessible.
+            </HelpTip>
+            : this file was checked but could not be fully auto-fixed. Add document tags manually in Adobe Acrobat
+            or the free{' '}
+            <a
+              href="https://pac.pdf-accessibility.org/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]"
+            >
+              PAC tool
+            </a>{' '}
+            before publishing.
+          </p>
+        ) : null}
+        {file.ocrAttempted && !file.ocrApplied ? (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+            <span className="font-semibold">Scanned text notice:</span> this file looks like a scanned document, but
+            OCR could not add searchable text{file.ocrReason ? ` (${file.ocrReason})` : ''}. The updated PDF may not
+            be readable by screen readers. Run OCR in a desktop tool (such as Adobe Acrobat), then upload the
+            OCR&rsquo;d file for a new check.
+          </p>
+        ) : null}
+      </section>
 
       <section className="rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
@@ -301,14 +361,21 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                           {suggestion.message}
                         </p>
                       ) : null}
-                      <label className="mt-3 flex items-center gap-2 text-sm text-[var(--ucsd-text)]">
-                        <input
-                          type="checkbox"
-                          checked={entry.draft.decorative}
-                          onChange={(event) => saveAltText(entry.image.id, '', event.target.checked)}
-                        />
-                        Decorative image
-                      </label>
+                      <div className="mt-3 flex items-center gap-2 text-sm text-[var(--ucsd-text)]">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={entry.draft.decorative}
+                            onChange={(event) => saveAltText(entry.image.id, '', event.target.checked)}
+                          />
+                          Decorative image
+                        </label>
+                        <HelpTip label="decorative image">
+                          Decorative images are purely visual and add no information — for example dividers, borders,
+                          or background art. Marking an image decorative tells screen readers to skip it. If the image
+                          conveys information, leave this unchecked and write a description instead.
+                        </HelpTip>
+                      </div>
                       <textarea
                         value={entry.draft.alt}
                         onChange={(event) => saveAltText(entry.image.id, event.target.value, false)}

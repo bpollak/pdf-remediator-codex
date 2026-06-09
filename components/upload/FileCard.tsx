@@ -1,10 +1,33 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { collectDescendantFileIds, useAppStore, type FileEntry } from '@/stores/app-store';
+
+const LONG_RUNNING_THRESHOLD_MS = 90_000;
 
 function isWorkingStatus(status: FileEntry['status']): boolean {
   return status !== 'remediated' && status !== 'error';
+}
+
+function useIsLongRunning(file: FileEntry): boolean {
+  const startedAt = isWorkingStatus(file.status) && file.status !== 'queued' ? file.processingStartedAt : undefined;
+  const [longRunning, setLongRunning] = useState(false);
+
+  useEffect(() => {
+    if (!startedAt) {
+      setLongRunning(false);
+      return;
+    }
+    const elapsed = () => Date.now() - new Date(startedAt).getTime();
+    setLongRunning(elapsed() > LONG_RUNNING_THRESHOLD_MS);
+    const timer = setInterval(() => {
+      setLongRunning(elapsed() > LONG_RUNNING_THRESHOLD_MS);
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+
+  return longRunning;
 }
 
 function statusLabel(status: FileEntry['status']): string {
@@ -73,6 +96,7 @@ function isSettledStatus(status: FileEntry['status']): boolean {
 export function FileCard({ file }: { file: FileEntry }) {
   const files = useAppStore((state) => state.files);
   const removeFile = useAppStore((state) => state.removeFile);
+  const isLongRunning = useIsLongRunning(file);
   const sourceFile = file.derivedFromFileId ? files.find((entry) => entry.id === file.derivedFromFileId) : undefined;
   const canViewResults = file.status === 'remediated';
   const canRemove = isSettledStatus(file.status);
@@ -115,6 +139,22 @@ export function FileCard({ file }: { file: FileEntry }) {
         />
       </div>
       <p className="mt-2 text-sm text-[var(--ucsd-text)]">{statusHint(file)}</p>
+      {isWorking && file.status !== 'queued' ? (
+        <p className="mt-1 text-xs text-[var(--ucsd-text)]">
+          {isLongRunning
+            ? 'Still working — large or scanned PDFs can take several minutes. Keep this tab open.'
+            : 'This usually takes a few seconds to about two minutes, depending on file size.'}
+        </p>
+      ) : null}
+      {file.status === 'remediated' && file.ocrAttempted && !file.ocrApplied ? (
+        <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+          <p>
+            This file looks like a scanned document, but OCR could not add searchable text
+            {file.ocrReason ? ` (${file.ocrReason})` : ''}. The updated PDF may not be readable by screen readers. Run
+            OCR in a desktop tool (such as Adobe Acrobat), then upload the OCR&rsquo;d file here.
+          </p>
+        </div>
+      ) : null}
       {file.sourceType && (
         <p className="mt-1 text-xs text-[var(--ucsd-text)]">
           Source type: {file.sourceType.replace(/-/g, ' ')} ({file.sourceTypeConfidence ?? 'n/a'} confidence)

@@ -10,7 +10,9 @@ let serviceUnavailableUntil = 0;
 
 function summarizeError(status: number): string {
   if (status === 404 || status === 501 || status === 503) return 'OCR service unavailable';
-  if (status === 413) return 'OCR input exceeds deployment upload limits';
+  if (status === 413) {
+    return 'This file is too large for the OCR service on this deployment. Run OCR in a desktop tool (such as Adobe Acrobat), then upload the OCR’d PDF';
+  }
   if (status === 504) return 'OCR request timed out';
   return `OCR request failed (${status})`;
 }

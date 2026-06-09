@@ -67,6 +67,8 @@ export interface FileEntry {
   derivedFromFileId?: string;
   status: 'queued' | 'parsing' | 'ocr' | 'auditing' | 'audited' | 'remediating' | 'remediated' | 'error';
   progress: number;
+  /** Set when processing starts; not persisted. Used to surface long-running-work hints. */
+  processingStartedAt?: string;
   ocrAttempted?: boolean;
   ocrApplied?: boolean;
   ocrReason?: string;
