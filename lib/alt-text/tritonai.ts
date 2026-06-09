@@ -44,6 +44,28 @@ function stripJsonFences(value: string): string {
   return (fence ? fence[1] : trimmed).trim();
 }
 
+/**
+ * Models sometimes wrap the JSON object in prose or truncate trailing output.
+ * Try the raw content first, then the outermost {...} substring.
+ */
+function parseJsonObjectLoosely(content: string): unknown {
+  const candidates = [stripJsonFences(content)];
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    candidates.push(content.slice(start, end + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return undefined;
+}
+
 function normalizeAltText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_ALT_TEXT_LENGTH);
@@ -61,20 +83,22 @@ export function validateImageDataUrl(value: unknown): string | undefined {
   return value;
 }
 
-export function parseAltTextSuggestion(content: unknown): AltTextSuggestion {
+export function parseAltTextSuggestion(content: unknown, finishReason?: string): AltTextSuggestion {
+  const finishSuffix = finishReason && finishReason !== 'stop' ? ` (finish_reason: ${finishReason})` : '';
+
   if (typeof content !== 'string' || !content.trim()) {
-    throw new Error('TritonAI returned an empty alt-text response.');
+    throw new Error(`TritonAI returned an empty alt-text response.${finishSuffix}`);
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripJsonFences(content));
-  } catch {
-    throw new Error('TritonAI returned alt-text that was not valid JSON.');
+  const parsed = parseJsonObjectLoosely(content);
+  if (parsed === undefined) {
+    throw new Error(
+      `TritonAI returned alt-text that was not valid JSON.${finishSuffix} Content started with: ${content.trim().slice(0, 120)}`
+    );
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    throw new Error('TritonAI returned an invalid alt-text payload.');
+    throw new Error(`TritonAI returned an invalid alt-text payload.${finishSuffix}`);
   }
 
   const record = parsed as Record<string, unknown>;
@@ -82,7 +106,7 @@ export function parseAltTextSuggestion(content: unknown): AltTextSuggestion {
   const alt = decorative ? '' : normalizeAltText(record.alt);
 
   if (!decorative && alt.length < 8) {
-    throw new Error('TritonAI did not return a usable alt-text recommendation.');
+    throw new Error(`TritonAI did not return a usable alt-text recommendation.${finishSuffix}`);
   }
 
   return {
@@ -99,6 +123,7 @@ export function buildAltTextPrompt(input: AltTextSuggestionInput): string {
     'Use nearby text only as context; do not copy it unless it describes the image.',
     'If the image is decorative or only a divider/background, return decorative true and alt as an empty string.',
     'If the image conveys information, return decorative false and a concise alt text sentence under 160 characters.',
+    'Keep the rationale under 25 words.',
     'Do not start with "image of", "picture of", or "graphic of".',
     '',
     `Document: ${input.documentName?.trim() || 'uploaded PDF'}`,
@@ -139,7 +164,7 @@ export function buildTritonAiRequest(input: AltTextSuggestionInput, config: Pick
         ]
       }
     ],
-    max_tokens: 500,
+    max_tokens: 800,
     response_format: { type: 'json_object' },
     ...(supportsCustomTemperature(model) ? { temperature: 0.2 } : {})
   };
@@ -172,5 +197,6 @@ export async function requestTritonAiAltText(
   }
 
   const payload = await response.json();
-  return parseAltTextSuggestion(payload?.choices?.[0]?.message?.content);
+  const choice = payload?.choices?.[0];
+  return parseAltTextSuggestion(choice?.message?.content, choice?.finish_reason);
 }

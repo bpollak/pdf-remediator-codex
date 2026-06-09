@@ -154,7 +154,8 @@ export async function POST(request: NextRequest) {
         hint: 'All configured TritonAI alt-text models failed.',
         attemptedModels: failures.map((failure) => ({
           model: failure.model,
-          status: failure.status
+          status: failure.status,
+          detail: failure.detail?.slice(0, 200)
         }))
       },
       { status: 502 }
