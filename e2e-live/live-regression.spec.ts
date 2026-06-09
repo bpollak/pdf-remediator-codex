@@ -65,8 +65,9 @@ test.describe('upload and remediation workflow', () => {
       page.getByText(/^(Accessible|Not yet accessible|Verification unavailable|Processing)$/).first()
     ).toBeVisible();
 
-    // Download action is available.
+    // Download action is available, with the worksheet disclaimer.
     await expect(page.getByRole('button', { name: /download updated pdf/i })).toBeEnabled();
+    await expect(page.getByText(/not.*added to the downloaded pdf/i).first()).toBeVisible();
   });
 
   test('already-accessible PDF still completes and offers download', async ({ page }) => {
