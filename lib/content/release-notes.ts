@@ -8,6 +8,23 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-06-09-ux-clarity-and-alt-text-reliability',
+    versionLabel: 'Release 2026.06.09',
+    deployedOn: 'June 9, 2026',
+    summary:
+      'Clearer publish-readiness guidance, friendlier error and processing feedback, and more reliable TritonAI alt-text suggestions.',
+    highlights: [
+      'Added an "Is this PDF ready to publish?" status banner to the results page with plain-language reasons, an analysis-only explanation, and a scanned-text notice when OCR could not add searchable text.',
+      'Added duration expectations and a long-running notice to upload file cards, plus a keep-this-tab-open warning while files are still processing.',
+      'Changed error messages for oversized OCR uploads, password-protected PDFs, and unreadable PDFs to explain what to do next.',
+      'Fixed TritonAI alt-text suggestions failing for informative images by giving reasoning models a much larger token budget and retrying once when the budget is exhausted.',
+      'Added per-model failure detail to alt-text diagnostics so production issues can be diagnosed without server log access.',
+      'Replaced MCID/ParentTree jargon in next steps with plain language and added a help tip explaining decorative images.',
+      'Corrected the landing page privacy description and linked the 2-minute quick start from the home page.',
+      'Added a Playwright post-deploy regression suite that runs against the live production site.'
+    ]
+  },
+  {
     id: '2026-05-22-tritonai-ocr-primary',
     versionLabel: 'Release 2026.05.22',
     deployedOn: 'May 22, 2026',
