@@ -24,6 +24,12 @@ type SuggestionState =
   | { status: 'ready'; alt: string; decorative: boolean }
   | { status: 'error'; message: string };
 
+type ApplyState =
+  | { status: 'idle' }
+  | { status: 'working' }
+  | { status: 'done'; applied: number; skipped: Array<{ imageId: string; reason: string }> }
+  | { status: 'error'; message: string };
+
 const categoryLabels: Record<ManualCustomElementCategory, string> = {
   'alt-text': 'Image description',
   structure: 'Document structure',
@@ -61,6 +67,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const [newItemCategory, setNewItemCategory] = useState<ManualCustomElementCategory>('structure');
   const [newItemNote, setNewItemNote] = useState('');
   const [suggestions, setSuggestions] = useState<Record<string, SuggestionState>>({});
+  const [applyState, setApplyState] = useState<ApplyState>({ status: 'idle' });
 
   const parsed = file?.remediatedParsedData ?? file?.parsedData;
   const sourceBytes = file?.remediatedParsedData ? file?.remediatedBytes ?? file?.uploadedBytes : file?.uploadedBytes;
@@ -96,18 +103,57 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     });
   }, [file, parsed]);
 
-  function downloadUpdatedPdf() {
-    if (!file?.remediatedBytes) return;
-    const blob = new Blob([file.remediatedBytes], { type: 'application/pdf' });
+  const savedDescriptionDrafts = useMemo(
+    () =>
+      Object.entries(drafts.altText)
+        .map(([imageId, draft]) => ({ imageId, alt: draft.alt.trim(), decorative: draft.decorative }))
+        .filter((entry) => entry.decorative || entry.alt.length > 0),
+    [drafts.altText]
+  );
+
+  function triggerDownload(bytes: BlobPart, name: string) {
+    const blob = new Blob([bytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `remediated-${file.name}`;
+    anchor.download = name;
     anchor.click();
     URL.revokeObjectURL(url);
     markWorkflowProgress(fileId, {
-      downloadedAt: file.workflowProgress?.downloadedAt ?? new Date().toISOString()
+      downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
     });
+  }
+
+  function downloadUpdatedPdf() {
+    if (!file?.remediatedBytes) return;
+    triggerDownload(file.remediatedBytes, `remediated-${file.name}`);
+  }
+
+  async function applyDescriptionsAndDownload() {
+    if (!file?.remediatedBytes || savedDescriptionDrafts.length === 0) return;
+    setApplyState({ status: 'working' });
+
+    try {
+      const { applyManualAltText } = await import('@/lib/remediate/apply-alt-text');
+      const pageImageCounts: Record<number, number> = {};
+      for (const image of parsed?.images ?? []) {
+        pageImageCounts[image.page] = (pageImageCounts[image.page] ?? 0) + 1;
+      }
+
+      const outcome = await applyManualAltText(file.remediatedBytes, savedDescriptionDrafts, pageImageCounts);
+      if (outcome.applied.length > 0) {
+        triggerDownload(outcome.bytes as BlobPart, `remediated-${file.name}`);
+      }
+      setApplyState({ status: 'done', applied: outcome.applied.length, skipped: outcome.skipped });
+    } catch (error) {
+      setApplyState({
+        status: 'error',
+        message:
+          error instanceof Error
+            ? `Could not embed the descriptions (${error.message}). Download the updated PDF and apply them in Acrobat instead.`
+            : 'Could not embed the descriptions. Download the updated PDF and apply them in Acrobat instead.'
+      });
+    }
   }
 
   function saveAltText(imageId: string, alt: string, decorative: boolean) {
@@ -271,13 +317,29 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 : 'No manual edits are listed right now. Save the updated PDF, then do your normal final review before publishing.'}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
+              {savedDescriptionDrafts.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={applyDescriptionsAndDownload}
+                  disabled={!file.remediatedBytes || applyState.status === 'working'}
+                  className="inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {applyState.status === 'working'
+                    ? 'Embedding descriptions...'
+                    : `Download PDF with my ${savedDescriptionDrafts.length === 1 ? 'description' : 'descriptions'}`}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={downloadUpdatedPdf}
                 disabled={!file.remediatedBytes}
-                className="inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300"
+                className={
+                  savedDescriptionDrafts.length > 0
+                    ? 'inline-flex rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2.5 text-sm font-semibold text-[var(--ucsd-navy)] hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-gray-400'
+                    : 'inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300'
+                }
               >
-                Download updated PDF
+                {savedDescriptionDrafts.length > 0 ? 'Download without descriptions' : 'Download updated PDF'}
               </button>
               <Link
                 href={revalidationHref}
@@ -286,9 +348,30 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 Upload revised PDF
               </Link>
             </div>
+            {applyState.status === 'done' ? (
+              <div className="mt-3 max-w-2xl rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                <p>
+                  {applyState.applied > 0
+                    ? `Embedded ${applyState.applied} ${applyState.applied === 1 ? 'description' : 'descriptions'} into the downloaded PDF. Upload that file above to re-check it.`
+                    : 'No descriptions could be embedded automatically.'}
+                </p>
+                {applyState.skipped.length > 0 ? (
+                  <p className="mt-1 text-amber-900">
+                    {applyState.skipped.length} {applyState.skipped.length === 1 ? 'image' : 'images'} still need Acrobat:{' '}
+                    {[...new Set(applyState.skipped.map((item) => item.reason))].join(' ')}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {applyState.status === 'error' ? (
+              <p className="mt-3 max-w-2xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                {applyState.message}
+              </p>
+            ) : null}
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-              The download contains the automated fixes only. Descriptions and edits you draft below are saved in this
-              browser as a worksheet &mdash; they are <strong>not</strong> added to the downloaded PDF.
+              {savedDescriptionDrafts.length > 0
+                ? 'Image descriptions you saved below are embedded only when you use the "Download PDF with my descriptions" button. Table decisions and other manual edits still need Acrobat or the source document.'
+                : 'The download contains the automated fixes only. Descriptions and edits you draft below are saved in this browser as a worksheet — they are not added to the downloaded PDF until you use the embed option that appears after saving a description.'}
             </p>
           </div>
           <div className="rounded-md border border-[rgba(24,43,73,0.14)] bg-slate-50 p-4">
@@ -317,16 +400,19 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
           </p>
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p>
-              <span className="font-semibold">These edits are a worksheet, not changes to the PDF.</span> What you
-              save here stays in this browser so you can track the work. To finish:
+              <span className="font-semibold">How these edits reach the PDF:</span>
             </p>
             <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>Draft your descriptions and decisions below.</li>
+              <li>Save image descriptions (or mark images decorative) below.</li>
               <li>
-                Apply them to the PDF in Adobe Acrobat (Tags panel &rarr; Figure &rarr; Alt text) or update the source
-                document and export a new PDF.
+                Use <span className="font-semibold">Download PDF with my descriptions</span> above &mdash; the app
+                embeds them into the file as accessibility tags. Images it cannot tag safely are listed for follow-up
+                in Adobe Acrobat (Tags panel &rarr; Figure &rarr; Alt text).
               </li>
-              <li>Upload the revised PDF above to confirm the fixes.</li>
+              <li>
+                Table decisions and other manual edits stay a worksheet: apply those in Acrobat or the source
+                document, then upload the revised PDF above to confirm.
+              </li>
             </ol>
           </div>
         </div>

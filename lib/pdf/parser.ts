@@ -13,6 +13,9 @@ const OPS_RECORD = OPS as Record<string, number | undefined>;
 const OP_SAVE = OPS_RECORD.save;
 const OP_RESTORE = OPS_RECORD.restore;
 const OP_TRANSFORM = OPS_RECORD.transform;
+const OP_BEGIN_MARKED_CONTENT = OPS_RECORD.beginMarkedContent;
+const OP_BEGIN_MARKED_CONTENT_PROPS = OPS_RECORD.beginMarkedContentProps;
+const OP_END_MARKED_CONTENT = OPS_RECORD.endMarkedContent;
 const IMAGE_OPERATOR_CODES = new Set(
   [
     OPS_RECORD.paintImageXObject,
@@ -138,7 +141,8 @@ function collectStructTreeTags(root: any, page: number, tags: ParsedPDF['tags'])
     if (role) {
       tags.push({
         type: role === 'Root' ? 'Document' : role,
-        page
+        page,
+        alt: cleanText((node as { alt?: unknown }).alt)
       });
     }
 
@@ -285,7 +289,16 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
 
   const images: ParsedPDF['images'] = [];
   const matrixStack: Matrix[] = [];
+  const markedContentStack: string[] = [];
   let ctm = IDENTITY_MATRIX;
+
+  function markedContentTag(args: unknown): string {
+    if (!Array.isArray(args)) return '';
+    const tag = args[0] as { name?: unknown } | string | undefined;
+    if (typeof tag === 'string') return tag;
+    if (tag && typeof tag === 'object' && typeof tag.name === 'string') return tag.name;
+    return '';
+  }
 
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {
     if (images.length >= MAX_IMAGE_ITEMS) break;
@@ -309,6 +322,16 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
       continue;
     }
 
+    if (fn === OP_BEGIN_MARKED_CONTENT || fn === OP_BEGIN_MARKED_CONTENT_PROPS) {
+      markedContentStack.push(markedContentTag(args));
+      continue;
+    }
+
+    if (fn === OP_END_MARKED_CONTENT) {
+      markedContentStack.pop();
+      continue;
+    }
+
     if (!IMAGE_OPERATOR_CODES.has(fn)) continue;
 
     const bounds = matrixBounds(ctm);
@@ -320,7 +343,8 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
       x: bounds.x,
       y: bounds.y,
       width: bounds.width,
-      height: bounds.height
+      height: bounds.height,
+      ...(markedContentStack.includes('Artifact') ? { decorative: true } : {})
     });
   }
 
@@ -620,12 +644,25 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
           });
         }
 
+        const tagCountBeforePage = discoveredTags.length;
         if (structTree) {
           discoveredHasStructTree = true;
           collectStructTreeTags(structTree, pageNumber, discoveredTags);
         }
 
         if (imageItems.length > 0) {
+          // Credit existing Figure /Alt entries to images when the counts
+          // line up unambiguously (both lists are in document order).
+          const figureAlts = discoveredTags
+            .slice(tagCountBeforePage)
+            .filter((tag) => tag.type === 'Figure' && tag.alt)
+            .map((tag) => tag.alt!);
+          const describable = imageItems.filter((image) => !image.decorative);
+          if (figureAlts.length > 0 && figureAlts.length === describable.length) {
+            describable.forEach((image, index) => {
+              image.alt = figureAlts[index];
+            });
+          }
           discoveredImages.push(...imageItems);
         }
 
