@@ -70,6 +70,25 @@ test.describe('upload and remediation workflow', () => {
     await expect(page.getByText(/not.*added to the downloaded pdf/i).first()).toBeVisible();
   });
 
+  test('saved image description can be embedded into the downloaded PDF', async ({ page }) => {
+    await uploadFixture(page, 'with-image.pdf');
+    await expect(page.getByText('with-image.pdf')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Ready: review results')).toBeVisible({ timeout: PROCESSING_TIMEOUT_MS });
+
+    await page.getByRole('link', { name: /view results/i }).click();
+    await expect(page.getByRole('heading', { name: /image descriptions/i })).toBeVisible({ timeout: 20_000 });
+
+    await page.getByPlaceholder(/write the image description/i).fill('Bar chart of recycling volume by month.');
+    const embedButton = page.getByRole('button', { name: /download pdf with my description/i });
+    await expect(embedButton).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await embedButton.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^remediated-/);
+    await expect(page.getByText(/embedded 1 description into the downloaded pdf/i)).toBeVisible({ timeout: 30_000 });
+  });
+
   test('already-accessible PDF still completes and offers download', async ({ page }) => {
     await uploadFixture(page, 'accessible.pdf');
     await expect(page.getByText('accessible.pdf')).toBeVisible({ timeout: 10_000 });

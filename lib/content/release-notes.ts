@@ -22,7 +22,9 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Replaced MCID/ParentTree jargon in next steps with plain language and added a help tip explaining decorative images.',
       'Corrected the landing page privacy description and linked the 2-minute quick start from the home page.',
       'Added a Playwright post-deploy regression suite that runs against the live production site.',
-      'Clarified that manual-edit drafts are a browser worksheet and are not embedded in the downloaded PDF, with steps for applying them in Acrobat or the source document.'
+      'Clarified that manual-edit drafts are a browser worksheet and are not embedded in the downloaded PDF, with steps for applying them in Acrobat or the source document.',
+      'Added "Download PDF with my descriptions": saved image descriptions are embedded into the PDF as content-bound Figure tags with alt text, and decorative images are marked as artifacts. Images that cannot be tagged safely are listed for follow-up in Acrobat.',
+      'Re-uploading an embedded PDF now credits existing Figure alt text and artifact-marked images, so resolved image findings clear on re-validation.'
     ]
   },
   {
