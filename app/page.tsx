@@ -59,6 +59,13 @@ export default function LandingPage() {
             </li>
           ))}
         </ol>
+        <p className="mt-5 text-sm text-[var(--ucsd-text)]">
+          Want a walkthrough first? Read the{' '}
+          <Link href="/about" className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]">
+            2-minute quick start on the About page
+          </Link>
+          .
+        </p>
       </section>
 
       {/* What you'll need */}
@@ -75,7 +82,10 @@ export default function LandingPage() {
             <svg className="mt-0.5 h-4 w-4 shrink-0 text-green-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
             </svg>
-            <span>A modern web browser — everything runs in your browser, nothing is uploaded to a server</span>
+            <span>
+              A modern web browser — processing runs in your browser, and files are only sent to configured OCR or
+              verification services when needed (see <Link href="/about" className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]">Privacy on the About page</Link>)
+            </span>
           </li>
           <li className="flex items-start gap-2">
             <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ucsd-blue)]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

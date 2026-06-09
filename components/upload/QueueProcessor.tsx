@@ -42,6 +42,20 @@ function remediationModeForParsed(parsed: ParsedPDF): RemediationMode {
 // unhandled error leaves a file ID in the processing set.
 const STALE_PROCESSING_TIMEOUT_MS = 120_000;
 
+function friendlyProcessingError(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (/password|encrypt/i.test(message)) {
+    return 'This PDF is password-protected. Remove the password protection, then upload it again.';
+  }
+  if (/invalid|corrupt|malformed|unexpected|parse/i.test(message)) {
+    return `Could not read this PDF (${message}). Re-export the PDF from its source document (for example Word or PowerPoint), then upload it again.`;
+  }
+  if (message) {
+    return `${message} Try uploading the file again. If it keeps failing, re-export the PDF from its source document.`;
+  }
+  return 'Failed to process this PDF. Try uploading it again.';
+}
+
 export function QueueProcessor() {
   const files = useAppStore((s) => s.files);
   const hydrated = useAppStore((s) => s.hydrated);
@@ -69,7 +83,7 @@ export function QueueProcessor() {
 
     (async () => {
       try {
-        updateFile(next.id, { status: 'parsing', progress: 10 });
+        updateFile(next.id, { status: 'parsing', progress: 10, processingStartedAt: new Date().toISOString() });
         // Bytes may have been released from memory; reload from IndexedDB if needed.
         const uploadedBytes = next.uploadedBytes ?? await ensureUploadedBytes(next.id);
         if (!uploadedBytes) {
@@ -276,7 +290,7 @@ export function QueueProcessor() {
         updateFile(next.id, {
           status: 'error',
           progress: 100,
-          error: error instanceof Error ? error.message : 'Failed to process PDF'
+          error: friendlyProcessingError(error)
         });
       } finally {
         processing.current.delete(next.id);

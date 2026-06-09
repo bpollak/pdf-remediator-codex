@@ -55,7 +55,8 @@ describe('runVerapdfViaApi error paths', () => {
   });
 
   it('extracts detail from error response payload', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    // 502 is retried, so each fetch call needs a fresh Response with an unread body.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response(
         JSON.stringify({
           error: 'veraPDF backend failed',

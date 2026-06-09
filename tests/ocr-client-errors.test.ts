@@ -19,7 +19,7 @@ describe('runOcrViaApi error paths', () => {
 
     const result = await runOcrViaApi(createSampleBytes(), 'big.pdf', 'en-US');
     expect(result.attempted).toBe(true);
-    expect(result.reason).toBe('OCR input exceeds deployment upload limits');
+    expect(result.reason).toContain('too large for the OCR service');
     expect(result.bytes).toBeUndefined();
   });
 
