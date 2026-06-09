@@ -21,7 +21,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Added per-model failure detail to alt-text diagnostics so production issues can be diagnosed without server log access.',
       'Replaced MCID/ParentTree jargon in next steps with plain language and added a help tip explaining decorative images.',
       'Corrected the landing page privacy description and linked the 2-minute quick start from the home page.',
-      'Added a Playwright post-deploy regression suite that runs against the live production site.'
+      'Added a Playwright post-deploy regression suite that runs against the live production site.',
+      'Clarified that manual-edit drafts are a browser worksheet and are not embedded in the downloaded PDF, with steps for applying them in Acrobat or the source document.'
     ]
   },
   {

@@ -286,6 +286,10 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 Upload revised PDF
               </Link>
             </div>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+              The download contains the automated fixes only. Descriptions and edits you draft below are saved in this
+              browser as a worksheet &mdash; they are <strong>not</strong> added to the downloaded PDF.
+            </p>
           </div>
           <div className="rounded-md border border-[rgba(24,43,73,0.14)] bg-slate-50 p-4">
             <p className="text-sm font-semibold text-[var(--ucsd-navy)]">Progress</p>
@@ -311,6 +315,20 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
           <p className="mt-1 text-sm text-[var(--ucsd-text)]">
             Use this list to prepare anything the app could not safely finish automatically.
           </p>
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p>
+              <span className="font-semibold">These edits are a worksheet, not changes to the PDF.</span> What you
+              save here stays in this browser so you can track the work. To finish:
+            </p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5">
+              <li>Draft your descriptions and decisions below.</li>
+              <li>
+                Apply them to the PDF in Adobe Acrobat (Tags panel &rarr; Figure &rarr; Alt text) or update the source
+                document and export a new PDF.
+              </li>
+              <li>Upload the revised PDF above to confirm the fixes.</li>
+            </ol>
+          </div>
         </div>
 
         {imageEntries.length > 0 ? (
