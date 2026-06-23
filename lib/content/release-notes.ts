@@ -16,7 +16,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     highlights: [
       'Changed the results page into a clearer manual checklist so analysis-only PDFs show required structure tagging as an item that must be completed before progress reaches 100%.',
       'Moved detailed PDF/UA failure counts behind an automated-check details disclosure so the main page focuses on what the reviewer needs to do next.',
-      'Changed the default TritonAI OCR path to use the on-prem api-lightonocr-1b model first, with Mistral Small and Gemma fallbacks, and tightened the prompt so OCR models do not echo schema examples.',
+      'Changed the default TritonAI OCR path to use the on-prem api-lightonocr-1b model first, with Mistral Small and Gemma fallbacks when the primary model fails or returns too little text, and tightened the prompt so OCR models do not echo schema examples.',
       'Hardened TritonAI OCR so one page-level model failure no longer fails the whole OCR pass or sends the workflow into avoidable unconfigured backend calls.',
       'Added an "Is this PDF ready to publish?" status banner to the results page with plain-language reasons, an analysis-only explanation, and a scanned-text notice when OCR could not add searchable text.',
       'Added duration expectations and a long-running notice to upload file cards, plus a keep-this-tab-open warning while files are still processing.',

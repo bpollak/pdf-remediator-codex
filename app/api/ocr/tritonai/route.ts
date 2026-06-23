@@ -13,6 +13,7 @@ const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_LINES = 120;
 const MAX_LINE_LENGTH = 240;
+const MIN_CONFIDENT_PAGE_LINES = 2;
 
 interface OcrLine {
   text: string;
@@ -180,6 +181,7 @@ export async function POST(request: NextRequest) {
   const baseUrl = (process.env.OCR_LITELLM_BASE_URL || process.env.LITELLM_BASE_URL || DEFAULT_LITELLM_BASE_URL).replace(/\/+$/, '');
   const models = getModelCandidates();
   const failures: Array<{ model: string; status?: number; message: string }> = [];
+  let bestResult: { model: string; lines: OcrLine[] } | undefined;
 
   for (const model of models) {
     const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -213,10 +215,20 @@ export async function POST(request: NextRequest) {
     const payload = await response.json().catch(() => null);
     try {
       const lines = parseOcrResponse(payload?.choices?.[0]?.message?.content);
-      return NextResponse.json({
+      if (!bestResult || lines.length > bestResult.lines.length) {
+        bestResult = { model, lines };
+      }
+      if (lines.length >= MIN_CONFIDENT_PAGE_LINES) {
+        return NextResponse.json({
+          model,
+          lines,
+          text: lines.map((line) => line.text).join('\n')
+        });
+      }
+      failures.push({
         model,
-        lines,
-        text: lines.map((line) => line.text).join('\n')
+        status: 206,
+        message: `TritonAI OCR returned limited text (${lines.length} line${lines.length === 1 ? '' : 's'}); trying fallback model.`
       });
     } catch (error) {
       failures.push({
@@ -225,6 +237,19 @@ export async function POST(request: NextRequest) {
         message: error instanceof Error ? error.message : 'TritonAI OCR returned unusable text.'
       });
     }
+  }
+
+  if (bestResult) {
+    return NextResponse.json({
+      model: bestResult.model,
+      warning: `TritonAI OCR returned limited text (${bestResult.lines.length} line${bestResult.lines.length === 1 ? '' : 's'}).`,
+      lines: bestResult.lines,
+      text: bestResult.lines.map((line) => line.text).join('\n'),
+      attemptedModels: failures.map((failure) => ({
+        model: failure.model,
+        status: failure.status
+      }))
+    });
   }
 
   console.warn('TritonAI OCR failed for one page with all model candidates', failures);

@@ -58,4 +58,44 @@ describe('/api/ocr/tritonai', () => {
       ]
     });
   });
+
+  it('tries fallback models when the primary OCR model returns too little text', async () => {
+    process.env = {
+      ...originalEnv,
+      OCR_LITELLM_API_KEY: 'test-key',
+      OCR_LITELLM_BASE_URL: 'https://tritonai-api.ucsd.edu',
+      OCR_LITELLM_MODEL: 'api-lightonocr-1b',
+      OCR_LITELLM_FALLBACK_MODELS: 'api-mistral-small-3.2-2506'
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { content: JSON.stringify({ lines: [{ text: 'Only heading' }] }) } }]
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  lines: [{ text: 'Accessible PDF OCR smoke test' }, { text: 'LightOn OCR should extract this text.' }]
+                })
+              }
+            }
+          ]
+        })
+      );
+
+    const response = await POST(makeRequest());
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(payload).toMatchObject({
+      model: 'api-mistral-small-3.2-2506',
+      text: 'Accessible PDF OCR smoke test\nLightOn OCR should extract this text.'
+    });
+  });
 });
