@@ -29,7 +29,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       'Clarified that manual-edit drafts are a browser worksheet and are not embedded in the downloaded PDF, with steps for applying them in Acrobat or the source document.',
       'Added "Download PDF with my descriptions": saved image descriptions are embedded into the PDF as content-bound Figure tags with alt text, and decorative images are marked as artifacts. Images that cannot be tagged safely are listed for follow-up in Acrobat.',
       'Re-uploading an embedded PDF now matches existing Figure alt text by marked-content id, so resolved image findings clear on re-validation even when only some images on a page were manually described.',
-      'Changed the description download so it only downloads when every saved image description can be embedded, preventing partial PDFs that look complete but still miss some reviewer-entered alt text.'
+      'Changed the description download so it only downloads when every saved image description can be embedded, preventing partial PDFs that look complete but still miss some reviewer-entered alt text.',
+      'Updated the About page to reflect the current OCR path, AI-assisted alt-text behavior, all-or-nothing description downloads, and nested-image limitations.'
     ]
   },
   {

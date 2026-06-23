@@ -45,8 +45,9 @@ export default function AboutPage() {
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>Go to the App page and upload your PDF.</li>
           <li>Wait for the review to finish (usually under a few minutes, depending on file size).</li>
-          <li>Download the remediated PDF.</li>
-          <li>Use the &ldquo;What To Do Next&rdquo; checklist to complete remaining manual fixes.</li>
+          <li>Use the manual checklist to save image descriptions, mark decorative images, and track required structure fixes.</li>
+          <li>Download the PDF with descriptions when the app can embed every saved image description safely.</li>
+          <li>Complete any remaining Acrobat or PAC fixes shown in the checklist.</li>
           <li>Re-upload the revised PDF for a final validation check before publishing.</li>
         </ol>
       </section>
@@ -71,7 +72,9 @@ export default function AboutPage() {
             <strong>Read the file</strong> &mdash; Reviews text, headings, links, forms, and metadata.
           </li>
           <li>
-            <strong>Read scanned pages</strong> &mdash; If the PDF is image-based, OCR is used to add searchable text.
+            <strong>Read scanned pages</strong> &mdash; If the PDF is image-based, TritonAI OCR uses the on-prem
+            LightOn OCR model first, then Mistral Small and Gemma fallback models when needed. Local browser OCR can
+            still run if configured services do not produce usable text.
           </li>
           <li>
             <strong>Check for issues</strong> &mdash; Looks for common problems in headings, images, tables, lists,
@@ -93,7 +96,8 @@ export default function AboutPage() {
             additional standards check.
           </li>
           <li>
-            <strong>Next steps</strong> &mdash; Produces a practical checklist of remaining manual fixes.
+            <strong>Next steps</strong> &mdash; Produces a practical manual checklist with progress tracking for
+            image descriptions, document structure, tables, and any custom reviewer tasks.
           </li>
         </ol>
       </section>
@@ -109,6 +113,9 @@ export default function AboutPage() {
           <li>Adds missing form labels based on field names when possible.</li>
           <li>Detects real PDF image content from page rendering data and flags missing alt text.</li>
           <li>Offers TritonAI-assisted alt-text suggestions for reviewers when the LiteLLM gateway is configured.</li>
+          <li>Embeds saved image descriptions as real Figure alt text when every saved image can be safely matched.</li>
+          <li>Blocks partial description downloads when some saved image descriptions cannot be embedded automatically.</li>
+          <li>Recognizes previously embedded Figure alt text by marked-content ID when a remediated PDF is re-uploaded.</li>
           <li>Stores compact immutable remediation metadata to improve repeat-run consistency.</li>
           <li>Adds searchable text support for scanned PDFs.</li>
           <li>Tries to improve reading order in some multi-column layouts.</li>
@@ -133,6 +140,7 @@ export default function AboutPage() {
           <li>Heading order and document structure in long or complex files.</li>
           <li>Table headers, merged cells, and reading order in complex tables.</li>
           <li>Meaningful alt text for charts, diagrams, and instructional images.</li>
+          <li>Images that are drawn through nested graphics or Form XObjects when the app cannot safely bind alt text.</li>
           <li>Color contrast and visual-only cues that automated checks may miss.</li>
           <li>Final usability with assistive technology before publishing.</li>
         </ul>
@@ -145,8 +153,9 @@ export default function AboutPage() {
           not store files in an app database.
         </p>
         <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Files stay in browser memory during your session and are cleared when you refresh or close the page.</li>
-          <li>If TritonAI OCR is configured, scanned page images are sent through <code>/api/ocr/tritonai</code> to extract searchable text.</li>
+          <li>Files and review state are kept in your browser session and local browser storage so the current review can continue.</li>
+          <li>If TritonAI OCR is configured, rendered scanned page images are sent through <code>/api/ocr/tritonai</code> to extract searchable text.</li>
+          <li>If TritonAI alt-text suggestions are configured, cropped image regions are sent through <code>/api/alt-text</code> to draft reviewer-approved descriptions.</li>
           <li>If a PDF-native OCR backend is configured, the file may also be sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
           <li>If configured OCR services are unavailable, local OCR fallback can run in your browser using Tesseract.</li>
           <li>If veraPDF verification is enabled, the remediated PDF is sent through <code>/api/verapdf</code> and forwarded to the configured veraPDF service.</li>
@@ -160,8 +169,11 @@ export default function AboutPage() {
           Automatic fixes can solve many common issues, but they do not guarantee full WCAG or PDF/UA compliance.
           Some checks are best-effort only (especially color contrast, infographic layouts, and complex tables), and
           many files still need manual edits. If content-bound structural tagging cannot be verified, the output is
-          treated as analysis-only. If veraPDF is enabled, it adds an independent technical check, but you should still
-          complete manual review with desktop tools and assistive technology before publishing.
+          treated as analysis-only. Image descriptions are embedded only when the app can safely match every saved
+          description back to the correct PDF image paint. Some PDFs draw images through nested graphics or Form
+          XObjects; those images may still need alt text or artifact marking in Acrobat or PAC. If veraPDF is enabled,
+          it adds an independent technical check, but you should still complete manual review with desktop tools and
+          assistive technology before publishing.
         </p>
       </section>
 
