@@ -7,7 +7,7 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 ### How it works
 
 1. Upload pipeline parses the PDF and checks if it appears scan-only (very low text density).
-2. If likely scanned, the client first calls `POST /api/ocr/tritonai` and uses a TritonAI vision model to extract text from page images.
+2. If likely scanned, the client first calls `POST /api/ocr/tritonai` and uses the TritonAI LightOn OCR model to extract text from page images.
 3. If TritonAI OCR does not add enough usable text, the browser falls back to local Tesseract OCR (first pages only).
 4. A PDF-native OCR backend can still be exposed through `POST /api/ocr` for deployments that configure `OCR_SERVICE_URL`.
 5. Remediation runs against OCR-enriched content when OCR adds usable searchable text.
@@ -16,8 +16,8 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 
 - `OCR_LITELLM_API_KEY` (optional): TritonAI key for OCR. If omitted, `LITELLM_API_KEY` is used.
 - `OCR_LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL for OCR (default `https://tritonai-api.ucsd.edu` or `LITELLM_BASE_URL`).
-- `OCR_LITELLM_MODEL` (optional): TritonAI OCR model (default `api-mistral-small-3.2-2506`).
-- `OCR_LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback OCR models (default `api-gemma-4-26b`).
+- `OCR_LITELLM_MODEL` (optional): TritonAI OCR model (default `api-lightonocr-1b`).
+- `OCR_LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback OCR models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
 - `OCR_SERVICE_URL` (optional): URL of a PDF-native OCR backend endpoint.
 - `OCR_SERVICE_TOKEN` (optional): Bearer token for OCR backend auth.
 - `OCR_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for OCR backend auth.
@@ -32,7 +32,7 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 - `LITELLM_MODEL` (optional): model for alt-text suggestions (default `gpt-5.5`).
 - `LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback alt-text models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
 
-TritonAI OCR is the primary production OCR path when `OCR_LITELLM_API_KEY` or `LITELLM_API_KEY` is configured.
+TritonAI OCR is the primary production OCR path when `OCR_LITELLM_API_KEY` or `LITELLM_API_KEY` is configured. Use an on-prem TritonAI key for the default LightOn OCR model.
 If TritonAI OCR and `OCR_SERVICE_URL` are unavailable, local browser OCR fallback is attempted automatically for likely scanned PDFs.
 
 If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page

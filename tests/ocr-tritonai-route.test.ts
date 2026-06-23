@@ -52,6 +52,7 @@ describe('/api/ocr/tritonai', () => {
       lines: [],
       text: '',
       attemptedModels: [
+        { model: 'api-lightonocr-1b', status: 400 },
         { model: 'api-mistral-small-3.2-2506', status: 400 },
         { model: 'api-gemma-4-26b', status: 400 }
       ]
