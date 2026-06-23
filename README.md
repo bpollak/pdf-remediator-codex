@@ -8,8 +8,8 @@ The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
 
 1. Upload pipeline parses the PDF and checks if it appears scan-only (very low text density).
 2. If likely scanned, the client first calls `POST /api/ocr/tritonai` and uses a TritonAI vision model to extract text from page images.
-3. If TritonAI OCR is unavailable, the client can call `POST /api/ocr` for a configured PDF-native OCR backend.
-4. If backend OCR is unavailable, the browser falls back to local Tesseract OCR (first pages only).
+3. If TritonAI OCR does not add enough usable text, the browser falls back to local Tesseract OCR (first pages only).
+4. A PDF-native OCR backend can still be exposed through `POST /api/ocr` for deployments that configure `OCR_SERVICE_URL`.
 5. Remediation runs against OCR-enriched content when OCR adds usable searchable text.
 
 ### Environment variables

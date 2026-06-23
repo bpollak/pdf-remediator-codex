@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import type { AuditResult } from '@/lib/audit/types';
 import { classifyPdfSource } from '@/lib/pdf/source-type';
 import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
-import { runOcrViaApi } from '@/lib/ocr/client';
 import { assessOcrTextGain, isLikelyScannedPdf } from '@/lib/ocr/detection';
 import {
   MAX_REMEDIATION_ITERATIONS,
@@ -120,32 +119,6 @@ export function QueueProcessor() {
               upstreamOcrFailureReason = undefined;
             } else {
               upstreamOcrFailureReason = [upstreamOcrFailureReason, tritonAssessment.reason].filter(Boolean).join('; ') || undefined;
-            }
-          }
-
-          if (!ocrApplied) {
-            const ocrResult = await runOcrViaApi(remediationSourceBytes, next.name, originalParsedData.language);
-            upstreamOcrFailureReason = [upstreamOcrFailureReason, ocrResult.reason].filter(Boolean).join('; ') || undefined;
-
-            if (ocrResult.bytes) {
-              try {
-                const candidateParsed = await parsePdfInWorker(`${next.id}-ocr`, ocrResult.bytes);
-                const candidateAssessment = assessOcrTextGain(originalParsedData, candidateParsed);
-
-                if (candidateAssessment.accepted) {
-                  remediationSourceBytes = ocrResult.bytes;
-                  remediationParsedData = candidateParsed;
-                  ocrApplied = true;
-                  ocrReason = 'Used OCR service';
-                  upstreamOcrFailureReason = undefined;
-                } else {
-                  upstreamOcrFailureReason = [upstreamOcrFailureReason, candidateAssessment.reason].filter(Boolean).join('; ') || undefined;
-                }
-              } catch (error) {
-                const parseFailure =
-                  error instanceof Error ? `OCR output could not be parsed (${error.message})` : 'OCR output could not be parsed';
-                upstreamOcrFailureReason = [upstreamOcrFailureReason, parseFailure].filter(Boolean).join('; ') || undefined;
-              }
             }
           }
 
