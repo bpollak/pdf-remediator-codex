@@ -80,13 +80,13 @@ function buildOcrPrompt(page: number, documentName?: string, language?: string) 
     'Extract the visible text from this PDF page image for OCR.',
     'Return only text that is actually visible on the page.',
     'Preserve reading order as separate lines.',
-    'Do not summarize, correct, translate, or describe the page.',
+    'Do not summarize, correct, translate, describe the page, or invent sample text.',
     '',
     `Document: ${documentName?.trim() || 'uploaded PDF'}`,
     `Page: ${page}`,
     language?.trim() ? `Language hint: ${language.trim()}` : undefined,
     '',
-    'Return JSON only: {"lines":[{"text":"first visible line"},{"text":"second visible line"}]}.'
+    'Return JSON only with a top-level "lines" array. Each line item must be an object with a "text" string.'
   ]
     .filter(Boolean)
     .join('\n');
