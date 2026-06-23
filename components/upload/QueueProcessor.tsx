@@ -90,7 +90,7 @@ export function QueueProcessor() {
         }
         const originalParsedData = await parsePdfInWorker(next.id, uploadedBytes);
         const sourceAssessment = classifyPdfSource(next.name, originalParsedData);
-        let remediationSourceBytes = uploadedBytes;
+        const remediationSourceBytes = uploadedBytes;
         let remediationParsedData = originalParsedData;
         let ocrAttempted = false;
         let ocrApplied = false;
