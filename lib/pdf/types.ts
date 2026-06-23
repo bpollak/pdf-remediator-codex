@@ -21,6 +21,7 @@ export interface ImageItem {
   height: number;
   alt?: string;
   decorative?: boolean;
+  markedContentId?: number;
 }
 
 export interface StructureBindingSummary {
@@ -48,7 +49,7 @@ export interface ParsedPDF {
   remediationMode?: RemediationMode;
   hasStructTree: boolean;
   structureBinding?: StructureBindingSummary;
-  tags: Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string }>;
+  tags: Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string; markedContentId?: number }>;
   textItems: TextItem[];
   images: ImageItem[];
   links: Array<{ text: string; url: string; page: number }>;

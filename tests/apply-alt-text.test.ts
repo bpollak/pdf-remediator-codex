@@ -122,6 +122,29 @@ describe('applyManualAltText', () => {
     expect(altTexts).toContain('Second image description');
   });
 
+  it('credits Figure alt text by marked-content id when only some page images have alt text', async () => {
+    const sourceBytes = await createPdfWithImages(2);
+    const parsed = await parsePdfBytes(sourceBytes.slice(0));
+    expect(parsed.images).toHaveLength(2);
+
+    const outcome = await applyManualAltText(
+      sourceBytes,
+      [{ imageId: parsed.images[0]!.id, alt: 'First image description', decorative: false }],
+      pageImageCounts(parsed)
+    );
+    expect(outcome.skipped).toEqual([]);
+
+    const reparsed = await parsePdfBytes(
+      outcome.bytes.buffer.slice(outcome.bytes.byteOffset, outcome.bytes.byteOffset + outcome.bytes.byteLength)
+    );
+
+    expect(reparsed.tags.filter((tag) => tag.type === 'Figure' && tag.alt)).toMatchObject([
+      { alt: 'First image description', markedContentId: expect.any(Number) }
+    ]);
+    expect(reparsed.images[0]?.alt).toBe('First image description');
+    expect(reparsed.images[1]?.alt).toBeUndefined();
+  });
+
   it('skips pages whose painted images cannot be matched safely', async () => {
     const sourceBytes = await createPdfWithImages(1);
     const parsed = await parsePdfBytes(sourceBytes.slice(0));

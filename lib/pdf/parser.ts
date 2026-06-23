@@ -142,7 +142,8 @@ function collectStructTreeTags(root: any, page: number, tags: ParsedPDF['tags'])
       tags.push({
         type: role === 'Root' ? 'Document' : role,
         page,
-        alt: cleanText((node as { alt?: unknown }).alt)
+        alt: cleanText((node as { alt?: unknown }).alt),
+        markedContentId: extractStructTreeMarkedContentId(node)
       });
     }
 
@@ -154,13 +155,37 @@ function collectStructTreeTags(root: any, page: number, tags: ParsedPDF['tags'])
   }
 }
 
+function extractStructTreeMarkedContentId(node: unknown): number | undefined {
+  if (!node || typeof node !== 'object') return undefined;
+  const children = (node as { children?: unknown }).children;
+  if (!Array.isArray(children)) return undefined;
+
+  const stack = [...children];
+  const visited = new WeakSet<object>();
+  while (stack.length > 0) {
+    const child = stack.pop();
+    if (!child || typeof child !== 'object') continue;
+    if (visited.has(child)) continue;
+    visited.add(child);
+
+    const contentId = cleanText((child as { id?: unknown }).id);
+    const match = contentId?.match(/_mc(\d+)$/);
+    if (match) return Number(match[1]);
+
+    const nested = (child as { children?: unknown }).children;
+    if (Array.isArray(nested)) stack.push(...nested);
+  }
+
+  return undefined;
+}
+
 function dedupeTags(tags: ParsedPDF['tags']): ParsedPDF['tags'] {
   const seen = new Set<string>();
   const deduped: ParsedPDF['tags'] = [];
 
   for (const tag of tags) {
     if (!tag?.type) continue;
-    const key = `${tag.type}|${tag.page ?? ''}|${tag.text ?? ''}|${tag.alt ?? ''}|${tag.scope ?? ''}`;
+    const key = `${tag.type}|${tag.page ?? ''}|${tag.text ?? ''}|${tag.alt ?? ''}|${tag.scope ?? ''}|${tag.markedContentId ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(tag);
@@ -289,15 +314,16 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
 
   const images: ParsedPDF['images'] = [];
   const matrixStack: Matrix[] = [];
-  const markedContentStack: string[] = [];
+  const markedContentStack: Array<{ tag: string; markedContentId?: number }> = [];
   let ctm = IDENTITY_MATRIX;
 
-  function markedContentTag(args: unknown): string {
-    if (!Array.isArray(args)) return '';
+  function markedContentEntry(args: unknown): { tag: string; markedContentId?: number } {
+    if (!Array.isArray(args)) return { tag: '' };
     const tag = args[0] as { name?: unknown } | string | undefined;
-    if (typeof tag === 'string') return tag;
-    if (tag && typeof tag === 'object' && typeof tag.name === 'string') return tag.name;
-    return '';
+    const normalizedTag =
+      typeof tag === 'string' ? tag : tag && typeof tag === 'object' && typeof tag.name === 'string' ? tag.name : '';
+    const markedContentId = typeof args[1] === 'number' ? args[1] : undefined;
+    return { tag: normalizedTag, markedContentId };
   }
 
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {
@@ -323,7 +349,7 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
     }
 
     if (fn === OP_BEGIN_MARKED_CONTENT || fn === OP_BEGIN_MARKED_CONTENT_PROPS) {
-      markedContentStack.push(markedContentTag(args));
+      markedContentStack.push(markedContentEntry(args));
       continue;
     }
 
@@ -336,6 +362,7 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
 
     const bounds = matrixBounds(ctm);
     if (bounds.width < 1 || bounds.height < 1) continue;
+    const figureMark = [...markedContentStack].reverse().find((entry) => entry.tag === 'Figure');
 
     images.push({
       id: `img-${pageNumber}-${images.length + 1}`,
@@ -344,7 +371,8 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
       y: bounds.y,
       width: bounds.width,
       height: bounds.height,
-      ...(markedContentStack.includes('Artifact') ? { decorative: true } : {})
+      ...(markedContentStack.some((entry) => entry.tag === 'Artifact') ? { decorative: true } : {}),
+      ...(typeof figureMark?.markedContentId === 'number' ? { markedContentId: figureMark.markedContentId } : {})
     });
   }
 
@@ -656,11 +684,29 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
           const figureAlts = discoveredTags
             .slice(tagCountBeforePage)
             .filter((tag) => tag.type === 'Figure' && tag.alt)
-            .map((tag) => tag.alt!);
-          const describable = imageItems.filter((image) => !image.decorative);
-          if (figureAlts.length > 0 && figureAlts.length === describable.length) {
+            .map((tag) => ({ alt: tag.alt!, markedContentId: tag.markedContentId }));
+          const figureAltByMcid = new Map<number, string>();
+          for (const figure of figureAlts) {
+            if (typeof figure.markedContentId === 'number') {
+              figureAltByMcid.set(figure.markedContentId, figure.alt);
+            }
+          }
+
+          if (figureAltByMcid.size > 0) {
+            for (const image of imageItems) {
+              if (typeof image.markedContentId !== 'number') continue;
+              const alt = figureAltByMcid.get(image.markedContentId);
+              if (alt) image.alt = alt;
+            }
+          }
+
+          const remainingFigureAlts = figureAlts
+            .filter((figure) => typeof figure.markedContentId !== 'number')
+            .map((figure) => figure.alt);
+          const describable = imageItems.filter((image) => !image.decorative && !image.alt);
+          if (remainingFigureAlts.length > 0 && remainingFigureAlts.length === describable.length) {
             describable.forEach((image, index) => {
-              image.alt = figureAlts[index];
+              image.alt = remainingFigureAlts[index];
             });
           }
           discoveredImages.push(...imageItems);
