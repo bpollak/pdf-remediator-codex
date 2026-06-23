@@ -27,7 +27,13 @@ type SuggestionState =
 type ApplyState =
   | { status: 'idle' }
   | { status: 'working' }
-  | { status: 'done'; applied: number; skipped: Array<{ imageId: string; reason: string }> }
+  | {
+      status: 'done';
+      applied: number;
+      expected: number;
+      downloaded: boolean;
+      skipped: Array<{ imageId: string; reason: string }>;
+    }
   | { status: 'error'; message: string };
 
 const categoryLabels: Record<ManualCustomElementCategory, string> = {
@@ -165,11 +171,19 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         pageImageCounts[image.page] = (pageImageCounts[image.page] ?? 0) + 1;
       }
 
+      const expected = savedDescriptionDrafts.length;
       const outcome = await applyManualAltText(file.remediatedBytes, savedDescriptionDrafts, pageImageCounts);
-      if (outcome.applied.length > 0) {
+      const complete = outcome.skipped.length === 0 && outcome.applied.length === expected;
+      if (complete) {
         triggerDownload(outcome.bytes as BlobPart, `remediated-${file.name}`);
       }
-      setApplyState({ status: 'done', applied: outcome.applied.length, skipped: outcome.skipped });
+      setApplyState({
+        status: 'done',
+        applied: outcome.applied.length,
+        expected,
+        downloaded: complete,
+        skipped: outcome.skipped
+      });
     } catch (error) {
       setApplyState({
         status: 'error',
@@ -413,11 +427,17 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
               </Link>
             </div>
             {applyState.status === 'done' ? (
-              <div className="mt-3 max-w-2xl rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+              <div
+                className={`mt-3 max-w-2xl rounded-md border p-3 text-sm ${
+                  applyState.downloaded
+                    ? 'border-green-200 bg-green-50 text-green-900'
+                    : 'border-amber-200 bg-amber-50 text-amber-950'
+                }`}
+              >
                 <p>
-                  {applyState.applied > 0
-                    ? `Embedded ${applyState.applied} ${applyState.applied === 1 ? 'description' : 'descriptions'} into the downloaded PDF. Upload that file above to re-check it.`
-                    : 'No descriptions could be embedded automatically.'}
+                  {applyState.downloaded
+                    ? `Embedded all ${applyState.applied} ${applyState.applied === 1 ? 'description' : 'descriptions'} into the downloaded PDF. Upload that file above to re-check it.`
+                    : `Could not embed every saved image description. ${applyState.applied} of ${applyState.expected} ${applyState.expected === 1 ? 'description was' : 'descriptions were'} embedded, so no partial PDF was downloaded.`}
                 </p>
                 {applyState.skipped.length > 0 ? (
                   <p className="mt-1 text-amber-900">
