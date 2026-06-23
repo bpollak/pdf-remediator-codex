@@ -78,8 +78,10 @@ function parseOcrResponse(content: unknown): OcrLine[] {
 function buildOcrPrompt(page: number, documentName?: string, language?: string) {
   return [
     'Extract the visible text from this PDF page image for OCR.',
+    'Extract every readable text line across the whole page, including headings, body text, labels, captions, headers, and footers.',
     'Return only text that is actually visible on the page.',
     'Preserve reading order as separate lines.',
+    'Do not stop after the first title, heading, or text block.',
     'Do not summarize, correct, translate, describe the page, or invent sample text.',
     '',
     `Document: ${documentName?.trim() || 'uploaded PDF'}`,
