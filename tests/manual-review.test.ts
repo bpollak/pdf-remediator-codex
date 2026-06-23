@@ -248,6 +248,72 @@ describe('manual review utilities', () => {
     });
   });
 
+  it('counts analysis-only structure tagging as a required manual checklist item', () => {
+    const file = makeFile({
+      remediationMode: 'analysis-only',
+      manualReviewDrafts: {
+        altText: {
+          'img-1-1': {
+            alt: 'Campus accessibility map.',
+            decorative: false
+          }
+        },
+        structure: {
+          headings: {},
+          headingOrder: [],
+          tableDecisions: {}
+        },
+        customElements: [],
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
+    });
+
+    expect(summarizeManualCompletion(file)).toMatchObject({
+      total: 2,
+      completed: 1,
+      percent: 50,
+      structure: {
+        total: 1,
+        completed: 0
+      }
+    });
+  });
+
+  it('marks analysis-only structure complete when the workflow has been prepared', () => {
+    const file = makeFile({
+      remediationMode: 'analysis-only',
+      workflowProgress: {
+        structurePreparedAt: '2026-03-06T10:05:00.000Z'
+      },
+      manualReviewDrafts: {
+        altText: {
+          'img-1-1': {
+            alt: 'Campus accessibility map.',
+            decorative: false
+          }
+        },
+        structure: {
+          headings: {},
+          headingOrder: [],
+          tableDecisions: {}
+        },
+        customElements: [],
+        lastUpdatedAt: '2026-03-06T10:00:00.000Z'
+      }
+    });
+
+    expect(hasPendingManualReviewChanges(file)).toBe(true);
+    expect(summarizeManualCompletion(file)).toMatchObject({
+      total: 2,
+      completed: 2,
+      percent: 100,
+      structure: {
+        total: 1,
+        completed: 1
+      }
+    });
+  });
+
   it('reports no pending re-validation when no draft overrides exist', () => {
     const summary = summarizeManualReviewState(makeFile());
 

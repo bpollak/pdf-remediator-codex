@@ -300,13 +300,15 @@ export function getOrderedStructureHeadingKeys(
 }
 
 export function hasPendingManualReviewChanges(file: FileEntry | undefined): boolean {
-  if (!file?.manualReviewDrafts) return false;
+  if (!file) return false;
+  if (!file.manualReviewDrafts) return Boolean(file.workflowProgress?.structurePreparedAt);
   const drafts = getManualReviewDrafts(file);
   return (
     Object.keys(drafts.altText).length > 0 ||
     hasHeadingDraftChanges(file) ||
     Object.keys(drafts.structure.tableDecisions).length > 0 ||
-    drafts.customElements.length > 0
+    drafts.customElements.length > 0 ||
+    Boolean(file.workflowProgress?.structurePreparedAt)
   );
 }
 
@@ -386,12 +388,15 @@ export function summarizeManualCompletion(file: FileEntry | undefined) {
   const review = summarizeManualReviewState(file);
   const altTextTotal = review.altText.totalImages;
   const altTextCompleted = review.altText.completedCount;
+  const manualStructureTotal = file?.remediationMode === 'analysis-only' ? 1 : 0;
+  const manualStructureCompleted =
+    manualStructureTotal > 0 && file?.workflowProgress?.structurePreparedAt ? 1 : 0;
   const tableTotal = review.structure.tableSuggestions;
   const tableCompleted = review.structure.reviewedTables;
   const customTotal = review.customElements.totalCount;
   const customCompleted = review.customElements.completedCount;
-  const total = altTextTotal + tableTotal + customTotal;
-  const completed = altTextCompleted + tableCompleted + customCompleted;
+  const total = altTextTotal + manualStructureTotal + tableTotal + customTotal;
+  const completed = altTextCompleted + manualStructureCompleted + tableCompleted + customCompleted;
 
   return {
     total,
@@ -404,6 +409,10 @@ export function summarizeManualCompletion(file: FileEntry | undefined) {
     tables: {
       total: tableTotal,
       completed: tableCompleted
+    },
+    structure: {
+      total: manualStructureTotal,
+      completed: manualStructureCompleted
     },
     customElements: {
       total: customTotal,

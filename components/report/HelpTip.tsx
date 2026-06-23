@@ -29,7 +29,7 @@ export function HelpTip({ label, children }: HelpTipProps) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label={`Help: ${label}`}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 hover:bg-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)]"
+        className="ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)]"
       >
         ?
       </button>

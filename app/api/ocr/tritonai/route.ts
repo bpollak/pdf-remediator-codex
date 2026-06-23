@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
-const DEFAULT_OCR_MODEL = 'api-lightonocr-1b';
-const DEFAULT_OCR_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
+const DEFAULT_OCR_MODEL = 'api-mistral-small-3.2-2506';
+const DEFAULT_OCR_FALLBACK_MODELS = ['api-gemma-4-26b'];
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_LINES = 120;
@@ -225,16 +225,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  console.error('TritonAI OCR failed for all model candidates', failures);
+  console.warn('TritonAI OCR failed for one page with all model candidates', failures);
 
   return NextResponse.json(
     {
-      error: 'TritonAI OCR failed for all configured model candidates.',
+      warning: 'TritonAI OCR could not extract usable text for this page.',
+      lines: [],
+      text: '',
       attemptedModels: failures.map((failure) => ({
         model: failure.model,
         status: failure.status
       }))
     },
-    { status: 502 }
+    { status: 200 }
   );
 }

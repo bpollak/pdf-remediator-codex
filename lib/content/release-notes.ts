@@ -14,6 +14,9 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     summary:
       'Clearer publish-readiness guidance, friendlier error and processing feedback, and more reliable TritonAI alt-text suggestions.',
     highlights: [
+      'Changed the results page into a clearer manual checklist so analysis-only PDFs show required structure tagging as an item that must be completed before progress reaches 100%.',
+      'Moved detailed PDF/UA failure counts behind an automated-check details disclosure so the main page focuses on what the reviewer needs to do next.',
+      'Hardened TritonAI OCR so one page-level model failure no longer fails the whole OCR pass or sends the workflow into avoidable fallback paths.',
       'Added an "Is this PDF ready to publish?" status banner to the results page with plain-language reasons, an analysis-only explanation, and a scanned-text notice when OCR could not add searchable text.',
       'Added duration expectations and a long-running notice to upload file cards, plus a keep-this-tab-open warning while files are still processing.',
       'Changed error messages for oversized OCR uploads, password-protected PDFs, and unreadable PDFs to explain what to do next.',

@@ -15,6 +15,8 @@ interface TritonOcrResponse {
   lines?: TritonOcrLine[];
   text?: string;
   error?: string;
+  warning?: string;
+  attemptedModels?: Array<{ model: string; status?: number }>;
 }
 
 export interface TritonOcrResult {
@@ -90,7 +92,7 @@ async function requestPageOcr(input: {
   page: number;
   documentName: string;
   language?: string;
-}): Promise<TritonOcrLine[]> {
+}): Promise<{ lines: TritonOcrLine[]; warning?: string }> {
   const response = await fetch(TRITON_OCR_API_PATH, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -102,20 +104,19 @@ async function requestPageOcr(input: {
     throw new Error(payload.error || `TritonAI OCR request failed (${response.status})`);
   }
 
+  let lines: TritonOcrLine[] = [];
   if (Array.isArray(payload.lines)) {
-    return payload.lines
+    lines = payload.lines
       .map((line) => ({ text: normalizeText(line.text) }))
       .filter((line) => line.text);
-  }
-
-  if (typeof payload.text === 'string') {
-    return payload.text
+  } else if (typeof payload.text === 'string') {
+    lines = payload.text
       .split(/\r?\n/)
       .map((text) => ({ text: normalizeText(text) }))
       .filter((line) => line.text);
   }
 
-  return [];
+  return { lines, warning: payload.warning };
 }
 
 export async function runTritonAiOcr(
@@ -136,17 +137,27 @@ export async function runTritonAiOcr(
   try {
     const doc = await loadingTask.promise;
     const ocrItems: TextItem[] = [];
+    const pageWarnings: string[] = [];
 
     try {
       for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
-        const rendered = await renderPageToDataUrl({ doc, pageNumber });
-        const lines = await requestPageOcr({
-          imageDataUrl: rendered.imageDataUrl,
-          page: pageNumber,
-          documentName,
-          language: language ?? parsed.language
-        });
-        ocrItems.push(...pageOcrLinesToTextItems(lines, pageNumber, rendered.pageWidth, rendered.pageHeight));
+        try {
+          const rendered = await renderPageToDataUrl({ doc, pageNumber });
+          const result = await requestPageOcr({
+            imageDataUrl: rendered.imageDataUrl,
+            page: pageNumber,
+            documentName,
+            language: language ?? parsed.language
+          });
+          if (result.warning) {
+            pageWarnings.push(`Page ${pageNumber}: ${result.warning}`);
+          }
+          ocrItems.push(...pageOcrLinesToTextItems(result.lines, pageNumber, rendered.pageWidth, rendered.pageHeight));
+        } catch (error) {
+          pageWarnings.push(
+            `Page ${pageNumber}: ${error instanceof Error ? error.message : 'TritonAI OCR did not complete'}`
+          );
+        }
       }
     } finally {
       doc.cleanup();
@@ -158,7 +169,10 @@ export async function runTritonAiOcr(
       return {
         attempted: true,
         applied: false,
-        reason: `TritonAI OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`
+        reason: [
+          `TritonAI OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`,
+          pageWarnings.slice(0, 3).join('; ')
+        ].filter(Boolean).join(': ')
       };
     }
 
@@ -169,7 +183,8 @@ export async function runTritonAiOcr(
         ...parsed,
         language: parsed.language ?? language ?? 'en-US',
         textItems: [...parsed.textItems, ...ocrItems]
-      }
+      },
+      reason: pageWarnings.length > 0 ? pageWarnings.slice(0, 3).join('; ') : undefined
     };
   } catch (error) {
     return {

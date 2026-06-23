@@ -43,9 +43,31 @@ const categoryLabels: Record<ManualCustomElementCategory, string> = {
 const categoryOptions = Object.entries(categoryLabels) as Array<[ManualCustomElementCategory, string]>;
 
 function manualStatusLabel(remaining: number) {
-  if (remaining === 0) return 'No manual edits listed';
-  if (remaining === 1) return '1 manual edit left';
-  return `${remaining} manual edits left`;
+  if (remaining === 0) return 'Checklist complete';
+  if (remaining === 1) return '1 checklist item left';
+  return `${remaining} checklist items left`;
+}
+
+function readinessLabel(status: ReturnType<typeof getAccessibilityStatus>) {
+  if (status.status === 'accessible') return 'Ready for final review';
+  if (status.status === 'processing') return 'Still processing';
+  return 'Not ready yet';
+}
+
+function readinessMessage(status: ReturnType<typeof getAccessibilityStatus>) {
+  if (status.status === 'accessible') {
+    return 'The automated checks passed. Download the PDF and complete your normal final spot-check before publishing.';
+  }
+  if (status.status === 'processing') return status.message;
+  return 'The automated pass is complete, but this PDF still needs the checklist below before it can be published.';
+}
+
+function primaryReasonLabels(status: ReturnType<typeof getAccessibilityStatus>) {
+  return status.reasons
+    .filter((reason) =>
+      ['analysis-only', 'pending-revalidation', 'source-artifact', 'verification-unavailable'].includes(reason.code)
+    )
+    .map((reason) => reason.label);
 }
 
 const statusToneClasses: Record<ReturnType<typeof getAccessibilityStatus>['status'], string> = {
@@ -68,12 +90,15 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const [newItemNote, setNewItemNote] = useState('');
   const [suggestions, setSuggestions] = useState<Record<string, SuggestionState>>({});
   const [applyState, setApplyState] = useState<ApplyState>({ status: 'idle' });
+  const [showAddManualItem, setShowAddManualItem] = useState(false);
 
   const parsed = file?.remediatedParsedData ?? file?.parsedData;
   const sourceBytes = file?.remediatedParsedData ? file?.remediatedBytes ?? file?.uploadedBytes : file?.uploadedBytes;
   const completion = summarizeManualCompletion(file);
   const drafts = getManualReviewDrafts(file);
   const remaining = Math.max(completion.total - completion.completed, 0);
+  const manualStructureRequired = file?.remediationMode === 'analysis-only';
+  const manualStructureDone = Boolean(file?.workflowProgress?.structurePreparedAt);
   const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app';
 
   const imageEntries = useMemo(() => {
@@ -160,6 +185,12 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     updateAltTextDraft(fileId, imageId, { alt, decorative });
   }
 
+  function setManualStructureDone(done: boolean) {
+    markWorkflowProgress(fileId, {
+      structurePreparedAt: done ? file?.workflowProgress?.structurePreparedAt ?? new Date().toISOString() : undefined
+    });
+  }
+
   async function suggestAltText(entry: (typeof imageEntries)[number]) {
     if (!sourceBytes) {
       setSuggestions((state) => ({
@@ -227,6 +258,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     setNewItemTitle('');
     setNewItemCategory('structure');
     setNewItemNote('');
+    setShowAddManualItem(false);
   }
 
   if (!file) {
@@ -247,6 +279,20 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   }
 
   const accessibility = getAccessibilityStatus(file);
+  const prominentReasons = primaryReasonLabels(accessibility);
+  const hasSavedDescriptions = savedDescriptionDrafts.length > 0;
+  const nextStepTitle =
+    remaining > 0
+      ? 'Finish the manual checklist'
+      : hasSavedDescriptions
+        ? 'Download the PDF with descriptions'
+        : 'Download the updated PDF';
+  const nextStepDescription =
+    remaining > 0
+      ? 'Work through the checklist below. When it is complete, download the best available PDF and upload your revised file for a final check.'
+      : hasSavedDescriptions
+        ? 'Your image descriptions are saved. Download the PDF that includes them, then upload that revised file to check it again.'
+        : 'No manual checklist items are left in this browser. Download the updated PDF, then do your normal final review before publishing.';
 
   return (
     <div className="space-y-6">
@@ -256,19 +302,19 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
       </div>
 
       <section className={`rounded-lg border p-5 shadow-sm ${statusToneClasses[accessibility.status]}`}>
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">
-          Is this PDF ready to publish?
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Readiness</p>
+        <p className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{readinessLabel(accessibility)}</p>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+          {readinessMessage(accessibility)}
         </p>
-        <p className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{accessibility.label}</p>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">{accessibility.message}</p>
-        {accessibility.reasons.length > 0 ? (
+        {prominentReasons.length > 0 ? (
           <ul className="mt-3 flex flex-wrap gap-2">
-            {accessibility.reasons.map((reason) => (
+            {prominentReasons.map((reason) => (
               <li
-                key={reason.code}
-                className="inline-flex items-center rounded-full border border-[rgba(24,43,73,0.2)] bg-white px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-navy)]"
+                key={reason}
+                className="inline-flex items-center rounded-full border border-[rgba(24,43,73,0.2)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--ucsd-navy)]"
               >
-                {reason.label}
+                {reason}
               </li>
             ))}
           </ul>
@@ -302,27 +348,45 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
             OCR&rsquo;d file for a new check.
           </p>
         ) : null}
+        {accessibility.reasons.length > 0 ? (
+          <details className="mt-3 max-w-2xl text-sm text-[var(--ucsd-text)]">
+            <summary className="cursor-pointer font-semibold text-[var(--ucsd-navy)]">
+              Show automated check details
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {accessibility.reasons.map((reason) => (
+                <li key={`${reason.code}-${reason.label}`}>{reason.label}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </section>
 
       <section className="rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Next step</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">
-              {remaining > 0 ? 'Complete the manual edits below' : 'Download the updated PDF'}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-              {remaining > 0
-                ? 'Save descriptions, confirm tables, or add any missing manual tasks. When you are done, apply those edits to the PDF or source file and upload the revised PDF.'
-                : 'No manual edits are listed right now. Save the updated PDF, then do your normal final review before publishing.'}
-            </p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{nextStepTitle}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">{nextStepDescription}</p>
             <div className="mt-4 flex flex-wrap gap-3">
+              {remaining > 0 ? (
+                <a
+                  href="#manual-checklist"
+                  className="inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)]"
+                >
+                  Go to checklist
+                </a>
+              ) : null}
               {savedDescriptionDrafts.length > 0 ? (
                 <button
                   type="button"
                   onClick={applyDescriptionsAndDownload}
                   disabled={!file.remediatedBytes || applyState.status === 'working'}
-                  className="inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300"
+                  className={
+                    remaining === 0
+                      ? 'inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300'
+                      : 'inline-flex rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2.5 text-sm font-semibold text-[var(--ucsd-navy)] hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-gray-400'
+                  }
                 >
                   {applyState.status === 'working'
                     ? 'Embedding descriptions...'
@@ -334,7 +398,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 onClick={downloadUpdatedPdf}
                 disabled={!file.remediatedBytes}
                 className={
-                  savedDescriptionDrafts.length > 0
+                  remaining > 0 || savedDescriptionDrafts.length > 0
                     ? 'inline-flex rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2.5 text-sm font-semibold text-[var(--ucsd-navy)] hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-gray-400'
                     : 'inline-flex rounded-md bg-[var(--ucsd-blue)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300'
                 }
@@ -368,14 +432,16 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 {applyState.message}
               </p>
             ) : null}
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-              {savedDescriptionDrafts.length > 0
-                ? 'Image descriptions you saved below are embedded only when you use the "Download PDF with my descriptions" button. Table decisions and other manual edits still need Acrobat or the source document.'
-                : 'The download contains the automated fixes only. Descriptions and edits you draft below are saved in this browser as a worksheet — they are not added to the downloaded PDF until you use the embed option that appears after saving a description.'}
-            </p>
+            {remaining === 0 ? (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+                {savedDescriptionDrafts.length > 0
+                  ? 'Use the description download when you want the saved image descriptions embedded into the PDF. Table decisions and other manual edits still need Acrobat or the source document.'
+                  : 'This download contains the automated fixes the app could safely make.'}
+              </p>
+            ) : null}
           </div>
           <div className="rounded-md border border-[rgba(24,43,73,0.14)] bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-[var(--ucsd-navy)]">Progress</p>
+            <p className="text-sm font-semibold text-[var(--ucsd-navy)]">Manual checklist progress</p>
             <p className="mt-1 text-3xl font-semibold text-[var(--ucsd-navy)]">{completion.percent}%</p>
             <div
               className="mt-3 h-2 rounded-full bg-white"
@@ -392,30 +458,63 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm">
+      <section
+        id="manual-checklist"
+        className="space-y-4 rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm"
+      >
         <div>
-          <h2>Manual edits</h2>
+          <h2>Manual checklist</h2>
           <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-            Use this list to prepare anything the app could not safely finish automatically.
+            Complete each item that applies to this PDF. The progress meter updates as you save descriptions,
+            confirm tables, or mark manual tasks done.
           </p>
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p>
-              <span className="font-semibold">How these edits reach the PDF:</span>
+              <span className="font-semibold">How to finish:</span>
             </p>
             <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>Save image descriptions (or mark images decorative) below.</li>
+              <li>Save any image descriptions, or mark decorative images so screen readers can skip them.</li>
               <li>
-                Use <span className="font-semibold">Download PDF with my descriptions</span> above &mdash; the app
-                embeds them into the file as accessibility tags. Images it cannot tag safely are listed for follow-up
-                in Adobe Acrobat (Tags panel &rarr; Figure &rarr; Alt text).
+                If a document structure or table item appears, apply that fix in Acrobat, PAC, or the source file.
               </li>
               <li>
-                Table decisions and other manual edits stay a worksheet: apply those in Acrobat or the source
-                document, then upload the revised PDF above to confirm.
+                Download the best available PDF, make any desktop edits, then upload the revised PDF for validation.
               </li>
             </ol>
           </div>
         </div>
+
+        {manualStructureRequired ? (
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Document structure</h3>
+            <article
+              className={`rounded-md border p-3 ${
+                manualStructureDone ? 'border-green-200 bg-green-50' : 'border-[rgba(24,43,73,0.14)]'
+              }`}
+            >
+              <label className="flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={manualStructureDone}
+                  onChange={(event) => setManualStructureDone(event.target.checked)}
+                  className="mt-1 h-5 w-5"
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--ucsd-navy)]">
+                    Fix document structure in Acrobat or PAC
+                  </span>
+                  <span className="mt-1 block leading-relaxed text-[var(--ucsd-text)]">
+                    Add or repair the hidden tags that screen readers use, including heading order, reading order, and
+                    table structure. Check this only after you have made those edits in the PDF or source file.
+                  </span>
+                  <span className="mt-2 block text-xs font-semibold text-[var(--ucsd-text)]">
+                    {manualStructureDone ? 'Done' : 'Required before publishing'}
+                  </span>
+                </span>
+              </label>
+            </article>
+          </div>
+        ) : null}
 
         {imageEntries.length > 0 ? (
           <div className="space-y-3">
@@ -468,11 +567,12 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                         </p>
                       ) : null}
                       <div className="mt-3 flex items-center gap-2 text-sm text-[var(--ucsd-text)]">
-                        <label className="flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 py-1">
                           <input
                             type="checkbox"
                             checked={entry.draft.decorative}
                             onChange={(event) => saveAltText(entry.image.id, '', event.target.checked)}
+                            className="h-5 w-5"
                           />
                           Decorative image
                         </label>
@@ -539,13 +639,13 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         ) : null}
 
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Other manual edits</h3>
+          <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Other manual tasks</h3>
           {drafts.customElements.length > 0 ? (
             <div className="space-y-2">
               {drafts.customElements.map((item) => (
                 <article key={item.id} className="rounded-md border border-[rgba(24,43,73,0.14)] p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <label className="flex min-w-0 items-start gap-2 text-sm">
+                    <label className="flex min-w-0 cursor-pointer items-start gap-3 text-sm">
                       <input
                         type="checkbox"
                         checked={item.status === 'done'}
@@ -554,7 +654,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                             status: event.target.checked ? 'done' : 'todo'
                           })
                         }
-                        className="mt-1"
+                        className="mt-1 h-5 w-5"
                       />
                       <span>
                         <span className="block break-words font-semibold text-[var(--ucsd-navy)]">{item.title}</span>
@@ -579,54 +679,64 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
             </div>
           ) : (
             <p className="rounded-md border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3 text-sm text-[var(--ucsd-text)]">
-              No extra manual edits have been added.
+              No extra manual tasks have been added.
             </p>
           )}
 
-          <form onSubmit={addManualItem} className="grid gap-3 rounded-md border border-[rgba(24,43,73,0.14)] p-3 md:grid-cols-[minmax(0,1fr)_190px]">
-            <label className="text-sm font-semibold text-[var(--ucsd-navy)]">
-              Add manual edit
-              <input
-                value={newItemTitle}
-                onChange={(event) => setNewItemTitle(event.target.value)}
-                placeholder="Example: Fix reading order on page 2"
-                className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
-              />
-            </label>
-            <label className="text-sm font-semibold text-[var(--ucsd-navy)]">
-              Type
-              <select
-                value={newItemCategory}
-                onChange={(event) => setNewItemCategory(event.target.value as ManualCustomElementCategory)}
-                className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
-              >
-                {categoryOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-semibold text-[var(--ucsd-navy)] md:col-span-2">
-              Note
-              <textarea
-                value={newItemNote}
-                onChange={(event) => setNewItemNote(event.target.value)}
-                rows={2}
-                placeholder="Optional details"
-                className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
-              />
-            </label>
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                disabled={!newItemTitle.trim()}
-                className="rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300"
-              >
-                Add edit
-              </button>
-            </div>
-          </form>
+          <button
+            type="button"
+            onClick={() => setShowAddManualItem((value) => !value)}
+            className="rounded-md border border-[rgba(24,43,73,0.25)] px-4 py-2 text-sm font-semibold text-[var(--ucsd-navy)] hover:bg-slate-50"
+          >
+            {showAddManualItem ? 'Hide task form' : 'Add another task'}
+          </button>
+
+          {showAddManualItem ? (
+            <form onSubmit={addManualItem} className="grid gap-3 rounded-md border border-[rgba(24,43,73,0.14)] p-3 md:grid-cols-[minmax(0,1fr)_190px]">
+              <label className="text-sm font-semibold text-[var(--ucsd-navy)]">
+                Task
+                <input
+                  value={newItemTitle}
+                  onChange={(event) => setNewItemTitle(event.target.value)}
+                  placeholder="Example: Fix reading order on page 2"
+                  className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
+                />
+              </label>
+              <label className="text-sm font-semibold text-[var(--ucsd-navy)]">
+                Type
+                <select
+                  value={newItemCategory}
+                  onChange={(event) => setNewItemCategory(event.target.value as ManualCustomElementCategory)}
+                  className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
+                >
+                  {categoryOptions.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-semibold text-[var(--ucsd-navy)] md:col-span-2">
+                Note
+                <textarea
+                  value={newItemNote}
+                  onChange={(event) => setNewItemNote(event.target.value)}
+                  rows={2}
+                  placeholder="Optional details"
+                  className="mt-1 block w-full rounded-md border border-[rgba(24,43,73,0.2)] px-3 py-2 text-sm font-normal text-[var(--ucsd-text)]"
+                />
+              </label>
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={!newItemTitle.trim()}
+                  className="rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--ucsd-navy)] disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  Add task
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
       </section>
 

@@ -78,11 +78,17 @@ export function ManualCompletionTracker({ fileId, embedded = false }: { fileId: 
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded border border-[rgba(24,43,73,0.12)] p-3 text-sm">
           <p className="font-medium text-[var(--ucsd-navy)]">Alt text</p>
           <p className="mt-1 text-[var(--ucsd-text)]">
             {completion.altText.completed} of {completion.altText.total} images covered
+          </p>
+        </div>
+        <div className="rounded border border-[rgba(24,43,73,0.12)] p-3 text-sm">
+          <p className="font-medium text-[var(--ucsd-navy)]">Document structure</p>
+          <p className="mt-1 text-[var(--ucsd-text)]">
+            {completion.structure.completed} of {completion.structure.total} required fixes complete
           </p>
         </div>
         <div className="rounded border border-[rgba(24,43,73,0.12)] p-3 text-sm">
