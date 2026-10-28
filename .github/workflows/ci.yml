@@ -106,3 +106,15 @@ jobs:
               - 'services/ocrmypdf-worker/**'
       - if: steps.changes.outputs.worker == 'true'
         run: docker build -t ocrmypdf-worker services/ocrmypdf-worker
+      - if: steps.changes.outputs.worker == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - if: steps.changes.outputs.worker == 'true'
+        name: Worker tests
+        working-directory: services/ocrmypdf-worker
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          pip install -r requirements.txt httpx
+          python -m unittest discover -s tests -v

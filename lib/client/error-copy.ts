@@ -1,5 +1,5 @@
 import { StepTimeoutError, isAbortError } from '@/lib/client/deadline';
-import { ENCRYPTED_PDF_MESSAGE, EncryptedPdfError } from '@/lib/pdf/encryption';
+import { ENCRYPTED_PDF_MESSAGE, EncryptedPdfError } from '@/lib/pdf/pdf-errors';
 import type { ProcessingErrorCode } from '@/types/file-entry';
 
 export const INTERRUPTED_MESSAGE =
