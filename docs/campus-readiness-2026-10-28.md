@@ -73,7 +73,22 @@ university's assurance attached. This release makes the app honest first, then h
 
 ### Reliability (client)
 
-See the client section of the PR description; summarized in the release notes.
+- A file that crashes or hangs the tab no longer restarts on every visit: it comes back as "Processing was
+  interrupted" with Try again. Failed files can be retried without uploading again.
+- veraPDF is skipped (with a reason) for PDFs over 4.4 MB instead of failing three full passes; 413s, timeouts and
+  network errors stop the loop, a circuit breaker skips a down service, and the change fingerprint now works.
+- Storage-full no longer loses records; free space is checked before upload; `persist()` is asked once.
+- Remove aborts the running job (one AbortController per job, passed to every fetch); every step has a deadline;
+  TritonAI OCR stops on credential or configuration errors and honours `Retry-After`; OCR page coverage is recorded.
+- Error boundaries on every route.
+- Only one tab runs the queue (Web Locks), others stay in sync (BroadcastChannel).
+- 30-day expiry and "Clear all my files from this browser".
+- Plain-language card errors; amber "Done – needs your review" vs green "Done"; one queue live region; batch summary;
+  file names on repeated controls; focus management after Remove; named skipped files over the 10-file limit.
+- 300-page hard limit and a warning over 100 pages, checked before the expensive parse.
+- The served pdf.js worker is the legacy build matching the installed package (older Safari and Firefox), copied
+  before every dev and build.
+- Only the best remediation pass is kept in memory; unused worker files removed.
 
 ### Accessibility and UX of the app
 
@@ -84,6 +99,8 @@ See the client section of the PR description; summarized in the release notes.
 - Privacy and data-classification note on the upload page and next to AI suggestions.
 - Home and About pages rewritten to be honest and task-first; release notes collapsed.
 - The technical report is linked as "Technical report (for accessibility staff)" and agrees with the results page.
+- The browser suite now runs axe (WCAG 2.0–2.2 A/AA tags) on the home, About, upload, results and technical report
+  pages, so accessibility regressions in the app fail CI.
 
 ### Delivery
 
@@ -136,6 +153,8 @@ description helper.
 | Embedded Unicode font with ToUnicode for any generated text | M |
 | OCR with real bounding boxes (OCRmyPDF hOCR or Tesseract), artifact the page image under the OCR text, merge into an existing tag tree instead of replacing it | M |
 | Bold and font detection from real font names (pdf.js `commonObjs`) to improve heading detection | S |
+| Save without orphaned objects (each remediation pass currently grows the file by about 1.4 KB) | S |
+| A file that earlier versions of this app wrongly marked as PDF/UA keeps that claim on later passes; detect this app's own earlier claim and drop it | S |
 
 ### Phase 3: scale and performance
 

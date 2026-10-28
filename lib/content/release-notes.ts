@@ -8,6 +8,28 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-10-28-campus-readiness',
+    versionLabel: 'Release 2026.10.28',
+    deployedOn: 'October 28, 2026',
+    summary:
+      'An honesty and reliability release to prepare for campus-wide use: results never overstate what was fixed, processing survives reloads and large files, and the app is easier to use with a keyboard or screen reader.',
+    highlights: [
+      'The best result is now "Passed automated checks — a person still needs to review it". No automated tool can certify a PDF as accessible, and checks that could not run, such as color contrast, now hold that result back.',
+      'The updated PDF no longer gets a made-up title, author or subject, and no longer claims to meet the PDF/UA standard unless its own structure supports it. A missing title, or a language we had to assume, now appears on the checklist.',
+      'Untagged PDFs no longer get a hidden copy of their text that screen readers would read instead of the real page; the results explain how to export a tagged PDF from Word, PowerPoint or Google Docs instead.',
+      'Scores no longer rise for files that were not fixed, scanned pages are recognized even when the file has tags, and the checklist adds required items for unreadable scans and other serious problems, so it cannot reach 100% while one remains.',
+      'The results page shows what was fixed automatically, what is still left, and where to get help, with a technical report for accessibility staff.',
+      'Digitally signed PDFs are refused with an explanation, because changing them would invalidate the signature.',
+      'A file that was processing when the tab closed or crashed now shows "Processing was interrupted" with Try again, instead of restarting on every visit. Failed files can be retried, and files over 300 pages are refused with advice to split them.',
+      'PDFs too large for online verification are no longer sent three times; the results say to check them in PAC or Acrobat. Removing a file now stops its processing.',
+      'Only one browser tab processes files at a time, results stay safe when browser storage runs low, stored files expire after 30 days, and you can clear all your files from this browser.',
+      'Each page has its own title, focus moves to the page heading after navigation, there is a skip link, and screen readers hear when each file is ready or fails.',
+      'Error messages are in plain language, with technical details behind "Details for support". The upload page explains what leaves your browser and asks you not to upload restricted information.',
+      'The AI and OCR services now finish within their time limits, refuse oversized input, and no longer reveal configuration details in errors.',
+      'The app now has automated checks on every change, including accessibility tests of its own pages.'
+    ]
+  },
+  {
     id: '2026-10-27-code-review-fixes',
     versionLabel: 'Release 2026.10.27',
     deployedOn: 'October 27, 2026',
