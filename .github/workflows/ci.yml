@@ -87,6 +87,12 @@ jobs:
           LIVE_BASE_URL: ${{ inputs.live_base_url || 'http://127.0.0.1:3000' }}
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.live_base_url }}
+        with:
+          name: live-walkthrough
+          path: test-results/walkthrough/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces
