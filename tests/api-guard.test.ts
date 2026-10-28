@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { assertServiceUrlSafe, guardApiRequest, upstreamErrorStatus } from '@/lib/rate-limit';
+import {
+  assertServiceUrlSafe,
+  getRequestIdentity,
+  guardApiRequest,
+  MAX_RATE_LIMIT_ENTRIES,
+  rateLimit,
+  rateLimitEntryCountForTests,
+  resolveClientIp,
+  upstreamErrorStatus
+} from '@/lib/rate-limit';
 import { POST as altTextPost } from '@/app/api/alt-text/route';
 
 function request(headers: Record<string, string> = {}) {
@@ -29,6 +38,64 @@ describe('guardApiRequest', () => {
     expect(guardApiRequest(make(), 'route-a', 1, 60_000)).toBeUndefined();
     expect(guardApiRequest(make(), 'route-a', 1, 60_000)?.status).toBe(429);
     expect(guardApiRequest(make(), 'route-b', 1, 60_000)).toBeUndefined();
+  });
+});
+
+describe('guardApiRequest without Sec-Fetch-Site', () => {
+  it('falls back to comparing Origin with the request host', async () => {
+    const crossOrigin = guardApiRequest(request({ origin: 'https://evil.example' }), 'origin', 5, 60_000);
+    expect(crossOrigin?.status).toBe(403);
+    expect((await crossOrigin?.json())?.code).toBe('cross_site');
+
+    expect(guardApiRequest(request({ origin: 'null' }), 'origin', 5, 60_000)?.status).toBe(403);
+    expect(guardApiRequest(request({ origin: 'https://example.test' }), 'origin', 5, 60_000)).toBeUndefined();
+    expect(
+      guardApiRequest(request({ origin: 'https://pdf.ucsd.edu', host: 'pdf.ucsd.edu' }), 'origin', 5, 60_000)
+    ).toBeUndefined();
+  });
+
+  it('trusts Sec-Fetch-Site over Origin when both are present', () => {
+    expect(
+      guardApiRequest(request({ 'sec-fetch-site': 'same-origin', origin: 'https://example.test' }), 'origin', 5, 60_000)
+    ).toBeUndefined();
+  });
+});
+
+describe('rate limiter', () => {
+  it('returns a rate_limited code with Retry-After', async () => {
+    const ip = crypto.randomUUID();
+    guardApiRequest(request({ 'x-forwarded-for': ip }), 'code', 1, 60_000);
+    const refused = guardApiRequest(request({ 'x-forwarded-for': ip }), 'code', 1, 60_000);
+    expect(refused?.status).toBe(429);
+    expect(refused?.headers.get('retry-after')).toBeTruthy();
+    expect((await refused?.json())?.code).toBe('rate_limited');
+  });
+
+  it('caps the number of tracked clients, evicting the oldest', () => {
+    const first = `first-${crypto.randomUUID()}`;
+    rateLimit(first, 1, 60_000);
+    expect(rateLimit(first, 1, 60_000).allowed).toBe(false);
+
+    for (let i = 0; i < MAX_RATE_LIMIT_ENTRIES + 50; i += 1) {
+      rateLimit(`flood-${i}`, 1, 60_000);
+    }
+    expect(rateLimitEntryCountForTests()).toBeLessThanOrEqual(MAX_RATE_LIMIT_ENTRIES);
+    // The oldest key was evicted, so it starts a fresh window.
+    expect(rateLimit(first, 1, 60_000).allowed).toBe(true);
+  });
+});
+
+describe('resolveClientIp', () => {
+  it('prefers the Vercel-set headers over X-Forwarded-For', () => {
+    const headers = { 'x-forwarded-for': '6.6.6.6', 'x-real-ip': '2.2.2.2', 'x-vercel-forwarded-for': '1.1.1.1' };
+    expect(resolveClientIp(new Request('https://example.test', { headers }))).toBe('1.1.1.1');
+    expect(
+      resolveClientIp(new Request('https://example.test', { headers: { 'x-forwarded-for': '6.6.6.6', 'x-real-ip': '2.2.2.2' } }))
+    ).toBe('2.2.2.2');
+    expect(resolveClientIp(new Request('https://example.test', { headers: { 'x-forwarded-for': '6.6.6.6, 7.7.7.7' } }))).toBe(
+      '6.6.6.6'
+    );
+    expect(getRequestIdentity(new Request('https://example.test'))).toBe('ip:unknown');
   });
 });
 
