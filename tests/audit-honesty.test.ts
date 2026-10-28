@@ -91,6 +91,14 @@ describe('scanned detection (DOC-004)', () => {
     expect(isLikelyScannedPdf(parsed)).toBe(false);
   });
 
+  it('does not flag a tagged poster whose full-page images are described or decorative', () => {
+    const images = [
+      { ...fullPageScan(1), alt: 'Poster: Fall Welcome Week, September 20 to 26, Price Center.' },
+      { ...fullPageScan(2), decorative: true }
+    ];
+    expect(isLikelyScannedPdf(base({ pageCount: 2, pageBoxes, textItems: [], images }))).toBe(false);
+  });
+
   it('does not flag a born-digital page with a small logo', () => {
     const parsed = base({ pageBoxes: pageBoxes.slice(0, 1), images: [{ id: 'img-1-1', page: 1, x: 72, y: 720, width: 60, height: 40 }] });
     expect(isLikelyScannedPdf(parsed)).toBe(false);

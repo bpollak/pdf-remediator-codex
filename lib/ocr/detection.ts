@@ -38,6 +38,9 @@ function imageCoverageByPage(parsed: ParsedPDF): number[] {
   const boxes = parsed.pageBoxes ?? [];
   const covered = boxes.map(() => 0);
   for (const image of parsed.images) {
+    // A described or decorative image is tagged content (a poster, a flyer,
+    // a cover), not a scanned page; OCR would replace its tags.
+    if (image.alt?.trim() || image.decorative) continue;
     const box = boxes[image.page - 1];
     if (!box || box.width <= 0 || box.height <= 0) continue;
     const width = Math.min(image.x + image.width, box.x + box.width) - Math.max(image.x, box.x);
