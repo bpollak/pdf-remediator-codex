@@ -1,4 +1,4 @@
 fastapi==0.115.6
 ocrmypdf==16.13.0
-python-multipart==0.0.20
+python-multipart==0.0.32
 uvicorn[standard]==0.32.1
