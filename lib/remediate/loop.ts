@@ -1,3 +1,4 @@
+import type { ParsedPDF } from '@/lib/pdf/types';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
@@ -47,17 +48,53 @@ export function computeFailureScore(result?: VerapdfResult): number | undefined 
   return undefined;
 }
 
+/** FNV-1a over every byte (not a sample), prefixed with the length. */
 export function createByteFingerprint(bytes: ArrayBuffer): string {
   const view = new Uint8Array(bytes);
   let hash = 2166136261;
-  const step = Math.max(1, Math.floor(view.length / 256));
 
-  for (let i = 0; i < view.length; i += step) {
+  for (let i = 0; i < view.length; i += 1) {
     hash ^= view[i]!;
     hash = Math.imul(hash, 16777619);
   }
 
   return `${view.length}:${hash >>> 0}`;
+}
+
+// Every pass stamps a new modification date, so dates must not count as a change.
+const VOLATILE_METADATA_KEY = /date/i;
+// pdf.js names fonts per loaded document (g_d3_f1, g_d4_f1, ...).
+const PDFJS_DOCUMENT_FONT_PREFIX = /^g_d\d+_/;
+
+function stableRemediationContent(parsed: ParsedPDF): string {
+  const metadata = Object.fromEntries(
+    Object.entries(parsed.metadata ?? {})
+      .filter(([key]) => !VOLATILE_METADATA_KEY.test(key))
+      .sort(([a], [b]) => a.localeCompare(b))
+  );
+  return JSON.stringify({ ...parsed, metadata }, (key, value: unknown) =>
+    key === 'fontName' && typeof value === 'string' ? value.replace(PDFJS_DOCUMENT_FONT_PREFIX, '') : value
+  );
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Fingerprint what a remediation pass produced: the re-parsed text, tags,
+ * structure, images, links, forms and metadata, ignoring the modification
+ * dates that change on every pass. The raw bytes can't be compared because
+ * pdf-lib compresses the dated Info dictionary into an object stream.
+ * Equal fingerprints on consecutive passes mean another pass won't help.
+ */
+export async function createRemediationFingerprint(parsed: ParsedPDF): Promise<string> {
+  const data = new TextEncoder().encode(stableRemediationContent(parsed));
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    return `sha256:${toHex(await subtle.digest('SHA-256', data))}`;
+  }
+  return createByteFingerprint(data.buffer as ArrayBuffer);
 }
 
 export function decideRemediationLoop(input: RemediationLoopDecisionInput): RemediationLoopDecision {
