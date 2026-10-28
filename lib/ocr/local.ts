@@ -2,8 +2,12 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { ParsedPDF, TextItem } from '@/lib/pdf/types';
 import { ensurePdfJsWorkerConfigured } from '@/lib/pdf/configure-worker';
 import { mapToTesseractLang } from './language';
+import { createAbortError, throwIfAborted, withDeadline } from '@/lib/client/deadline';
 
-const LOCAL_OCR_MAX_PAGES = 8;
+export const LOCAL_OCR_MAX_PAGES = 8;
+// Starting tesseract downloads its core and language data (several MB) first.
+export const LOCAL_OCR_SETUP_TIMEOUT_MS = 90_000;
+export const LOCAL_OCR_PAGE_TIMEOUT_MS = 60_000;
 const LOCAL_OCR_SCALE = 1.6;
 const LOCAL_OCR_MIN_CONFIDENCE = 35;
 
@@ -68,11 +72,29 @@ export interface LocalOcrResult {
   applied: boolean;
   parsed?: ParsedPDF;
   reason?: string;
+  /** Pages tesseract recognized. */
+  pagesProcessed: number;
+  totalPages: number;
 }
 
-export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, language?: string): Promise<LocalOcrResult> {
+export interface LocalOcrOptions {
+  signal?: AbortSignal;
+  setupTimeoutMs?: number;
+  pageTimeoutMs?: number;
+}
+
+type TesseractWorker = Awaited<ReturnType<typeof import('tesseract.js')['createWorker']>>;
+
+export async function runLocalOcr(
+  parsed: ParsedPDF,
+  sourceBytes: ArrayBuffer,
+  language?: string,
+  options: LocalOcrOptions = {}
+): Promise<LocalOcrResult> {
+  const { signal, setupTimeoutMs = LOCAL_OCR_SETUP_TIMEOUT_MS, pageTimeoutMs = LOCAL_OCR_PAGE_TIMEOUT_MS } = options;
+  const totalPages = parsed.pageCount;
   if (typeof window === 'undefined') {
-    return { attempted: false, applied: false, reason: 'Local OCR only runs in browser context' };
+    return { attempted: false, applied: false, reason: 'Local OCR only runs in browser context', pagesProcessed: 0, totalPages };
   }
 
   ensurePdfJsWorkerConfigured();
@@ -80,18 +102,28 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
   const pageLimit = Math.max(1, Math.min(parsed.pageCount, LOCAL_OCR_MAX_PAGES));
   const tesseractLang = mapToTesseractLang(language ?? parsed.language);
 
-  try {
-    const loadingTask = getDocument({ data: sourceBytes.slice(0) });
+  let pagesProcessed = 0;
+  const loadingTask = getDocument({ data: sourceBytes.slice(0) });
 
-    const [{ createWorker }, doc] = await Promise.all([
-      import('tesseract.js'),
-      loadingTask.promise
-    ]);
-    const worker = await createWorker(tesseractLang);
+  try {
+    const [{ createWorker }, doc] = await withDeadline(
+      Promise.all([import('tesseract.js'), loadingTask.promise]),
+      { step: 'Loading OCR', timeoutMs: setupTimeoutMs, signal }
+    );
+    const workerPromise = createWorker(tesseractLang);
+    let worker: TesseractWorker;
+    try {
+      worker = await withDeadline(workerPromise, { step: 'Starting OCR', timeoutMs: setupTimeoutMs, signal });
+    } catch (error) {
+      // The worker may still start after we gave up; shut it down when it does.
+      workerPromise.then((late) => late.terminate()).catch(() => undefined);
+      throw error;
+    }
     const ocrItems: TextItem[] = [];
 
     try {
       for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+        throwIfAborted(signal);
         const page = await doc.getPage(pageNumber);
 
         try {
@@ -105,7 +137,12 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
             if (!context) continue;
 
             await page.render({ canvasContext: context, viewport }).promise;
-            const recognition = (await worker.recognize(canvas)) as OcrRecognitionLike;
+            const recognition = (await withDeadline(worker.recognize(canvas), {
+              step: `OCR of page ${pageNumber}`,
+              timeoutMs: pageTimeoutMs,
+              signal
+            })) as OcrRecognitionLike;
+            pagesProcessed += 1;
             const lines = recognition.data?.lines ?? [];
 
             for (const line of lines) {
@@ -121,9 +158,9 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
         }
       }
     } finally {
-      await worker.terminate();
+      // Terminating also stops a recognize() that ran past its deadline.
+      await worker.terminate().catch(() => undefined);
       doc.cleanup();
-      await loadingTask.destroy().catch(() => undefined);
     }
 
     // Scale minimum text threshold by pages processed — a single-page scan
@@ -133,7 +170,9 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
       return {
         attempted: true,
         applied: false,
-        reason: `Local OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`
+        reason: `Local OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`,
+        pagesProcessed,
+        totalPages
       };
     }
 
@@ -144,13 +183,20 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
         ...parsed,
         language: parsed.language ?? language ?? 'en-US',
         textItems: [...parsed.textItems, ...ocrItems]
-      }
+      },
+      pagesProcessed,
+      totalPages
     };
   } catch (error) {
+    if (signal?.aborted) throw createAbortError();
     return {
       attempted: true,
       applied: false,
-      reason: error instanceof Error ? error.message : 'Unknown local OCR error'
+      reason: error instanceof Error ? error.message : 'Unknown local OCR error',
+      pagesProcessed,
+      totalPages
     };
+  } finally {
+    await loadingTask.destroy().catch(() => undefined);
   }
 }

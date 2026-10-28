@@ -35,6 +35,18 @@ export interface OcrResult {
   reason?: string;
 }
 
+/**
+ * 503 means "not configured" on older servers (no code) and when the code says
+ * so; with code upstream_error the worker is only busy, so don't start the
+ * long cooldown.
+ */
+async function isLongOutage(response: Response): Promise<boolean> {
+  if (response.status !== 503) return true;
+  const payload = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
+  const code = typeof payload?.code === 'string' ? payload.code : undefined;
+  return code === undefined || code === 'not_configured';
+}
+
 async function attemptOcrFetch(formData: FormData, signal: AbortSignal): Promise<Response> {
   return fetch(OCR_API_PATH, {
     method: 'POST',
@@ -72,7 +84,7 @@ export async function runOcrViaApi(bytes: ArrayBuffer, fileName: string, languag
       if (!response.ok) {
         lastReason = summarizeError(response.status);
         if (isServiceUnavailable(response.status)) {
-          markServiceUnavailable();
+          if (await isLongOutage(response)) markServiceUnavailable();
           return { attempted: true, reason: lastReason };
         }
         if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_RETRIES) {
