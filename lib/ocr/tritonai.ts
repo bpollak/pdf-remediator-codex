@@ -96,7 +96,9 @@ async function requestPageOcr(input: {
   const response = await fetch(TRITON_OCR_API_PATH, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
+    // The server route tries up to three models within its 120 s limit.
+    signal: AbortSignal.timeout(130_000)
   });
   const payload = (await response.json().catch(() => ({}))) as TritonOcrResponse;
 

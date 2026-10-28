@@ -99,7 +99,8 @@ export function FileCard({ file }: { file: FileEntry }) {
   const isLongRunning = useIsLongRunning(file);
   const sourceFile = file.derivedFromFileId ? files.find((entry) => entry.id === file.derivedFromFileId) : undefined;
   const canViewResults = file.status === 'remediated';
-  const canRemove = isSettledStatus(file.status);
+  // Removing a file mid-run cancels it: the queue drops the job at its next step.
+  const canRemove = true;
   const isWorking = isWorkingStatus(file.status);
   const descendantIds = collectDescendantFileIds(files, file.id);
   const descendantIdSet = new Set(descendantIds);
@@ -112,7 +113,7 @@ export function FileCard({ file }: { file: FileEntry }) {
         ? ` and ${descendantFiles.length} linked revised upload${descendantFiles.length === 1 ? '' : 's'}`
         : '';
     const confirmed = window.confirm(
-      `Remove "${file.name}"${linkedUploadLabel} from this browser? This deletes the saved upload and review data from the Upload PDF list on this device.`
+      `${isWorking ? 'Stop processing and remove' : 'Remove'} "${file.name}"${linkedUploadLabel} from this browser? This deletes the saved upload and review data from the Upload PDF list on this device.`
     );
 
     if (!confirmed) return;
@@ -170,6 +171,11 @@ export function FileCard({ file }: { file: FileEntry }) {
       ) : null}
 
       {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
+      {file.persistError ? (
+        <p className="mt-2 text-sm text-red-700" role="alert">
+          {file.persistError}
+        </p>
+      ) : null}
       {canViewResults || canRemove ? (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {canViewResults ? (
@@ -195,7 +201,7 @@ export function FileCard({ file }: { file: FileEntry }) {
                   : 'border-red-200 text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2'
               }`}
             >
-              Remove from list
+              {isWorking ? 'Cancel and remove' : 'Remove from list'}
             </button>
           ) : null}
         </div>

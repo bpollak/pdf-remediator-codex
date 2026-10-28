@@ -54,7 +54,10 @@ export interface WorkflowProgress {
   downloadedAt?: string;
   reviewedAt?: string;
   altTextPreparedAt?: string;
+  /** Set when manual structure drafts (tables, headings) change. */
   structurePreparedAt?: string;
+  /** Set only when the user ticks "Fix document structure in Acrobat or PAC" as done. */
+  structureConfirmedAt?: string;
 }
 
 export interface FileEntry {
@@ -69,6 +72,8 @@ export interface FileEntry {
   progress: number;
   /** Set when processing starts; not persisted. Used to surface long-running-work hints. */
   processingStartedAt?: string;
+  /** Set when saving to browser storage fails; not persisted. */
+  persistError?: string;
   ocrAttempted?: boolean;
   ocrApplied?: boolean;
   ocrReason?: string;
