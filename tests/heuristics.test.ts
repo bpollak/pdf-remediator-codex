@@ -77,15 +77,19 @@ describe('detectHeadings', () => {
   });
 
   it('rejects items that look like list items', () => {
+    // Bullets are never headings; numbered items at body size are list items.
+    // (Numbered text set clearly larger than body text is a numbered heading,
+    // covered in heuristics-headings.test.ts.)
     const parsed = makeParsed({
       textItems: [
-        makeTextItem({ text: '1. First item in a list', fontSize: 18, bold: true, y: 700 }),
+        makeTextItem({ text: '\u2022 First item in a list', fontSize: 18, bold: true, y: 700 }),
+        makeTextItem({ text: '1. Second item in a list', fontSize: 12, bold: true, y: 680 }),
         makeTextItem({ text: 'Normal body text', fontSize: 12, y: 650 }),
         makeTextItem({ text: 'Normal body text again', fontSize: 12, y: 600 })
       ]
     });
     const headings = detectHeadings(parsed);
-    expect(headings.every((h) => !h.text.startsWith('1.'))).toBe(true);
+    expect(headings.every((h) => !h.text.startsWith('1.') && !h.text.startsWith('\u2022'))).toBe(true);
   });
 
   it('rejects very long text items as headings', () => {
