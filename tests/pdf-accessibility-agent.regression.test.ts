@@ -14,7 +14,7 @@ const FIXTURES = {
 } as const;
 
 function fixturePath(name: string): string {
-  return resolve(process.cwd(), 'public', name);
+  return resolve(process.cwd(), 'fixtures', 'regression', name);
 }
 
 async function loadFixtureBytes(name: string): Promise<ArrayBuffer> {

@@ -10,7 +10,7 @@ const scannedFixtures = ['scansmpl.pdf', 'Naac_appLetter-scanned.pdf'] as const;
 const allFixtures = [...scannedFixtures] as const;
 
 async function loadPdfBytes(fileName: string): Promise<ArrayBuffer> {
-  const filePath = resolve(process.cwd(), 'public', fileName);
+  const filePath = resolve(process.cwd(), 'fixtures', 'regression', fileName);
   const sourceBuffer = await readFile(filePath);
   return sourceBuffer.buffer.slice(sourceBuffer.byteOffset, sourceBuffer.byteOffset + sourceBuffer.byteLength);
 }
