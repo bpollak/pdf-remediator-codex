@@ -54,10 +54,14 @@ LIVE_BASE_URL=http://127.0.0.1:3000 npm run test:e2e
 ```
 
 CI (`.github/workflows/ci.yml`) runs all of these on every pull request and push to `main`, plus a Docker build and
-the unit tests of the OCR worker when it changes. After each push to `main`, `.github/workflows/post-deploy.yml` waits
-until production reports that commit from `/api/health`, then runs the browser suite (regression, axe and a visual
-walkthrough) against the live site; the walkthrough screenshots are published to the `qa/live-walkthrough` branch. CI needs no secrets: the AI and veraPDF services stay unconfigured and their "not
-configured" paths are tested.
+the unit tests of the OCR worker when it changes. CI itself needs no secrets: the AI and veraPDF services stay
+unconfigured and their "not configured" paths are tested.
+
+After CI succeeds on `main`, `.github/workflows/post-deploy.yml` deploys that commit to Vercel production with the
+Vercel CLI (when the `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` repository secrets are set; otherwise it
+relies on Vercel's GitHub integration), waits until production reports that commit from `/api/health`, then runs the
+browser suite (regression, axe and a visual walkthrough) against the live site. The walkthrough screenshots are
+published to the `qa/live-walkthrough` branch.
 
 ## How processing works
 

@@ -1,14 +1,21 @@
 name: Post-deploy checks
 
-# After each push to main: wait until production serves that exact commit
-# (proving Vercel deployed it), then run the browser suite against the live
-# site, including the axe checks and the visual walkthrough. The walkthrough
-# screenshots are uploaded as an artifact and also published to the
-# qa/live-walkthrough branch (overwritten on every run), so they can be
-# reviewed from environments that cannot download artifacts.
+# Runs after CI succeeds on main.
+#
+# 1. Deploys that commit to Vercel production with the Vercel CLI, when the
+#    VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID repository secrets are
+#    set. Without them it relies on Vercel's GitHub integration.
+# 2. Waits until production's /api/health reports that exact commit, so a
+#    push that never reached production fails loudly.
+# 3. Runs the browser suite against the live site (regression, axe checks and
+#    the visual walkthrough). Screenshots are uploaded as an artifact and also
+#    published to the qa/live-walkthrough branch (overwritten each run), so
+#    they can be reviewed from environments that cannot download artifacts.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -24,34 +31,63 @@ env:
 
 jobs:
   live:
-    name: Live production checks
+    name: Deploy and check production
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     permissions:
       contents: write
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v5
-      - name: Wait for production to serve this commit
-        run: |
-          expected="${GITHUB_SHA::7}"
-          for i in $(seq 1 60); do
-            body=$(curl -sS --max-time 15 "$PRODUCTION_URL/api/health" || true)
-            version=$(echo "$body" | sed -n 's/.*"version":"\([0-9a-f]*\)".*/\1/p')
-            if [ "$version" = "$expected" ]; then
-              echo "Production is serving $expected: $body"
-              exit 0
-            fi
-            echo "Waiting for $expected (production reports '${version:-unknown}')"
-            sleep 15
-          done
-          echo "::error::Production did not start serving $expected within 15 minutes. Check that the Vercel GitHub integration deployed this push."
-          exit 1
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+
+      - name: Deploy to Vercel production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "Vercel secrets are not set; relying on the Vercel GitHub integration to deploy $DEPLOY_SHA."
+            exit 0
+          fi
+          npm ci
+          export GITHUB_SHA="$DEPLOY_SHA"
+          npx --yes vercel@63.1.2 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@63.1.2 build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@63.1.2 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Wait for production to serve this commit
+        run: |
+          expected="${DEPLOY_SHA::7}"
+          for i in $(seq 1 60); do
+            status=$(curl -sS -o health.json -w '%{http_code}' --max-time 15 "$PRODUCTION_URL/api/health" || echo 000)
+            version=$(sed -n 's/.*"version":"\([0-9a-f]*\)".*/\1/p' health.json 2>/dev/null)
+            if [ "$version" = "$expected" ]; then
+              echo "Production is serving $expected: $(cat health.json)"
+              exit 0
+            fi
+            if [ "$status" = "404" ]; then
+              echo "Waiting for $expected (production has no /api/health yet, so it runs a release from before October 28)"
+            else
+              echo "Waiting for $expected (HTTP $status, production reports '${version:-no version}')"
+            fi
+            sleep 15
+          done
+          echo "::error::Production did not start serving $expected within 15 minutes. Add the VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID secrets, or check that the Vercel GitHub integration deploys pushes to main."
+          exit 1
+
+      - name: Install browser test dependencies
+        run: |
+          [ -d node_modules ] || npm ci
+          npx playwright install --with-deps chromium
       - name: Browser suite against production
         env:
           LIVE_BASE_URL: ${{ env.PRODUCTION_URL }}
@@ -68,11 +104,11 @@ jobs:
           [ -d test-results/walkthrough ] || exit 0
           out=$(mktemp -d)
           cp -r test-results/walkthrough/. "$out/"
-          echo "Production checks for ${GITHUB_SHA} (${{ job.status }}), run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > "$out/README.md"
+          echo "Production checks for ${DEPLOY_SHA} (${{ job.status }}), run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > "$out/README.md"
           cd "$out"
           git init -q -b qa/live-walkthrough
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "Live walkthrough for ${GITHUB_SHA::7}"
+          git commit -q -m "Live walkthrough for ${DEPLOY_SHA::7}"
           git push -q --force "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:qa/live-walkthrough

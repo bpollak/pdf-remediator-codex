@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     process.env.VERAPDF_SERVICE_URL?.trim() ||
     // The veraPDF route falls back to a local container in development.
     (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8081' : undefined);
-  const version = process.env.VERCEL_GIT_COMMIT_SHA?.trim().slice(0, 7);
+  const version = (process.env.APP_COMMIT_SHA?.trim() || process.env.VERCEL_GIT_COMMIT_SHA?.trim())?.slice(0, 7);
 
   log.finish({ status: 200 });
   return Response.json(
