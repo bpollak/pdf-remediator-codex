@@ -24,7 +24,7 @@ export function ComplianceScore({
       : score > 85
       ? 'text-[var(--ucsd-blue)]'
       : score >= 50
-        ? 'text-[var(--ucsd-gold)]'
+        ? 'text-amber-800'
         : 'text-[var(--ucsd-navy)]';
 
   const label =

@@ -279,11 +279,21 @@ describe('manual review utilities', () => {
     });
   });
 
-  it('marks analysis-only structure complete when the workflow has been prepared', () => {
+  it('does not mark analysis-only structure complete just because structure drafts changed', () => {
+    const file = makeFile({
+      remediationMode: 'analysis-only',
+      workflowProgress: { structurePreparedAt: '2026-03-06T10:05:00.000Z' }
+    });
+
+    expect(summarizeManualCompletion(file)).toMatchObject({ structure: { total: 1, completed: 0 } });
+  });
+
+  it('marks analysis-only structure complete when the user confirms it', () => {
     const file = makeFile({
       remediationMode: 'analysis-only',
       workflowProgress: {
-        structurePreparedAt: '2026-03-06T10:05:00.000Z'
+        structurePreparedAt: '2026-03-06T10:05:00.000Z',
+        structureConfirmedAt: '2026-03-06T10:06:00.000Z'
       },
       manualReviewDrafts: {
         altText: {

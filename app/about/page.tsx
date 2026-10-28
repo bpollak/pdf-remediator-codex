@@ -57,7 +57,7 @@ export default function AboutPage() {
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
           <li>Fast first-pass remediation of common PDF accessibility issues.</li>
           <li>Identifying where manual edits are still required before publication.</li>
-          <li>Reviewing updated output and QA evidence before handoff to Acrobat or PAC.</li>
+          <li>Reviewing the updated output and the remaining manual checklist before handoff to Acrobat or PAC.</li>
           <li>Reducing remediation effort while keeping humans in control of final compliance decisions.</li>
         </ul>
       </section>
@@ -84,8 +84,8 @@ export default function AboutPage() {
             <strong>Fix what it can safely</strong> &mdash; Applies supported automatic fixes and builds an updated PDF.
           </li>
           <li>
-            <strong>Check again and compare</strong> &mdash; Runs the checks again and shows before/after
-            results side by side.
+            <strong>Check again</strong> &mdash; Runs the checks again on the updated PDF and shows what still
+            needs manual work.
           </li>
           <li>
             <strong>Set remediation mode</strong> &mdash; Marks output as <em>content-bound</em> when structural bindings
@@ -159,7 +159,7 @@ export default function AboutPage() {
           <li>If a PDF-native OCR backend is configured, the file may also be sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
           <li>If configured OCR services are unavailable, local OCR fallback can run in your browser using Tesseract.</li>
           <li>If veraPDF verification is enabled, the remediated PDF is sent through <code>/api/verapdf</code> and forwarded to the configured veraPDF service.</li>
-          <li>When you export a remediated PDF, worksheet, or evidence pack, it is downloaded locally to your device.</li>
+          <li>When you download the updated PDF, it is saved locally to your device.</li>
         </ul>
       </section>
 

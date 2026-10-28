@@ -171,7 +171,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
                 {category}
               </span>
               {count > 0 && (
-                <span className="ml-auto text-xs text-gray-400">
+                <span className="ml-auto text-xs text-gray-600">
                   {count} {count === 1 ? 'issue' : 'issues'}
                 </span>
               )}
