@@ -7,6 +7,33 @@ interface HeadingCandidate {
   page: number;
 }
 
+/** A heading together with the text item it came from (index into parsed.textItems). */
+export interface HeadingItem extends HeadingCandidate {
+  index: number;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
+export interface ParagraphBlock {
+  text: string;
+  page: number;
+  /** Index (into parsed.textItems) of the first line of the paragraph. */
+  index: number;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
+export interface DetectParagraphsOptions {
+  /** Text item indices that belong to other roles (headings); they break paragraphs and are never merged in. */
+  excludeIndices?: ReadonlySet<number>;
+  /** Maximum number of paragraphs returned (default 400). */
+  limit?: number;
+}
+
+const BULLET_PATTERN = /^[\u2022\-*]\s+/;
+
 export interface DetectedTable {
   page: number;
   rows: Array<{
@@ -44,33 +71,43 @@ function toHeadingLevel(fontSize: number, rankedSizes: number[]): number {
   return idx >= 0 ? Math.min(6, idx + 1) : 6;
 }
 
-function normalizeHeadingLevels(headings: HeadingCandidate[]): HeadingCandidate[] {
-  const normalized: HeadingCandidate[] = [];
-  let previousLevel = 1;
+/**
+ * Returns a function mapping source heading levels (in reading order) to
+ * normalized levels with no skipped levels. A stack of (source level ->
+ * normalized level) keeps siblings as siblings: H1 H3 H3 H3 becomes
+ * H1 H2 H2 H2, not H1 H2 H3 H3. The first heading is always level 1.
+ */
+export function createHeadingLevelNormalizer(): (sourceLevel: number) => number {
+  const stack: Array<{ source: number; normalized: number }> = [];
 
-  for (let i = 0; i < headings.length; i += 1) {
-    const heading = headings[i]!;
-    let level = heading.level;
-    if (i === 0) {
-      level = 1;
-    } else if (level > previousLevel + 1) {
-      level = previousLevel + 1;
-    }
+  return (sourceLevel: number) => {
+    const source = Math.max(1, Math.min(6, Math.round(sourceLevel)));
+    while (stack.length > 0 && stack[stack.length - 1]!.source > source) stack.pop();
 
-    previousLevel = Math.max(1, Math.min(6, level));
-    normalized.push({ ...heading, level: previousLevel });
-  }
+    const top = stack[stack.length - 1];
+    if (top && top.source === source) return top.normalized;
 
-  return normalized;
+    const normalized = top ? Math.min(6, top.normalized + 1) : 1;
+    stack.push({ source, normalized });
+    return normalized;
+  };
+}
+
+function normalizeHeadingLevels<T extends HeadingCandidate>(headings: T[]): T[] {
+  const normalize = createHeadingLevelNormalizer();
+  return headings.map((heading) => ({ ...heading, level: normalize(heading.level) }));
 }
 
 function cleanHeadingText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-function looksLikeHeadingText(text: string): boolean {
+function looksLikeHeadingText(text: string, allowNumbered: boolean): boolean {
   if (!text || text.length > 110) return false;
-  if (LIST_ITEM_PATTERN.test(text)) return false;
+  if (BULLET_PATTERN.test(text)) return false;
+  // "1. Introduction" is a numbered heading when set clearly larger than
+  // body text; at body size the same pattern is a list item.
+  if (LIST_ITEM_PATTERN.test(text) && !allowNumbered) return false;
   if (/^[\d.\s]+$/.test(text)) return false;
 
   const alphaChars = (text.match(/[A-Za-z]/g) ?? []).length;
@@ -79,9 +116,9 @@ function looksLikeHeadingText(text: string): boolean {
   return true;
 }
 
-function dedupeHeadings(headings: HeadingCandidate[]): HeadingCandidate[] {
+function dedupeHeadings<T extends HeadingCandidate>(headings: T[]): T[] {
   const seen = new Set<string>();
-  const deduped: HeadingCandidate[] = [];
+  const deduped: T[] = [];
 
   for (const heading of headings) {
     const key = `${heading.page}|${heading.level}|${heading.text}`;
@@ -110,16 +147,57 @@ function deriveBodyColor(parsed: ParsedPDF): string | undefined {
   return mostCommon;
 }
 
-/** Weighted heading scoring: bold, font size, ALL CAPS, color, spacing. */
+function lineKey(page: number, y: number): string {
+  return `${page}|${Math.round(y)}`;
+}
+
+/** Groups normalized item texts by (page, rounded baseline) so a line's neighbours can be found cheaply. */
+function buildLineIndex(items: TextItem[]): Map<string, string[]> {
+  const lines = new Map<string, string[]>();
+  for (const item of items) {
+    const text = cleanHeadingText(item.text);
+    if (!text) continue;
+    const key = lineKey(item.page, item.y);
+    const bucket = lines.get(key);
+    if (bucket) bucket.push(text);
+    else lines.set(key, [text]);
+  }
+  return lines;
+}
+
+/**
+ * True when no other text shares this item's baseline (within 1pt).
+ * Identical overprinted copies (faux bold, duplicated runs) don't count.
+ */
+function isStandaloneLine(item: TextItem, text: string, lineIndex: Map<string, string[]>): boolean {
+  const rounded = Math.round(item.y);
+  for (let y = rounded - 1; y <= rounded + 1; y += 1) {
+    const texts = lineIndex.get(`${item.page}|${y}`);
+    if (texts?.some((other) => other !== text)) return false;
+  }
+  return true;
+}
+
+const STANDALONE_HEADING_MAX_LENGTH = 80;
+
+/**
+ * Weighted heading scoring: bold, font size, ALL CAPS, color. Bold only
+ * counts together with a size increase or when the item is a short line of
+ * its own, so an inline bold run ("Note:" followed by body text) is not a
+ * heading.
+ */
 function headingScore(
   item: TextItem & { text: string },
   bodySize: number,
-  bodyColor: string | undefined
+  bodyColor: string | undefined,
+  standalone: boolean
 ): number {
   let score = 0;
+  const larger = item.fontSize >= bodySize + 1.5;
+  const standaloneShort = standalone && item.text.length <= STANDALONE_HEADING_MAX_LENGTH;
   const appearsBold = item.bold || /bold|black|demi|semi/i.test(item.fontName);
-  if (appearsBold) score += 2;
-  if (item.fontSize >= bodySize + 1.5) score += 3;
+  if (appearsBold && (larger || standaloneShort)) score += 2;
+  if (larger) score += 3;
   const trimmed = item.text.replace(/\s+/g, ' ').trim();
   if (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && /[A-Z]/.test(trimmed)) score += 1.5;
   if (bodyColor && item.color && item.color !== bodyColor) score += 1;
@@ -128,70 +206,122 @@ function headingScore(
 
 const HEADING_SCORE_THRESHOLD = 2;
 
-export function detectHeadings(parsed: ParsedPDF): HeadingCandidate[] {
+function isClearlyLargerThanBody(fontSize: number, bodySize: number): boolean {
+  return fontSize >= bodySize + 2 && fontSize >= bodySize * 1.2;
+}
+
+/** Stable page-only ordering: keeps the caller's (column-aware) order within a page. */
+function indexedByPage<T extends { page: number }>(items: T[]): Array<{ item: T; index: number }> {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => a.item.page - b.item.page || a.index - b.index);
+}
+
+/**
+ * Detects headings and returns them with the index of the text item they
+ * came from, in the input's reading order (page, then the order of
+ * parsed.textItems, which the extractor has already made column-aware).
+ */
+export function detectHeadingItems(parsed: ParsedPDF): HeadingItem[] {
   const bodySize = deriveBodyFontSize(parsed);
   const bodyColor = deriveBodyColor(parsed);
+  const lineIndex = buildLineIndex(parsed.textItems);
 
-  const candidateItems = parsed.textItems
-    .filter((item) => {
-      const text = cleanHeadingText(item.text);
-      if (!looksLikeHeadingText(text)) return false;
-      return headingScore({ ...item, text }, bodySize, bodyColor) >= HEADING_SCORE_THRESHOLD;
-    })
-    .map((item) => ({
-      ...item,
-      text: cleanHeadingText(item.text)
-    }));
+  const candidates = indexedByPage(parsed.textItems)
+    .map(({ item, index }) => ({ item, index, text: cleanHeadingText(item.text) }))
+    .filter(({ item, text }) => {
+      if (!looksLikeHeadingText(text, isClearlyLargerThanBody(item.fontSize, bodySize))) return false;
+      return (
+        headingScore({ ...item, text }, bodySize, bodyColor, isStandaloneLine(item, text, lineIndex)) >= HEADING_SCORE_THRESHOLD
+      );
+    });
 
-  if (!candidateItems.length) return [];
+  if (!candidates.length) return [];
 
-  const rankedSizes = [...new Set(candidateItems.map((item) => Math.round(item.fontSize * 10) / 10))]
+  const rankedSizes = [...new Set(candidates.map(({ item }) => Math.round(item.fontSize * 10) / 10))]
     .sort((a, b) => b - a)
     .slice(0, 6);
 
-  const ordered = candidateItems
-    .sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x)
-    .map((item) => ({
-      text: item.text,
-      level: toHeadingLevel(Math.round(item.fontSize * 10) / 10, rankedSizes),
-      page: item.page
-    }));
+  const ordered: HeadingItem[] = candidates.map(({ item, index, text }) => ({
+    text,
+    level: toHeadingLevel(Math.round(item.fontSize * 10) / 10, rankedSizes),
+    page: item.page,
+    index,
+    x: item.x,
+    y: item.y,
+    fontSize: item.fontSize
+  }));
 
   return normalizeHeadingLevels(dedupeHeadings(ordered));
 }
 
-export function detectListItems(parsed: ParsedPDF): Array<{ text: string; page: number }> {
-  return parsed.textItems
-    .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
-    .filter((item) => LIST_ITEM_PATTERN.test(item.text) && item.text.length <= 300)
-    .map((item) => ({ text: item.text, page: item.page }));
+export function detectHeadings(parsed: ParsedPDF): HeadingCandidate[] {
+  return detectHeadingItems(parsed).map(({ text, level, page }) => ({ text, level, page }));
 }
 
-export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page: number }> {
-  const normalized = parsed.textItems
-    .map((item) => ({ ...item, text: item.text.replace(/\s+/g, ' ').trim() }))
-    .filter((item) => item.text.length > 0 && !LIST_ITEM_PATTERN.test(item.text))
-    .sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
+export interface ListItemBlock {
+  text: string;
+  page: number;
+  index: number;
+  x: number;
+  y: number;
+  fontSize: number;
+}
 
-  const paragraphs: Array<{ text: string; page: number }> = [];
+export function detectListItems(
+  parsed: ParsedPDF,
+  options: { excludeIndices?: ReadonlySet<number> } = {}
+): ListItemBlock[] {
+  return indexedByPage(parsed.textItems)
+    .filter(({ index }) => !options.excludeIndices?.has(index))
+    .map(({ item, index }) => ({ item, index, text: item.text.replace(/\s+/g, ' ').trim() }))
+    .filter(({ text }) => LIST_ITEM_PATTERN.test(text) && text.length <= 300)
+    .map(({ item, index, text }) => ({ text, page: item.page, index, x: item.x, y: item.y, fontSize: item.fontSize }));
+}
+
+/**
+ * Merges consecutive lines into paragraphs. Input order is preserved within
+ * each page (the extractor has already ordered items by column), and items
+ * listed in options.excludeIndices (headings) or matching the list pattern
+ * end the current paragraph instead of being merged into it.
+ */
+export function detectParagraphs(parsed: ParsedPDF, options: DetectParagraphsOptions = {}): ParagraphBlock[] {
+  const exclude = options.excludeIndices;
+  const limit = options.limit ?? 400;
+  const ordered = indexedByPage(parsed.textItems).map(({ item, index }) => ({
+    ...item,
+    index,
+    text: item.text.replace(/\s+/g, ' ').trim()
+  }));
+
+  const paragraphs: ParagraphBlock[] = [];
   const MAX_PARAGRAPH_LENGTH = 900;
   const X_ALIGNMENT_TOLERANCE = 28;
   const MAX_LINE_GAP = 28;
 
-  let currentPage: number | null = null;
+  let first: (typeof ordered)[number] | null = null;
   let currentText = '';
-  let previousItem: (typeof normalized)[number] | null = null;
+  let previousItem: (typeof ordered)[number] | null = null;
 
   function flushParagraph() {
     const text = currentText.replace(/\s+/g, ' ').trim();
-    if (!text) return;
-    if (currentPage === null) return;
-    paragraphs.push({ text, page: currentPage });
+    if (text && first) {
+      paragraphs.push({ text, page: first.page, index: first.index, x: first.x, y: first.y, fontSize: first.fontSize });
+    }
+    first = null;
+    currentText = '';
+    previousItem = null;
   }
 
-  for (const item of normalized) {
+  for (const item of ordered) {
+    if (!item.text) continue;
+    if (exclude?.has(item.index) || LIST_ITEM_PATTERN.test(item.text)) {
+      flushParagraph();
+      continue;
+    }
+
     if (!previousItem) {
-      currentPage = item.page;
+      first = item;
       currentText = item.text;
       previousItem = item;
       continue;
@@ -211,7 +341,7 @@ export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page:
 
     if (!shouldMerge) {
       flushParagraph();
-      currentPage = item.page;
+      first = item;
       currentText = item.text;
       previousItem = item;
       continue;
@@ -222,7 +352,7 @@ export function detectParagraphs(parsed: ParsedPDF): Array<{ text: string; page:
   }
 
   flushParagraph();
-  return paragraphs.slice(0, 400);
+  return paragraphs.slice(0, limit);
 }
 
 /**

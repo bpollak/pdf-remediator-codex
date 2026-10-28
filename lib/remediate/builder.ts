@@ -7,7 +7,6 @@ import {
   PDFNumber,
   PDFOperator,
   PDFOperatorNames,
-  PDFString,
   StandardFonts,
   TextRenderingMode,
   beginText,
@@ -23,6 +22,11 @@ import {
 } from 'pdf-lib';
 import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { extractRemediationPlan } from './extractor';
+import { createHeadingLevelNormalizer } from './heuristics';
+import { encodePdfTextString } from './pdf-text';
+import { decodePageContent, maxMcidInContent } from './page-content';
+import { buildXmpMetadata } from './xmp';
+import { assertNotEncrypted } from '@/lib/pdf/encryption';
 import { mapFontName } from './font-mapper';
 import { buildTagTree } from './tagger';
 import { injectStructTree } from './struct-tree';
@@ -84,6 +88,15 @@ function safeReadPdfMetadata(getter: () => string | undefined): string | undefin
     if (typeof value !== 'string') return undefined;
     const normalized = value.trim();
     return normalized || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeReadPdfDate(getter: () => Date | undefined): Date | undefined {
+  try {
+    const value = getter();
+    return value instanceof Date && !Number.isNaN(value.getTime()) ? value : undefined;
   } catch {
     return undefined;
   }
@@ -182,7 +195,7 @@ function inferFormLabels(parsed: ParsedPDF): Map<string, string> {
     if (cleanLabelText(form.label)) continue;
     const label = inferNearbyFormLabel(parsed, form) ?? humanizeFormName(form.name);
     if (!label) continue;
-    labels.set(form.name, label);
+    labels.set(form.name.replace(/\s+/g, ' ').trim(), label);
   }
 
   return labels;
@@ -204,28 +217,7 @@ function resolveTaggedLayerItems(
 ): TaggedTextLayerItem[] {
   const items: TaggedTextLayerItem[] = [];
   const seen = new Set<string>();
-  const pageAnchors = new Map<number, typeof parsed.textItems>();
   const fallbackCursor = new Map<number, number>();
-
-  for (const textItem of parsed.textItems) {
-    let bucket = pageAnchors.get(textItem.page);
-    if (!bucket) {
-      bucket = [];
-      pageAnchors.set(textItem.page, bucket);
-    }
-    bucket.push(textItem);
-  }
-
-  function locateAnchor(page: number, text: string) {
-    const anchors = pageAnchors.get(page) ?? [];
-    const key = shortMatchKey(text);
-    if (!key) return undefined;
-
-    return anchors.find((anchor) => {
-      const anchorKey = shortMatchKey(anchor.text);
-      return Boolean(anchorKey && (anchorKey.includes(key) || key.includes(anchorKey)));
-    });
-  }
 
   function pushItem(role: string, page: number, rawText: string, x?: number, y?: number, fontSize?: number) {
     const text = normalizeText(rawText).slice(0, MAX_TAGGED_TEXT_LENGTH);
@@ -257,24 +249,14 @@ function resolveTaggedLayerItems(
     return items;
   }
 
-  for (const heading of plan.headings) {
-    const anchor = locateAnchor(heading.page, heading.text);
-    const role = `H${Math.max(1, Math.min(6, heading.level))}`;
-    pushItem(role, heading.page, heading.text, anchor?.x, anchor?.y, anchor?.fontSize);
+  // One pass in reading order (page, then the extractor's column-aware
+  // order) so headings and body text interleave the way they are read.
+  // Heading lines are excluded from paragraphs upstream, so each line is
+  // tagged once. List items are tagged as P (no L/LI nesting here).
+  for (const entry of plan.readingOrder) {
+    const role = /^H[1-6]$/.test(entry.role) ? entry.role : 'P';
+    pushItem(role, entry.page, entry.text, entry.x, entry.y, entry.fontSize);
     if (items.length >= MAX_TAGGED_TEXT_ITEMS) return items;
-  }
-
-  for (const paragraph of plan.paragraphs) {
-    const anchor = locateAnchor(paragraph.page, paragraph.text);
-    pushItem('P', paragraph.page, paragraph.text, anchor?.x, anchor?.y, anchor?.fontSize);
-    if (items.length >= MAX_TAGGED_TEXT_ITEMS) return items;
-  }
-
-  if (items.length < 80) {
-    for (const item of parsed.textItems.slice(0, MAX_TAGGED_TEXT_ITEMS)) {
-      pushItem('P', item.page, item.text, item.x, item.y, item.fontSize);
-      if (items.length >= MAX_TAGGED_TEXT_ITEMS) break;
-    }
   }
 
   return items;
@@ -309,6 +291,16 @@ async function embedTaggedInvisibleTextLayer(
     const key = (page as unknown as PdfPageWithFontDictionary).node.newFontDictionary('F', font.ref);
     fontKeyByPage.set(pageNumber, key);
     return key;
+  }
+
+  // Existing marked content keeps its MCIDs; new sequences start above
+  // them. Read before any page is touched (adding resources normalizes the
+  // page and wraps its content).
+  for (const pageNumber of new Set(items.map((item) => item.page))) {
+    const page = pages[pageNumber - 1];
+    if (!page) continue;
+    const content = decodePageContent(pdf, page);
+    nextMcidByPage.set(pageNumber, content === undefined ? 0 : maxMcidInContent(content) + 1);
   }
 
   for (const item of items) {
@@ -363,28 +355,8 @@ function injectBoundStructTreeFromBindings(pdf: PDFDocument, bindings: TaggedBin
   const structTreeRootDict = context.obj({ Type: 'StructTreeRoot' });
   const structTreeRootRef = context.register(structTreeRootDict);
 
-  const roleMapDict = context.obj({
-    Document: 'Document',
-    Sect: 'Sect',
-    H1: 'H1',
-    H2: 'H2',
-    H3: 'H3',
-    H4: 'H4',
-    H5: 'H5',
-    H6: 'H6',
-    P: 'P',
-    Span: 'Span',
-    L: 'L',
-    LI: 'LI',
-    Lbl: 'Lbl',
-    LBody: 'LBody',
-    Table: 'Table',
-    TR: 'TR',
-    TH: 'TH',
-    TD: 'TD',
-    Figure: 'Figure'
-  });
-  structTreeRootDict.set(PDFName.of('RoleMap'), roleMapDict);
+  // Only standard structure types are used, so no RoleMap is needed (an
+  // identity RoleMap would remap standard types onto themselves).
 
   const documentElemDict = context.obj({
     Type: 'StructElem',
@@ -470,8 +442,7 @@ function normalizeBoundStructureHeadings(pdf: PDFDocument): boolean {
   if (!structTreeRoot) return false;
 
   const visited = new Set<PDFDict>();
-  let previousLevel = 1;
-  let headingCount = 0;
+  const normalizeLevel = createHeadingLevelNormalizer();
   let changed = false;
 
   function visit(value: unknown): void {
@@ -492,13 +463,11 @@ function normalizeBoundStructureHeadings(pdf: PDFDocument): boolean {
       const match = role.toString().match(/^\/H([1-6])$/);
       if (match) {
         const originalLevel = Number(match[1]);
-        const nextLevel = headingCount === 0 ? 1 : Math.min(originalLevel, previousLevel + 1);
+        const nextLevel = normalizeLevel(originalLevel);
         if (nextLevel !== originalLevel) {
           dict.set(PDFName.of('S'), PDFName.of(`H${nextLevel}`));
           changed = true;
         }
-        previousLevel = nextLevel;
-        headingCount += 1;
       }
     }
 
@@ -543,7 +512,7 @@ function injectOutlineFromHeadings(pdf: PDFDocument, headings: Array<{ text: str
     if (!dest) continue;
 
     const itemDict = context.obj({
-      Title: PDFString.of(entry.title),
+      Title: encodePdfTextString(entry.title),
       Parent: outlinesRef,
       Dest: dest
     }) as PDFDict;
@@ -609,27 +578,61 @@ function isPdfName(value: unknown, name: string): boolean {
   return value instanceof PDFName && value.toString() === `/${name}`;
 }
 
-function readWidgetFieldName(pdf: PDFDocument, widget: PDFDict): string | undefined {
-  const ownName = readPdfText(widget.get(PDFName.of('T')));
-  if (ownName) return ownName;
+function readRawPdfText(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as { decodeText?: () => string };
+  if (typeof candidate.decodeText !== 'function') return undefined;
+  try {
+    return candidate.decodeText();
+  } catch {
+    return undefined;
+  }
+}
 
-  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
-  return parent ? readPdfText(parent.get(PDFName.of('T'))) : undefined;
+/**
+ * The terminal field a widget belongs to: the widget itself when it carries
+ * a partial name (/T), otherwise its /Parent (a kid widget of a field).
+ */
+function terminalFieldForWidget(pdf: PDFDocument, widget: PDFDict): PDFDict {
+  if (widget.has(PDFName.of('T'))) return widget;
+  return lookupMaybeDict(pdf, widget.get(PDFName.of('Parent'))) ?? widget;
+}
+
+/**
+ * Fully qualified field name ("person.street"): the /T partial names of the
+ * field and all its ancestors joined with ".", as pdf.js reports it.
+ */
+function readFullFieldName(pdf: PDFDocument, widget: PDFDict): string | undefined {
+  const parts: string[] = [];
+  const visited = new Set<PDFDict>();
+  let node: PDFDict | undefined = widget;
+
+  while (node && !visited.has(node) && visited.size < 64) {
+    visited.add(node);
+    const partial = readRawPdfText(node.get(PDFName.of('T')));
+    if (partial) parts.unshift(partial);
+    node = lookupMaybeDict(pdf, node.get(PDFName.of('Parent')));
+  }
+
+  const name = parts.join('.').replace(/\s+/g, ' ').trim();
+  return name || undefined;
 }
 
 function hasWidgetTooltip(pdf: PDFDocument, widget: PDFDict): boolean {
   if (readPdfText(widget.get(PDFName.of('TU')))) return true;
-  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
-  return Boolean(parent && readPdfText(parent.get(PDFName.of('TU'))));
+  const field = terminalFieldForWidget(pdf, widget);
+  return Boolean(readPdfText(field.get(PDFName.of('TU'))));
 }
 
 function setWidgetTooltip(pdf: PDFDocument, widget: PDFDict, label: string): void {
-  const encodedLabel = PDFString.of(label);
+  const encodedLabel = encodePdfTextString(label);
   widget.set(PDFName.of('TU'), encodedLabel);
 
-  const parent = lookupMaybeDict(pdf, widget.get(PDFName.of('Parent')));
-  if (parent && !readPdfText(parent.get(PDFName.of('TU')))) {
-    parent.set(PDFName.of('TU'), encodedLabel);
+  // Only the terminal field gets the tooltip; never a non-terminal ancestor
+  // that groups several fields.
+  const field = terminalFieldForWidget(pdf, widget);
+  if (field !== widget && !readPdfText(field.get(PDFName.of('TU')))) {
+    field.set(PDFName.of('TU'), encodedLabel);
   }
 }
 
@@ -649,7 +652,7 @@ function applyFormLabelTooltips(pdf: PDFDocument, labels: Map<string, string>): 
       if (!isPdfName(subtype, 'Widget')) continue;
       if (hasWidgetTooltip(pdf, widget)) continue;
 
-      const fieldName = readWidgetFieldName(pdf, widget);
+      const fieldName = readFullFieldName(pdf, widget);
       const label = fieldName ? labels.get(fieldName) : undefined;
       if (!label) continue;
 
@@ -722,6 +725,9 @@ export async function buildRemediatedPdf(
     loadableSourceBytes instanceof Uint8Array || loadableSourceBytes instanceof ArrayBuffer
       ? await PDFDocument.load(loadableSourceBytes, { updateMetadata: false, ignoreEncryption: true })
       : await PDFDocument.create();
+  // pdf-lib cannot decrypt: a restricted (owner-password) PDF would be
+  // written back half-encrypted and unreadable. Refuse with a clear error.
+  assertNotEncrypted(pdf);
 
   if (!loadableSourceBytes) {
     const helvetica = await pdf.embedFont(StandardFonts.Helvetica);
@@ -810,6 +816,23 @@ export async function buildRemediatedPdf(
   }
 
   pdf.setKeywords([...existingKeywords]);
+
+  const modifiedAt = new Date();
+  pdf.setModificationDate(modifiedAt);
+  const xmpBytes = buildXmpMetadata({
+    title: metadataTitle,
+    author: metadataAuthor,
+    subject: metadataSubject,
+    keywords: [...existingKeywords].join(' '),
+    language: chosenLanguage,
+    creatorTool: 'PDF Remediator',
+    producer: 'PDF Remediator',
+    createdAt: safeReadPdfDate(() => pdf.getCreationDate()),
+    modifiedAt,
+    pdfUaPart: manifest.pdfUaPart
+  });
+  const metadataStream = pdf.context.stream(xmpBytes, { Type: 'Metadata', Subtype: 'XML' });
+  pdf.catalog.set(PDFName.of('Metadata'), pdf.context.register(metadataStream));
 
   // Legacy opt-in path for unbound StructElem generation (kept for experiments only).
   if (options.injectUnboundStructTree) {

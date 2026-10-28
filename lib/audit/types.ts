@@ -41,10 +41,18 @@ export interface AuditContext {
 
 export interface AuditRule {
   id: string;
+  /**
+   * False when the parsed data cannot support this check (e.g. no text
+   * colors were extracted). The rule is then reported as not checked rather
+   * than silently passing.
+   */
+  canEvaluate?: (context: AuditContext) => boolean;
   evaluate: (context: AuditContext) => AuditFinding[];
 }
 
 export interface AuditResult {
   findings: AuditFinding[];
   score: number;
+  /** Rule ids that could not be evaluated for this document (neither passed nor failed). */
+  notChecked?: string[];
 }

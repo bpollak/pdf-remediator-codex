@@ -16,12 +16,20 @@ const OP_TRANSFORM = OPS_RECORD.transform;
 const OP_BEGIN_MARKED_CONTENT = OPS_RECORD.beginMarkedContent;
 const OP_BEGIN_MARKED_CONTENT_PROPS = OPS_RECORD.beginMarkedContentProps;
 const OP_END_MARKED_CONTENT = OPS_RECORD.endMarkedContent;
+const OP_PAINT_IMAGE_REPEAT = OPS_RECORD.paintImageXObjectRepeat;
+const OP_PAINT_IMAGE_MASK_REPEAT = OPS_RECORD.paintImageMaskXObjectRepeat;
+const OP_PAINT_INLINE_IMAGE_GROUP = OPS_RECORD.paintInlineImageXObjectGroup;
+const OP_PAINT_IMAGE_MASK_GROUP = OPS_RECORD.paintImageMaskXObjectGroup;
 const IMAGE_OPERATOR_CODES = new Set(
   [
     OPS_RECORD.paintImageXObject,
     OPS_RECORD.paintInlineImageXObject,
     OPS_RECORD.paintImageMaskXObject,
-    OPS_RECORD.paintJpegXObject
+    OPS_RECORD.paintJpegXObject,
+    OPS_RECORD.paintImageXObjectRepeat,
+    OPS_RECORD.paintInlineImageXObjectGroup,
+    OPS_RECORD.paintImageMaskXObjectGroup,
+    OPS_RECORD.paintImageMaskXObjectRepeat
   ].filter((code): code is number => typeof code === 'number')
 );
 
@@ -90,6 +98,49 @@ function matrixBounds(matrix: Matrix): { x: number; y: number; width: number; he
     width: Math.max(0, maxX - minX),
     height: Math.max(0, maxY - minY)
   };
+}
+
+function numberAt(values: unknown, index: number): number | undefined {
+  if (!values || typeof values !== 'object') return undefined;
+  const value = (values as ArrayLike<unknown>)[index];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Image-space matrices (relative to the current CTM) painted by one image
+ * operator. pdf.js folds runs of identical image paints into the *Repeat
+ * and *Group operators, one entry per original paint.
+ */
+function imagePaintMatrices(fn: number, args: unknown): Matrix[] {
+  const list = Array.isArray(args) ? args : [];
+
+  if (fn === OP_PAINT_IMAGE_REPEAT || fn === OP_PAINT_IMAGE_MASK_REPEAT) {
+    const isMask = fn === OP_PAINT_IMAGE_MASK_REPEAT;
+    const scaleX = numberAt(list, 1) ?? 1;
+    const skewX = isMask ? numberAt(list, 2) ?? 0 : 0;
+    const skewY = isMask ? numberAt(list, 3) ?? 0 : 0;
+    const scaleY = numberAt(list, isMask ? 4 : 2) ?? 1;
+    const positions = list[isMask ? 5 : 3] as ArrayLike<unknown> | undefined;
+    const matrices: Matrix[] = [];
+    const count = positions && typeof positions.length === 'number' ? positions.length : 0;
+    for (let index = 0; index + 1 < count; index += 2) {
+      const x = numberAt(positions, index);
+      const y = numberAt(positions, index + 1);
+      if (x === undefined || y === undefined) continue;
+      matrices.push([scaleX, skewX, skewY, scaleY, x, y]);
+    }
+    return matrices;
+  }
+
+  if (fn === OP_PAINT_INLINE_IMAGE_GROUP || fn === OP_PAINT_IMAGE_MASK_GROUP) {
+    const entries = (fn === OP_PAINT_INLINE_IMAGE_GROUP ? list[1] : list[0]) as unknown;
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .map((entry) => matrixFromArgs(Array.from(((entry as { transform?: ArrayLike<unknown> })?.transform ?? []) as ArrayLike<unknown>)))
+      .filter((matrix): matrix is Matrix => Boolean(matrix));
+  }
+
+  return [IDENTITY_MATRIX];
 }
 
 function isRefProxy(value: unknown): value is { num: number; gen: number } {
@@ -360,20 +411,25 @@ async function extractPageImages(page: any, pageNumber: number): Promise<ParsedP
 
     if (!IMAGE_OPERATOR_CODES.has(fn)) continue;
 
-    const bounds = matrixBounds(ctm);
-    if (bounds.width < 1 || bounds.height < 1) continue;
     const figureMark = [...markedContentStack].reverse().find((entry) => entry.tag === 'Figure');
+    const decorative = markedContentStack.some((entry) => entry.tag === 'Artifact');
 
-    images.push({
-      id: `img-${pageNumber}-${images.length + 1}`,
-      page: pageNumber,
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-      ...(markedContentStack.some((entry) => entry.tag === 'Artifact') ? { decorative: true } : {}),
-      ...(typeof figureMark?.markedContentId === 'number' ? { markedContentId: figureMark.markedContentId } : {})
-    });
+    for (const imageMatrix of imagePaintMatrices(fn, args)) {
+      if (images.length >= MAX_IMAGE_ITEMS) break;
+      const bounds = matrixBounds(multiplyMatrix(ctm, imageMatrix));
+      if (bounds.width < 1 || bounds.height < 1) continue;
+
+      images.push({
+        id: `img-${pageNumber}-${images.length + 1}`,
+        page: pageNumber,
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        ...(decorative ? { decorative: true } : {}),
+        ...(typeof figureMark?.markedContentId === 'number' ? { markedContentId: figureMark.markedContentId } : {})
+      });
+    }
   }
 
   return images;
@@ -607,6 +663,30 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
   }
 }
 
+function readXmpPdfUaPart(
+  metadataObj: { get?: (key: string) => unknown; getRaw?: () => unknown } | null | undefined
+): string | undefined {
+  if (!metadataObj) return undefined;
+
+  try {
+    const parsedValue = typeof metadataObj.get === 'function' ? metadataObj.get('pdfuaid:part') : undefined;
+    const fromParsed = cleanText(Array.isArray(parsedValue) ? parsedValue[0] : parsedValue);
+    if (fromParsed && /^\d+$/.test(fromParsed)) return fromParsed;
+  } catch {
+    // Fall through to the raw packet.
+  }
+
+  try {
+    const raw = typeof metadataObj.getRaw === 'function' ? metadataObj.getRaw() : undefined;
+    if (typeof raw !== 'string') return undefined;
+    // Element form <pdfuaid:part>1</pdfuaid:part> or attribute form pdfuaid:part="1".
+    const match = raw.match(/<pdfuaid:part>\s*(\d+)\s*<\/pdfuaid:part>/i) ?? raw.match(/pdfuaid:part\s*=\s*["'](\d+)["']/i);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
 export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
   // pdf.js may transfer the underlying buffer; clone so the caller's copy
   // stays usable for OCR, remediation, preview, and verification steps.
@@ -614,7 +694,14 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
   const structureBindingPromise = inspectStructureBinding(parseBytes);
   ensurePdfJsWorkerConfigured();
   const loadingTask = getDocument({ data: parseBytes });
-  const doc = await loadingTask.promise;
+  let doc: Awaited<typeof loadingTask.promise>;
+  try {
+    doc = await loadingTask.promise;
+  } catch (error) {
+    // A rejected load still owns a worker-side document; release it.
+    await loadingTask.destroy().catch(() => undefined);
+    throw error;
+  }
 
   try {
     const metadataResult = await doc.getMetadata().catch(() => ({ info: {} as Record<string, unknown>, metadata: null }));
@@ -749,11 +836,18 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
     const outlineTree = await doc.getOutline().catch(() => null);
     await flattenOutlines(outlineTree, doc, discoveredOutlines);
 
-    if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
+    const metadataObj = (metadataResult as {
+      metadata?: { get?: (key: string) => unknown; getRaw?: () => unknown };
+    }).metadata;
+
+    // PDF/UA identification lives in XMP (pdfuaid:part); the remediation
+    // manifest in Keywords is only a fallback for older output.
+    const xmpPdfUaPart = readXmpPdfUaPart(metadataObj);
+    if (xmpPdfUaPart) {
+      metadata['pdfuaid:part'] = xmpPdfUaPart;
+    } else if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
       metadata['pdfuaid:part'] = manifest.pdfUaPart;
     }
-
-    const metadataObj = (metadataResult as { metadata?: { get?: (key: string) => unknown } }).metadata;
     const metadataLang =
       cleanText(metadata.Language) ??
       cleanText(metadata.Lang) ??
