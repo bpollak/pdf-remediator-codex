@@ -22,6 +22,9 @@ function parseColorString(color: string): [number, number, number] | null {
 export const colorRules: AuditRule[] = [
   {
     id: 'CLR-001',
+    // The parser does not extract fill colors yet, so most documents carry
+    // no color data; report the check as not performed instead of passing.
+    canEvaluate: ({ parsed }) => parsed.textItems.some((item) => Boolean(item.color)),
     evaluate: ({ parsed }) => {
       const findings: AuditFinding[] = [];
       const flaggedPages = new Set<number>();

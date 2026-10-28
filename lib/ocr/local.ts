@@ -23,7 +23,17 @@ interface OcrRecognitionLike {
   };
 }
 
-function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: number, viewportScale: number): TextItem | null {
+interface ViewportPointMapper {
+  convertToPdfPoint: (x: number, y: number) => number[];
+}
+
+/**
+ * Converts a Tesseract line (bbox in rendered-canvas pixels, origin top
+ * left) to a TextItem in PDF user space, using the page viewport so /Rotate
+ * and a MediaBox that does not start at 0,0 are handled. x/y is the start
+ * of the line's baseline (bottom-left of the box as seen on screen).
+ */
+export function ocrLineToTextItem(line: OcrLineLike, page: number, viewport: ViewportPointMapper): TextItem | null {
   const text = normalizeText(line.text);
   if (!text) return null;
 
@@ -34,14 +44,17 @@ function ocrLineToTextItem(line: OcrLineLike, page: number, viewportHeight: numb
   const y0 = line.bbox?.y0 ?? 0;
   const x1 = line.bbox?.x1 ?? x0 + 1;
   const y1 = line.bbox?.y1 ?? y0 + 1;
-  const width = Math.max(1, (x1 - x0) / viewportScale);
-  const height = Math.max(1, (y1 - y0) / viewportScale);
-  const y = Math.max(0, (viewportHeight - y1) / viewportScale);
+
+  const [originX, originY] = viewport.convertToPdfPoint(x0, y1) as [number, number];
+  const [endX, endY] = viewport.convertToPdfPoint(x1, y1) as [number, number];
+  const [topX, topY] = viewport.convertToPdfPoint(x0, y0) as [number, number];
+  const width = Math.max(1, Math.hypot(endX - originX, endY - originY));
+  const height = Math.max(1, Math.hypot(topX - originX, topY - originY));
 
   return {
     text,
-    x: Math.max(0, x0 / viewportScale),
-    y,
+    x: originX,
+    y: originY,
     width,
     height,
     fontName: 'OCR',
@@ -96,7 +109,7 @@ export async function runLocalOcr(parsed: ParsedPDF, sourceBytes: ArrayBuffer, l
             const lines = recognition.data?.lines ?? [];
 
             for (const line of lines) {
-              const item = ocrLineToTextItem(line, pageNumber, viewport.height, LOCAL_OCR_SCALE);
+              const item = ocrLineToTextItem(line, pageNumber, viewport);
               if (item) ocrItems.push(item);
             }
           } finally {
