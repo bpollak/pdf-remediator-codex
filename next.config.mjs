@@ -7,6 +7,12 @@ const isHttpsDeployment = process.env.VERCEL === '1' || process.env.HTTPS_ONLY_H
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The commit this build came from, inlined at build time so /api/health can
+  // report it for git deployments (VERCEL_GIT_COMMIT_SHA) and for builds made
+  // by the Vercel CLI in GitHub Actions (GITHUB_SHA).
+  env: {
+    APP_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || ''
+  },
   async headers() {
     return [
       {

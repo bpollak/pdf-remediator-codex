@@ -26,7 +26,8 @@ describe('/api/health', () => {
       OCR_LITELLM_API_KEY: '',
       OCR_SERVICE_URL: 'https://ocr.example.org/ocr',
       VERAPDF_SERVICE_URL: 'http://verapdf.example.org',
-      VERCEL_GIT_COMMIT_SHA: '0123456789abcdef'
+      VERCEL_GIT_COMMIT_SHA: '0123456789abcdef',
+      APP_COMMIT_SHA: ''
     };
     const fetchMock = vi.spyOn(globalThis, 'fetch');
 
@@ -44,6 +45,12 @@ describe('/api/health', () => {
     expect(JSON.stringify(payload)).not.toMatch(/sk-secret|example\.org/);
   });
 
+  it('reports the commit inlined at build time for CLI deployments', async () => {
+    process.env = { ...originalEnv, NODE_ENV: 'production', VERCEL_GIT_COMMIT_SHA: '', APP_COMMIT_SHA: 'fedcba9876543210' };
+    const payload = await (await GET(healthRequest())).json();
+    expect(payload.version).toBe('fedcba9');
+  });
+
   it('reports false for unconfigured services and omits version when unknown', async () => {
     process.env = {
       ...originalEnv,
@@ -53,7 +60,8 @@ describe('/api/health', () => {
       OCR_LITELLM_API_KEY: '',
       OCR_SERVICE_URL: '',
       VERAPDF_SERVICE_URL: '',
-      VERCEL_GIT_COMMIT_SHA: ''
+      VERCEL_GIT_COMMIT_SHA: '',
+      APP_COMMIT_SHA: ''
     };
 
     const payload = await (await GET(healthRequest())).json();
