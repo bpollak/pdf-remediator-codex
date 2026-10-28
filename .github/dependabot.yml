@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Major upgrades (Next 16, React, TypeScript, ESLint, Tailwind, Vitest,
+    # tesseract.js, zustand) need deliberate migrations; take them as planned
+    # work, not automated PRs.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       dev-dependencies:
         dependency-type: development
