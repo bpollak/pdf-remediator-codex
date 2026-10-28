@@ -103,7 +103,7 @@ describe('app store persistence', () => {
     const files = Array.from({ length: 12 }, (_, index) => new File(['%PDF-1.4'], `doc-${index}.pdf`, { type: 'application/pdf' }));
     const result = await useAppStore.getState().addFiles(files);
 
-    expect(result).toEqual({ added: 10, skipped: 2 });
+    expect(result).toEqual({ added: 10, skipped: 2, skippedNames: ['doc-10.pdf', 'doc-11.pdf'] });
     expect(useAppStore.getState().files).toHaveLength(11);
   });
 });
