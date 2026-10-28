@@ -5,7 +5,7 @@ const DB_VERSION = 1;
 const FILE_STORE = 'files';
 const ASSET_STORE = 'assets';
 
-interface PersistedFileRecord extends Omit<FileEntry, 'uploadedBytes' | 'remediatedBytes'> {
+interface PersistedFileRecord extends Omit<FileEntry, 'uploadedBytes' | 'remediatedBytes' | 'processingStartedAt' | 'persistError'> {
   uploadedAssetKey: string;
   remediatedAssetKey?: string;
 }
@@ -16,7 +16,21 @@ interface PersistedAssetRecord {
 }
 
 interface SaveFileEntryOptions {
-  persistAssets?: boolean;
+  /**
+   * PDF bytes to write alongside the record. Only the variants named here are
+   * written; `remediated: null` deletes the stored remediated PDF. Omitted
+   * variants are left as they are in storage.
+   */
+  assets?: {
+    uploaded?: ArrayBuffer;
+    remediated?: ArrayBuffer | null;
+  };
+}
+
+interface LoadPersistedFilesResult {
+  files: FileEntry[];
+  /** Records whose uploaded PDF is missing from storage; they were deleted. */
+  droppedIds: string[];
 }
 
 function stripAssetKeys(record: PersistedFileRecord): Omit<PersistedFileRecord, 'uploadedAssetKey' | 'remediatedAssetKey'> {
@@ -73,7 +87,12 @@ function remediatedAssetKey(fileId: string): string {
   return `${fileId}:remediated`;
 }
 
-export async function loadPersistedFiles(): Promise<FileEntry[]> {
+/**
+ * Load saved files. The original upload is only read into memory for files
+ * that have no remediated PDF yet; for finished files it stays in storage and
+ * is loaded on demand with loadAssetBytes().
+ */
+export async function loadPersistedFiles(): Promise<LoadPersistedFilesResult> {
   const database = await openDatabase();
 
   try {
@@ -91,30 +110,31 @@ export async function loadPersistedFiles(): Promise<FileEntry[]> {
 
     const hydratedFiles = await Promise.all(
       fileRecords.map(async (record) => {
-        const uploadedAsset = await requestToPromise(assetStore.get(record.uploadedAssetKey)) as PersistedAssetRecord | undefined;
-        if (!uploadedAsset?.bytes) return undefined;
-
         const remediatedAsset = record.remediatedAssetKey
           ? (await requestToPromise(assetStore.get(record.remediatedAssetKey)) as PersistedAssetRecord | undefined)
           : undefined;
         const fileRecord = stripAssetKeys(record);
 
-        return {
-          ...fileRecord,
-          uploadedBytes: uploadedAsset.bytes,
-          remediatedBytes: remediatedAsset?.bytes
-        } satisfies FileEntry;
+        if (remediatedAsset?.bytes) {
+          const uploadedExists = (await requestToPromise(assetStore.count(record.uploadedAssetKey))) > 0;
+          if (!uploadedExists) return { droppedId: record.id };
+          return { file: { ...fileRecord, remediatedBytes: remediatedAsset.bytes } satisfies FileEntry };
+        }
+
+        const uploadedAsset = await requestToPromise(assetStore.get(record.uploadedAssetKey)) as PersistedAssetRecord | undefined;
+        if (!uploadedAsset?.bytes) return { droppedId: record.id };
+        return { file: { ...fileRecord, uploadedBytes: uploadedAsset.bytes } satisfies FileEntry };
       })
     );
 
     const files: FileEntry[] = [];
-    for (const file of hydratedFiles) {
-      if (file) {
-        files.push(file);
-      }
+    const droppedIds: string[] = [];
+    for (const result of hydratedFiles) {
+      if (result.file) files.push(result.file);
+      if (result.droppedId) droppedIds.push(result.droppedId);
     }
 
-    return files;
+    return { files, droppedIds };
   } finally {
     database.close();
   }
@@ -127,32 +147,26 @@ export async function saveFileEntry(entry: FileEntry, options: SaveFileEntryOpti
     const transaction = database.transaction([FILE_STORE, ASSET_STORE], 'readwrite');
     const fileStore = transaction.objectStore(FILE_STORE);
     const assetStore = transaction.objectStore(ASSET_STORE);
-    const { uploadedBytes, remediatedBytes, ...record } = entry;
-    const nextUploadedAssetKey = uploadedAssetKey(entry.id);
-    const nextRemediatedAssetKey = remediatedBytes ? remediatedAssetKey(entry.id) : undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { uploadedBytes, remediatedBytes, processingStartedAt, persistError, ...record } = entry;
+    const assets = options.assets ?? {};
+    // In-memory bytes may have been released, so the stored remediated PDF is
+    // still the record's asset unless this save deletes it.
+    const hasRemediatedAsset = assets.remediated === null ? false : Boolean(assets.remediated ?? remediatedBytes ?? entry.remediationCompletedAt);
 
     fileStore.put({
       ...record,
-      uploadedAssetKey: nextUploadedAssetKey,
-      remediatedAssetKey: nextRemediatedAssetKey
+      uploadedAssetKey: uploadedAssetKey(entry.id),
+      remediatedAssetKey: hasRemediatedAsset ? remediatedAssetKey(entry.id) : undefined
     } satisfies PersistedFileRecord);
 
-    if (options.persistAssets !== false) {
-      if (uploadedBytes) {
-        assetStore.put({
-          key: nextUploadedAssetKey,
-          bytes: uploadedBytes
-        } satisfies PersistedAssetRecord);
-      }
-
-      if (remediatedBytes && nextRemediatedAssetKey) {
-        assetStore.put({
-          key: nextRemediatedAssetKey,
-          bytes: remediatedBytes
-        } satisfies PersistedAssetRecord);
-      } else {
-        assetStore.delete(remediatedAssetKey(entry.id));
-      }
+    if (assets.uploaded) {
+      assetStore.put({ key: uploadedAssetKey(entry.id), bytes: assets.uploaded } satisfies PersistedAssetRecord);
+    }
+    if (assets.remediated) {
+      assetStore.put({ key: remediatedAssetKey(entry.id), bytes: assets.remediated } satisfies PersistedAssetRecord);
+    } else if (assets.remediated === null) {
+      assetStore.delete(remediatedAssetKey(entry.id));
     }
 
     await transactionToPromise(transaction);

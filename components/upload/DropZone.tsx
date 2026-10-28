@@ -2,12 +2,14 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAppStore } from '@/stores/app-store';
+import { MAX_FILES_PER_UPLOAD, useAppStore } from '@/stores/app-store';
 import { validatePdfFile } from '@/lib/utils/file-helpers';
 
 export function DropZone() {
   const addFiles = useAppStore((s) => s.addFiles);
   const files = useAppStore((s) => s.files);
+  // Until saved files are restored, a revised upload can't find the review it belongs to.
+  const hydrated = useAppStore((s) => s.hydrated);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
@@ -31,7 +33,7 @@ export function DropZone() {
 
     if (accepted.length > 0) {
       try {
-        await addFiles(
+        const { skipped } = await addFiles(
           accepted,
           baseFile
             ? {
@@ -40,6 +42,11 @@ export function DropZone() {
               }
             : undefined
         );
+        if (skipped > 0) {
+          rejected.push(
+            `Only ${MAX_FILES_PER_UPLOAD} files can be added at a time, so ${skipped} file${skipped === 1 ? ' was' : 's were'} not added. Add ${skipped === 1 ? 'it' : 'them'} after these finish.`
+          );
+        }
         if (baseFile) {
           router.replace('/app#upload-revised-pdf');
         }
@@ -61,11 +68,12 @@ export function DropZone() {
   const onDrop = useCallback(async (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragOver(false);
+    if (!hydrated) return;
     const droppedFiles = Array.from(event.dataTransfer.files);
     if (droppedFiles.length > 0) {
       await processFiles(droppedFiles);
     }
-  }, [processFiles]);
+  }, [hydrated, processFiles]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -93,9 +101,13 @@ export function DropZone() {
           {baseFile ? `Upload a revised PDF for ${baseFile.name}` : 'Drop PDFs here or browse'}
         </span>
         <span className="mt-1 block text-sm text-gray-500">
-          {baseFile ? 'This upload will stay linked to the earlier review for re-validation.' : 'Up to 10 files, 50 MB each'}
+          {!hydrated
+            ? 'Loading saved files...'
+            : baseFile
+              ? 'This upload will stay linked to the earlier review for re-validation.'
+              : `Up to ${MAX_FILES_PER_UPLOAD} files, 50 MB each`}
         </span>
-        <input aria-label="Upload PDF files" type="file" accept="application/pdf" multiple className="mx-auto mt-3 text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" onChange={onChange} />
+        <input aria-label="Upload PDF files" type="file" accept="application/pdf" multiple disabled={!hydrated} className="mx-auto mt-3 text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" onChange={onChange} />
       </label>
 
       {validationErrors.length > 0 ? (

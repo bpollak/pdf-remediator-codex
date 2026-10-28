@@ -40,8 +40,7 @@ can show an external PDF/UA check with rule/check counts.
 In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
 When verification is enabled, remediation now runs in an iterative loop (up to 3 passes) and stops early on:
 external compliance pass, no output change, no failed-check improvement, or service unavailability.
-The compare view includes a "What To Do Next" panel that converts remaining findings and verification outcomes into
-prioritized manual follow-up steps, plus a publishing-readiness summary and direct remediated PDF download actions.
+The results page shows a publishing-readiness summary, the manual checklist and the remediated PDF download.
 
 ### Accessibility scan
 
@@ -77,14 +76,12 @@ Current remediation policy:
 - Remediated Automated Check Score cannot display `100%` unless internal critical findings are clear and external veraPDF verification is compliant.
 - Files that look like checker/report artifacts are flagged as non-source inputs so users can switch to the original content PDF.
 
-### Manual review workspaces
+### Manual review
 
-On the compare page, the app now includes:
-
-- `Structural Integrity` panel (source-type assessment + StructTree/MCID/ParentTree trust signals).
-- `Alt Text Workspace` (draft/export alt-text worksheet JSON/CSV, with optional TritonAI suggestions when configured).
-- `Manual Structure Workspace` (heading/bookmark suggestions + table-confidence review + exportable plan).
-- `QA Evidence Pack` export for before/after findings, structure metrics, and verification results.
+The results page lists what still needs a person: image descriptions (with optional TritonAI suggestions, which can
+be embedded into the downloaded PDF), table confirmations, structure tagging for analysis-only output, and any
+custom tasks. The findings page shows the `Structural Integrity` panel (source-type assessment and
+StructTree/MCID/ParentTree trust signals) and every finding by category.
 
 ### Vercel deployment
 

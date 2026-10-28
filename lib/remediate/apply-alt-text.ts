@@ -6,16 +6,21 @@ import {
   PDFNull,
   PDFNumber,
   PDFRawStream,
-  PDFRef,
-  PDFString,
-  decodePDFRawStream
+  PDFRef
 } from 'pdf-lib';
+import { assertNotEncrypted } from '@/lib/pdf/encryption';
+import { binaryStringToBytes, encodePdfTextString } from './pdf-text';
+import { decodePageContent, maxMcidInContent } from './page-content';
 
 /**
  * Applies reviewer-drafted image descriptions to a PDF by wrapping each
  * image paint operation in a real marked-content sequence and binding a
  * Figure structure element (with /Alt) into the structure tree and
  * ParentTree. Decorative images are wrapped as /Artifact instead.
+ *
+ * Images that already sit inside a Figure marked-content sequence with an
+ * MCID are not wrapped again: the existing Figure structure element is
+ * found through the ParentTree and its /Alt is set in place.
  *
  * The transform is conservative: any page whose content cannot be matched
  * to the parsed image list unambiguously is skipped and reported, never
@@ -43,6 +48,11 @@ interface PageEntry extends ManualAltTextApplication {
 interface PaintOccurrence {
   start: number;
   end: number;
+}
+
+interface MarkedContentEntry {
+  tag: string;
+  mcid?: number;
 }
 
 const IMAGE_ID_PATTERN = /^img-(\d+)-(\d+)$/;
@@ -101,53 +111,7 @@ function imageXObjectNames(pdf: PDFDocument, page: ReturnType<PDFDocument['getPa
   return names;
 }
 
-function decodePageContent(pdf: PDFDocument, page: ReturnType<PDFDocument['getPages']>[number]): string | undefined {
-  const contents = page.node.get(PDFName.of('Contents'));
-  const streams: PDFRawStream[] = [];
-
-  const collect = (value: unknown): boolean => {
-    try {
-      const resolved =
-        value instanceof PDFRawStream ? value : pdf.context.lookup(value as Parameters<typeof pdf.context.lookup>[0]);
-      if (resolved instanceof PDFRawStream) {
-        streams.push(resolved);
-        return true;
-      }
-      if (resolved instanceof PDFArray) {
-        for (let i = 0; i < resolved.size(); i += 1) {
-          if (!collect(resolved.get(i))) return false;
-        }
-        return true;
-      }
-    } catch {
-      return false;
-    }
-    return false;
-  };
-
-  if (!contents || !collect(contents)) return undefined;
-  if (streams.length === 0) return undefined;
-
-  const decoder = new TextDecoder('latin1');
-  const parts: string[] = [];
-  for (const stream of streams) {
-    try {
-      parts.push(decoder.decode(decodePDFRawStream(stream).decode()));
-    } catch {
-      return undefined;
-    }
-  }
-  return parts.join('\n');
-}
-
-/**
- * Finds top-level image paint occurrences (XObject Do calls and inline
- * BI..EI images) in document order. Returns undefined when the content
- * contains constructs that make safe matching impossible.
- */
-function findImagePaints(content: string, imageNames: Set<string>): PaintOccurrence[] {
-  const occurrences: PaintOccurrence[] = [];
-  // Inline images: capture BI ... EI blocks so Do scanning skips their data.
+function findInlineImageBlocks(content: string): PaintOccurrence[] {
   const blocks: PaintOccurrence[] = [];
   const inlinePattern = /(^|[\s>])BI[\s/][\s\S]*?\sEI(?=[\s%]|$)/g;
   let inlineMatch: RegExpExecArray | null;
@@ -155,7 +119,16 @@ function findImagePaints(content: string, imageNames: Set<string>): PaintOccurre
     const lead = inlineMatch[1] ? inlineMatch[1].length : 0;
     blocks.push({ start: inlineMatch.index + lead, end: inlineMatch.index + inlineMatch[0].length });
   }
+  return blocks;
+}
 
+/**
+ * Finds top-level image paint occurrences (XObject Do calls and inline
+ * BI..EI images) in document order. Returns undefined when the content
+ * contains constructs that make safe matching impossible.
+ */
+function findImagePaints(content: string, imageNames: Set<string>, blocks: PaintOccurrence[]): PaintOccurrence[] {
+  const occurrences: PaintOccurrence[] = [];
   const inInlineBlock = (index: number) => blocks.some((block) => index >= block.start && index < block.end);
 
   const doPattern = /\/([^\s/<>[\]()]+)\s+Do(?![\w])/g;
@@ -169,13 +142,124 @@ function findImagePaints(content: string, imageNames: Set<string>): PaintOccurre
   return [...occurrences, ...blocks].sort((a, b) => a.start - b.start);
 }
 
-function maxExistingMcid(content: string, parentArray: PDFArray | undefined): number {
-  let max = -1;
-  const mcidPattern = /\/MCID\s+(\d+)/g;
-  let match: RegExpExecArray | null;
-  while ((match = mcidPattern.exec(content))) {
-    max = Math.max(max, Number(match[1]));
+const PDF_WHITESPACE = new Set(['\0', '\t', '\n', '\f', '\r', ' ']);
+const PDF_DELIMITERS = new Set(['(', ')', '<', '>', '[', ']', '{', '}', '/', '%']);
+
+function parseMarkedContentOperands(operands: string): MarkedContentEntry {
+  const tag = operands.match(/^\s*\/([^\s/<>[\]()]+)/)?.[1] ?? '';
+  const mcidMatch = operands.match(/\/MCID\s+(\d+)/);
+  return mcidMatch ? { tag, mcid: Number(mcidMatch[1]) } : { tag };
+}
+
+/**
+ * Lexes a content stream far enough to track the marked-content stack
+ * (BMC/BDC/EMC), skipping strings, comments and inline image data, and
+ * returns a snapshot of that stack at each target offset.
+ */
+function markedContentStacksAt(
+  content: string,
+  targets: number[],
+  skipRanges: PaintOccurrence[]
+): MarkedContentEntry[][] {
+  const order = targets.map((target, index) => ({ target, index })).sort((a, b) => a.target - b.target);
+  const snapshots: MarkedContentEntry[][] = targets.map(() => []);
+  const stack: MarkedContentEntry[] = [];
+  const skips = [...skipRanges].sort((a, b) => a.start - b.start);
+  let nextTarget = 0;
+  let skipIndex = 0;
+  let operandStart = 0;
+  let i = 0;
+
+  const recordUpTo = (position: number) => {
+    while (nextTarget < order.length && order[nextTarget]!.target <= position) {
+      snapshots[order[nextTarget]!.index] = [...stack];
+      nextTarget += 1;
+    }
+  };
+
+  while (i < content.length) {
+    while (skipIndex < skips.length && skips[skipIndex]!.end <= i) skipIndex += 1;
+    const skip = skips[skipIndex];
+    if (skip && i >= skip.start) {
+      recordUpTo(skip.start);
+      i = skip.end;
+      operandStart = i;
+      continue;
+    }
+
+    const char = content[i]!;
+    if (PDF_WHITESPACE.has(char)) {
+      i += 1;
+      continue;
+    }
+
+    recordUpTo(i);
+
+    if (char === '%') {
+      while (i < content.length && content[i] !== '\n' && content[i] !== '\r') i += 1;
+      continue;
+    }
+    if (char === '(') {
+      let depth = 0;
+      while (i < content.length) {
+        const current = content[i]!;
+        if (current === '\\') {
+          i += 2;
+          continue;
+        }
+        if (current === '(') depth += 1;
+        if (current === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            i += 1;
+            break;
+          }
+        }
+        i += 1;
+      }
+      continue;
+    }
+    if (char === '<') {
+      if (content[i + 1] === '<') {
+        i += 2;
+        continue;
+      }
+      const close = content.indexOf('>', i + 1);
+      i = close < 0 ? content.length : close + 1;
+      continue;
+    }
+    if (char === '>' || char === '[' || char === ']' || char === '{' || char === '}' || char === ')') {
+      i += char === '>' && content[i + 1] === '>' ? 2 : 1;
+      continue;
+    }
+
+    const tokenStart = i;
+    if (char === '/') i += 1;
+    while (i < content.length && !PDF_WHITESPACE.has(content[i]!) && !PDF_DELIMITERS.has(content[i]!)) i += 1;
+    if (i === tokenStart) {
+      i += 1;
+      continue;
+    }
+    const token = content.slice(tokenStart, i);
+    if (char === '/' || /^[+-]?(\d+\.?\d*|\.\d+)$/.test(token) || token === 'true' || token === 'false' || token === 'null') {
+      continue;
+    }
+
+    // Any other bare token is an operator.
+    if (token === 'BDC' || token === 'BMC') {
+      stack.push(parseMarkedContentOperands(content.slice(operandStart, tokenStart)));
+    } else if (token === 'EMC') {
+      stack.pop();
+    }
+    operandStart = i;
   }
+
+  recordUpTo(Number.POSITIVE_INFINITY);
+  return snapshots;
+}
+
+function maxExistingMcid(content: string, parentArray: PDFArray | undefined): number {
+  let max = maxMcidInContent(content);
   if (parentArray) {
     max = Math.max(max, parentArray.size() - 1);
   }
@@ -256,16 +340,20 @@ function resolveStructTree(pdf: PDFDocument): StructTreeHandles | undefined {
   // Number trees with /Kids are out of scope; skip rather than corrupt.
   if (!nums) return undefined;
 
+  // Never trust ParentTreeNextKey alone: a stale value would hand out a key
+  // that is already in use and silently rebind another page's content.
   let nextKey = 0;
   const nextKeyValue = rootDict.get(PDFName.of('ParentTreeNextKey'));
-  if (nextKeyValue instanceof PDFNumber) {
-    nextKey = nextKeyValue.asNumber();
-  } else {
-    for (let i = 0; i < nums.size(); i += 2) {
-      const key = nums.get(i);
-      if (key instanceof PDFNumber) nextKey = Math.max(nextKey, key.asNumber() + 1);
-    }
+  if (nextKeyValue instanceof PDFNumber) nextKey = Math.max(0, nextKeyValue.asNumber());
+  for (let i = 0; i < nums.size(); i += 2) {
+    const key = nums.get(i);
+    if (key instanceof PDFNumber) nextKey = Math.max(nextKey, key.asNumber() + 1);
   }
+  for (const page of pdf.getPages()) {
+    const structParents = page.node.get(PDFName.of('StructParents'));
+    if (structParents instanceof PDFNumber) nextKey = Math.max(nextKey, structParents.asNumber() + 1);
+  }
+  rootDict.set(PDFName.of('ParentTreeNextKey'), PDFNumber.of(nextKey));
 
   return { rootDict, parentRef, parentKids, nums, nextKey };
 }
@@ -307,6 +395,24 @@ function ensureParentArrayForPage(
   return parentArray;
 }
 
+function createFigureElement(
+  pdf: PDFDocument,
+  tree: StructTreeHandles,
+  page: ReturnType<PDFDocument['getPages']>[number],
+  mcid: number,
+  alt: string
+): PDFRef {
+  const context = pdf.context;
+  const figureDict = context.obj({ Type: 'StructElem', S: 'Figure' });
+  figureDict.set(PDFName.of('P'), tree.parentRef);
+  figureDict.set(PDFName.of('Pg'), page.ref);
+  figureDict.set(PDFName.of('K'), PDFNumber.of(mcid));
+  figureDict.set(PDFName.of('Alt'), encodePdfTextString(alt));
+  const figureRef = context.register(figureDict);
+  tree.parentKids.push(figureRef);
+  return figureRef;
+}
+
 export async function applyManualAltText(
   sourceBytes: ArrayBuffer | Uint8Array,
   applications: ManualAltTextApplication[],
@@ -329,6 +435,7 @@ export async function applyManualAltText(
 
   const loadable = sourceBytes instanceof Uint8Array ? sourceBytes.slice() : sourceBytes.slice(0);
   const pdf = await PDFDocument.load(loadable, { updateMetadata: false, ignoreEncryption: true });
+  assertNotEncrypted(pdf);
   const pages = pdf.getPages();
   const context = pdf.context;
 
@@ -355,7 +462,8 @@ export async function applyManualAltText(
       continue;
     }
 
-    const paints = findImagePaints(content, imageXObjectNames(pdf, page));
+    const inlineBlocks = findInlineImageBlocks(content);
+    const paints = findImagePaints(content, imageXObjectNames(pdf, page), inlineBlocks);
     const expectedCount = pageImageCounts[pageNumber];
     if (typeof expectedCount !== 'number' || paints.length !== expectedCount) {
       skipPage(
@@ -367,6 +475,11 @@ export async function applyManualAltText(
 
     const parentArray = ensureParentArrayForPage(pdf, tree, page);
     let nextMcid = maxExistingMcid(content, parentArray) + 1;
+    const enclosingMarks = markedContentStacksAt(
+      content,
+      paints.map((paint) => paint.start),
+      inlineBlocks
+    );
 
     const matched = pageEntries.filter((entry) => {
       if (entry.order >= 1 && entry.order <= paints.length) return true;
@@ -374,12 +487,76 @@ export async function applyManualAltText(
       return false;
     });
 
+    // Images already inside marked content are never wrapped a second time:
+    // nested MCIDs are invalid and would leave the original Figure without
+    // /Alt. Existing Figures get their /Alt set through the ParentTree.
+    const toWrap: PageEntry[] = [];
+    for (const entry of matched.sort((a, b) => a.order - b.order)) {
+      const marks = enclosingMarks[entry.order - 1] ?? [];
+      const inArtifact = marks.some((mark) => mark.tag === 'Artifact');
+      const tagged = [...marks].reverse().find((mark) => typeof mark.mcid === 'number');
+
+      if (inArtifact) {
+        if (entry.decorative) {
+          applied.push(entry.imageId);
+        } else {
+          skipped.push({
+            imageId: entry.imageId,
+            reason: 'This image is marked as a decorative artifact in the PDF. Retag it in Acrobat to describe it.'
+          });
+        }
+        continue;
+      }
+
+      if (!tagged) {
+        toWrap.push(entry);
+        continue;
+      }
+
+      if (entry.decorative) {
+        skipped.push({
+          imageId: entry.imageId,
+          reason: 'This image is already tagged in the PDF. Mark it as an artifact in Acrobat.'
+        });
+        continue;
+      }
+
+      const mcid = tagged.mcid!;
+      const existingElem = mcid < parentArray.size() ? lookupDict(pdf, parentArray.get(mcid)) : undefined;
+      if (existingElem) {
+        const role = existingElem.get(PDFName.of('S'));
+        if (!(role instanceof PDFName) || role.toString() !== '/Figure') {
+          skipped.push({
+            imageId: entry.imageId,
+            reason: 'This image is tagged inside non-Figure content. Retag it as a Figure in Acrobat.'
+          });
+          continue;
+        }
+        existingElem.set(PDFName.of('Alt'), encodePdfTextString(entry.alt));
+        applied.push(entry.imageId);
+        continue;
+      }
+
+      if (tagged.tag !== 'Figure') {
+        skipped.push({
+          imageId: entry.imageId,
+          reason: 'This image is tagged inside non-Figure content. Retag it as a Figure in Acrobat.'
+        });
+        continue;
+      }
+
+      // Figure-marked content with no structure element yet: bind one to
+      // the existing MCID rather than adding a second marked-content layer.
+      const figureRef = createFigureElement(pdf, tree, page, mcid, entry.alt);
+      while (parentArray.size() <= mcid) parentArray.push(PDFNull);
+      parentArray.set(mcid, figureRef);
+      applied.push(entry.imageId);
+    }
+
     // Assign MCIDs in paint order so the structure tree reads in document
     // order, then rewrite from the last occurrence backwards so byte
     // offsets stay valid.
-    const planned = matched
-      .sort((a, b) => a.order - b.order)
-      .map((entry) => ({ entry, mcid: entry.decorative ? -1 : nextMcid++ }));
+    const planned = toWrap.map((entry) => ({ entry, mcid: entry.decorative ? -1 : nextMcid++ }));
 
     let nextContent = content;
     const figureBindings: Array<{ mcid: number; alt: string; imageId: string }> = [];
@@ -399,18 +576,11 @@ export async function applyManualAltText(
 
     if (nextContent === content) continue;
 
-    const newStream = context.flateStream(nextContent);
+    const newStream = context.flateStream(binaryStringToBytes(nextContent));
     page.node.set(PDFName.of('Contents'), context.register(newStream));
 
     for (const binding of figureBindings.sort((a, b) => a.mcid - b.mcid)) {
-      const figureDict = context.obj({ Type: 'StructElem', S: 'Figure' });
-      figureDict.set(PDFName.of('P'), tree.parentRef);
-      figureDict.set(PDFName.of('Pg'), page.ref);
-      figureDict.set(PDFName.of('K'), PDFNumber.of(binding.mcid));
-      figureDict.set(PDFName.of('Alt'), PDFString.of(binding.alt));
-      const figureRef = context.register(figureDict);
-      tree.parentKids.push(figureRef);
-
+      const figureRef = createFigureElement(pdf, tree, page, binding.mcid, binding.alt);
       while (parentArray.size() <= binding.mcid) {
         parentArray.push(PDFNull);
       }

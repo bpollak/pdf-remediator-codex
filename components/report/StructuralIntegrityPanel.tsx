@@ -61,7 +61,7 @@ function SnapshotCard({
 
   return (
     <article className="rounded border border-[rgba(24,43,73,0.15)] bg-slate-50 p-3">
-      <h4 className="text-sm font-semibold text-[var(--ucsd-navy)]">{title}</h4>
+      <h3 className="text-sm font-semibold text-[var(--ucsd-navy)]">{title}</h3>
       <dl className="mt-2 grid grid-cols-2 gap-2 text-sm text-[var(--ucsd-text)]">
         <div>
           <dt className="text-xs uppercase tracking-wide text-gray-500">Reading structure</dt>

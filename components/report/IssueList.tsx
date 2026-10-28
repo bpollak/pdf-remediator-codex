@@ -68,15 +68,7 @@ function formatPageList(findings: AuditFinding[]): string {
   return `Pages ${unique.join(', ')}`;
 }
 
-function GroupedIssueCard({
-  instances,
-  fileId,
-  variant,
-}: {
-  instances: AuditFinding[];
-  fileId: string;
-  variant: AuditVariant;
-}) {
+function GroupedIssueCard({ instances }: { instances: AuditFinding[] }) {
   const [expanded, setExpanded] = useState(false);
   const representative = instances[0];
   const severity = worstSeverity(instances);
@@ -111,7 +103,7 @@ function GroupedIssueCard({
           </span>
         </div>
         <details className="mt-2">
-          <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">Technical details</summary>
+          <summary className="cursor-pointer text-xs text-gray-600 hover:text-gray-800">Technical details</summary>
           <p className="mt-1 text-xs text-gray-500">
             Rule: {representative.ruleId} · WCAG {representative.wcagCriterion}
           </p>
@@ -129,7 +121,7 @@ function GroupedIssueCard({
       {expanded && (
         <div className="space-y-2 pl-4 border-l-2 border-[rgba(24,43,73,0.1)]">
           {instances.map((finding, index) => (
-            <IssueCard key={`${finding.ruleId}-${finding.location.page ?? index}`} finding={finding} fileId={fileId} variant={variant} />
+            <IssueCard key={`${finding.ruleId}-${index}`} finding={finding} />
           ))}
         </div>
       )}
@@ -178,28 +170,18 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
         const ruleGroups = groupByRule(findings);
         return (
           <div key={category}>
-            <h4 className="mb-2 flex items-baseline gap-2">
+            <h3 className="mb-2 flex items-baseline gap-2 text-base">
               {category}
-              <span className="text-xs font-normal text-gray-400">
+              <span className="text-xs font-normal text-gray-600">
                 {findings.length} {findings.length === 1 ? 'issue' : 'issues'}
               </span>
-            </h4>
+            </h3>
             <div className="space-y-2">
               {ruleGroups.map((group) =>
                 group.instances.length === 1 ? (
-                  <IssueCard
-                    key={group.ruleId}
-                    finding={group.instances[0]}
-                    fileId={fileId}
-                    variant={variant}
-                  />
+                  <IssueCard key={group.ruleId} finding={group.instances[0]} />
                 ) : (
-                  <GroupedIssueCard
-                    key={group.ruleId}
-                    instances={group.instances}
-                    fileId={fileId}
-                    variant={variant}
-                  />
+                  <GroupedIssueCard key={group.ruleId} instances={group.instances} />
                 )
               )}
             </div>

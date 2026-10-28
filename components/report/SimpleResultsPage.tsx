@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { HelpTip } from '@/components/report/HelpTip';
 import { PdfRegionThumbnail } from '@/components/report/PdfRegionThumbnail';
@@ -47,6 +47,64 @@ const categoryLabels: Record<ManualCustomElementCategory, string> = {
 };
 
 const categoryOptions = Object.entries(categoryLabels) as Array<[ManualCustomElementCategory, string]>;
+
+const DESCRIPTION_SAVE_DELAY_MS = 400;
+
+/**
+ * Image description textarea. Typing stays local and is saved shortly after
+ * the user pauses (and on blur), instead of writing the store and browser
+ * storage on every keystroke.
+ */
+function DescriptionField({
+  value,
+  onSave,
+  disabled,
+  labelledBy
+}: {
+  value: string;
+  onSave: (value: string) => void;
+  disabled: boolean;
+  labelledBy: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const pending = useRef<string | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveRef = useRef(onSave);
+  saveRef.current = onSave;
+
+  // Take outside changes (for example "Use suggestion") when nothing is pending.
+  useEffect(() => {
+    if (pending.current === undefined) setDraft(value);
+  }, [value]);
+
+  function flush() {
+    clearTimeout(timer.current);
+    if (pending.current === undefined) return;
+    const next = pending.current;
+    pending.current = undefined;
+    saveRef.current(next);
+  }
+
+  useEffect(() => flush, []);
+
+  return (
+    <textarea
+      value={draft}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        pending.current = event.target.value;
+        clearTimeout(timer.current);
+        timer.current = setTimeout(flush, DESCRIPTION_SAVE_DELAY_MS);
+      }}
+      onBlur={flush}
+      disabled={disabled}
+      rows={3}
+      aria-labelledby={labelledBy}
+      placeholder="Write the image description"
+      className="mt-2 w-full rounded-md border border-[rgba(24,43,73,0.2)] p-2 text-sm disabled:bg-slate-100"
+    />
+  );
+}
 
 function manualStatusLabel(remaining: number) {
   if (remaining === 0) return 'Checklist complete';
@@ -104,7 +162,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const drafts = getManualReviewDrafts(file);
   const remaining = Math.max(completion.total - completion.completed, 0);
   const manualStructureRequired = file?.remediationMode === 'analysis-only';
-  const manualStructureDone = Boolean(file?.workflowProgress?.structurePreparedAt);
+  const manualStructureDone = Boolean(file?.workflowProgress?.structureConfirmedAt);
   const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app';
 
   const imageEntries = useMemo(() => {
@@ -148,8 +206,11 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = name;
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    // Revoking straight after click() can cancel the download in Safari.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     markWorkflowProgress(fileId, {
       downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
     });
@@ -201,7 +262,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
 
   function setManualStructureDone(done: boolean) {
     markWorkflowProgress(fileId, {
-      structurePreparedAt: done ? file?.workflowProgress?.structurePreparedAt ?? new Date().toISOString() : undefined
+      structureConfirmedAt: done ? file?.workflowProgress?.structureConfirmedAt ?? new Date().toISOString() : undefined
     });
   }
 
@@ -428,6 +489,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
             </div>
             {applyState.status === 'done' ? (
               <div
+                role="status"
                 className={`mt-3 max-w-2xl rounded-md border p-3 text-sm ${
                   applyState.downloaded
                     ? 'border-green-200 bg-green-50 text-green-900'
@@ -448,7 +510,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
               </div>
             ) : null}
             {applyState.status === 'error' ? (
-              <p className="mt-3 max-w-2xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p role="alert" className="mt-3 max-w-2xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                 {applyState.message}
               </p>
             ) : null}
@@ -557,7 +619,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                     />
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h4 className="font-semibold text-[var(--ucsd-navy)]">
+                        <h4 id={`image-heading-${entry.image.id}`} className="font-semibold text-[var(--ucsd-navy)]">
                           {entry.label} on page {entry.image.page}
                         </h4>
                         <button
@@ -570,7 +632,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                         </button>
                       </div>
                       {suggestion.status === 'ready' ? (
-                        <div className="mt-2 rounded-md border border-green-200 bg-green-50 p-2 text-sm text-green-900">
+                        <div role="status" className="mt-2 rounded-md border border-green-200 bg-green-50 p-2 text-sm text-green-900">
                           <p>{suggestion.decorative ? 'Suggested as decorative.' : suggestion.alt}</p>
                           <button
                             type="button"
@@ -582,7 +644,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                         </div>
                       ) : null}
                       {suggestion.status === 'error' ? (
-                        <p className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                        <p role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">
                           {suggestion.message}
                         </p>
                       ) : null}
@@ -591,7 +653,8 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                           <input
                             type="checkbox"
                             checked={entry.draft.decorative}
-                            onChange={(event) => saveAltText(entry.image.id, '', event.target.checked)}
+                            // Keep the description, so an accidental tick doesn't erase it.
+                            onChange={(event) => saveAltText(entry.image.id, entry.draft.alt, event.target.checked)}
                             className="h-5 w-5"
                           />
                           Decorative image
@@ -602,13 +665,11 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                           conveys information, leave this unchecked and write a description instead.
                         </HelpTip>
                       </div>
-                      <textarea
+                      <DescriptionField
                         value={entry.draft.alt}
-                        onChange={(event) => saveAltText(entry.image.id, event.target.value, false)}
+                        onSave={(alt) => saveAltText(entry.image.id, alt, false)}
                         disabled={entry.draft.decorative}
-                        rows={3}
-                        placeholder="Write the image description"
-                        className="mt-2 w-full rounded-md border border-[rgba(24,43,73,0.2)] p-2 text-sm disabled:bg-slate-100"
+                        labelledBy={`image-heading-${entry.image.id}`}
                       />
                     </div>
                   </div>
@@ -631,6 +692,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
+                      aria-pressed={table.decision === 'confirm'}
                       onClick={() => updateStructureTableDraft(fileId, table.key, 'confirm')}
                       className={`rounded-md border px-3 py-1.5 text-sm ${
                         table.decision === 'confirm'
@@ -642,6 +704,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                     </button>
                     <button
                       type="button"
+                      aria-pressed={table.decision === 'reject'}
                       onClick={() => updateStructureTableDraft(fileId, table.key, 'reject')}
                       className={`rounded-md border px-3 py-1.5 text-sm ${
                         table.decision === 'reject'

@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileQueue } from '@/components/upload/FileQueue';
 import { ProcessingNotice } from '@/components/upload/ProcessingNotice';
-import { QueueProcessor } from '@/components/upload/QueueProcessor';
 import { useAppStore } from '@/stores/app-store';
 
 function AppPageFallback() {
@@ -28,6 +27,7 @@ function AppPageContent() {
   const searchParams = useSearchParams();
   const files = useAppStore((state) => state.files);
   const hydrated = useAppStore((state) => state.hydrated);
+  const hydrationError = useAppStore((state) => state.hydrationError);
   const revalidateFor = searchParams.get('revalidateFor');
   const baseFile = revalidateFor ? files.find((file) => file.id === revalidateFor) : undefined;
   const hasCompletedWorkflow = files.some((file) => file.status === 'remediated');
@@ -60,9 +60,13 @@ function AppPageContent() {
           The earlier review could not be found. Uploading here will start a new remediation workflow.
         </div>
       ) : null}
+      {hydrationError ? (
+        <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {hydrationError}
+        </div>
+      ) : null}
       <DropZone />
       <ProcessingNotice />
-      <QueueProcessor />
       <FileQueue />
     </div>
   );

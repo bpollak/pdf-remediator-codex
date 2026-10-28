@@ -2,8 +2,6 @@
 
 import type { AuditFinding } from '@/lib/audit/types';
 import { findingActionTitle } from '@/lib/report/finding-copy';
-import { resolveFindingPreviewFocus } from '@/lib/report/finding-focus';
-import { useAppStore } from '@/stores/app-store';
 
 const severityStyles = {
   critical: 'bg-red-100 text-red-800',
@@ -17,30 +15,7 @@ const severityLabel = {
   minor: 'Lower priority',
 } as const;
 
-export function IssueCard({
-  finding,
-  fileId,
-  variant
-}: {
-  finding: AuditFinding;
-  fileId: string;
-  variant: 'original' | 'remediated';
-}) {
-  const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
-  const setPreviewFocus = useAppStore((state) => state.setPreviewFocus);
-  const focus = resolveFindingPreviewFocus(file, finding, variant);
-
-  function reviewInPreview() {
-    setPreviewFocus(fileId, {
-      variant,
-      page: focus?.page ?? finding.location.page ?? 1,
-      label: findingActionTitle(finding),
-      detail: focus?.detail,
-      bounds: focus?.bounds
-    });
-    document.getElementById('review-step')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
+export function IssueCard({ finding }: { finding: AuditFinding }) {
   return (
     <article className="rounded border border-[rgba(24,43,73,0.2)] bg-white p-3 shadow-sm">
       <p className="font-medium text-[var(--ucsd-navy)]">
@@ -66,18 +41,11 @@ export function IssueCard({
         )}
       </div>
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">Technical details</summary>
+        <summary className="cursor-pointer text-xs text-gray-600 hover:text-gray-800">Technical details</summary>
         <p className="mt-1 text-xs text-gray-500">
           Rule: {finding.ruleId} · WCAG {finding.wcagCriterion}
         </p>
       </details>
-      <button
-        type="button"
-        onClick={reviewInPreview}
-        className="mt-3 inline-flex items-center rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-slate-50"
-      >
-        {focus?.bounds ? 'Review highlighted region' : 'Review in preview'}
-      </button>
     </article>
   );
 }

@@ -98,4 +98,29 @@ describe('/api/ocr/tritonai', () => {
       text: 'Accessible PDF OCR smoke test\nLightOn OCR should extract this text.'
     });
   });
+
+  it('moves on to the fallback model when the primary request fails at the network level', async () => {
+    process.env = {
+      ...originalEnv,
+      OCR_LITELLM_API_KEY: 'test-key',
+      OCR_LITELLM_BASE_URL: 'https://tritonai-api.ucsd.edu',
+      OCR_LITELLM_MODEL: 'api-lightonocr-1b',
+      OCR_LITELLM_FALLBACK_MODELS: 'api-mistral-small-3.2-2506'
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockRejectedValueOnce(Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { content: JSON.stringify({ lines: [{ text: 'First line' }, { text: 'Second line' }] }) } }]
+        })
+      );
+
+    const response = await POST(makeRequest());
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(payload).toMatchObject({ model: 'api-mistral-small-3.2-2506', text: 'First line\nSecond line' });
+  });
 });

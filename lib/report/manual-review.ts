@@ -389,8 +389,10 @@ export function summarizeManualCompletion(file: FileEntry | undefined) {
   const altTextTotal = review.altText.totalImages;
   const altTextCompleted = review.altText.completedCount;
   const manualStructureTotal = file?.remediationMode === 'analysis-only' ? 1 : 0;
+  // Only the user's own "done" tick counts: editing table or heading drafts
+  // does not add tags to the PDF.
   const manualStructureCompleted =
-    manualStructureTotal > 0 && file?.workflowProgress?.structurePreparedAt ? 1 : 0;
+    manualStructureTotal > 0 && file?.workflowProgress?.structureConfirmedAt ? 1 : 0;
   const tableTotal = review.structure.tableSuggestions;
   const tableCompleted = review.structure.reviewedTables;
   const customTotal = review.customElements.totalCount;

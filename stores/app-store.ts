@@ -43,12 +43,21 @@ interface AddFilesOptions {
   derivedFromFileId?: string;
 }
 
+export const MAX_FILES_PER_UPLOAD = 10;
+
+export interface AddFilesResult {
+  added: number;
+  skipped: number;
+}
+
 interface AppStore {
   files: FileEntry[];
   hydrated: boolean;
+  /** Set when saved files could not be restored from browser storage. */
+  hydrationError?: string;
   previewFocusByFileId: Record<string, PreviewFocus | undefined>;
   hydrateFromPersistence: () => Promise<void>;
-  addFiles: (files: File[], options?: AddFilesOptions) => Promise<void>;
+  addFiles: (files: File[], options?: AddFilesOptions) => Promise<AddFilesResult>;
   updateFile: (id: string, patch: Partial<FileEntry>) => void;
   removeFile: (id: string) => void;
   updateAltTextDraft: (fileId: string, imageId: string, draft: ManualAltTextDraft | undefined) => void;
@@ -120,9 +129,21 @@ function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
   return false;
 }
 
-function shouldPersistAssetsForPatch(patch: Partial<FileEntry>): boolean {
-  return 'uploadedBytes' in patch || 'remediatedBytes' in patch;
+function assetsForPatch(patch: Partial<FileEntry>) {
+  const assets: { uploaded?: ArrayBuffer; remediated?: ArrayBuffer | null } = {};
+  if (patch.uploadedBytes) assets.uploaded = patch.uploadedBytes;
+  if ('remediatedBytes' in patch) assets.remediated = patch.remediatedBytes ?? null;
+  return assets;
 }
+
+function describePersistError(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+    return 'This browser is out of storage space, so this result will not survive a page reload. Download it now, or remove older files from the list.';
+  }
+  return 'This result could not be saved in this browser, so it will not survive a page reload. Download it now.';
+}
+
+let hydrationInFlight: Promise<void> | undefined;
 
 function buildManualReviewDrafts(
   file: FileEntry,
@@ -196,29 +217,43 @@ export const useAppStore = create<AppStore>((set, get) => ({
   files: [],
   hydrated: false,
   previewFocusByFileId: {},
-  hydrateFromPersistence: async () => {
-    if (get().hydrated || typeof window === 'undefined') return;
+  hydrateFromPersistence: () => {
+    if (get().hydrated || typeof window === 'undefined') return Promise.resolve();
+    // React strict mode runs effects twice; share one restore.
+    hydrationInFlight ??= (async () => {
+      try {
+        const { files: persistedFiles, droppedIds } = await loadPersistedFiles();
+        set((state) => {
+          const seenIds = new Set(state.files.map((file) => file.id));
+          const hydratedFiles = persistedFiles
+            .filter((file) => !seenIds.has(file.id))
+            .map((file) => normalizePersistedFile(file));
 
-    try {
-      const persistedFiles = await loadPersistedFiles();
-      set((state) => {
-        const seenIds = new Set(state.files.map((file) => file.id));
-        const hydratedFiles = persistedFiles
-          .filter((file) => !seenIds.has(file.id))
-          .map((file) => normalizePersistedFile(file));
-
-        return {
-          files: [...hydratedFiles, ...state.files],
-          hydrated: true
-        };
-      });
-    } catch {
-      set({ hydrated: true });
-    }
+          return {
+            files: [...hydratedFiles, ...state.files],
+            hydrated: true
+          };
+        });
+        if (droppedIds.length > 0) {
+          void deleteFileEntries(droppedIds).catch((err) => {
+            console.error('[app-store] Failed to delete incomplete saved files:', err);
+          });
+        }
+      } catch (err) {
+        console.error('[app-store] Failed to restore saved files:', err);
+        set({
+          hydrated: true,
+          hydrationError: 'Saved files could not be loaded from this browser. New uploads still work, but earlier results are not available.'
+        });
+      } finally {
+        hydrationInFlight = undefined;
+      }
+    })();
+    return hydrationInFlight;
   },
   addFiles: async (files, options) => {
     const entries = await Promise.all(
-      files.slice(0, 10).map(async (file) => ({
+      files.slice(0, MAX_FILES_PER_UPLOAD).map(async (file) => ({
         id: crypto.randomUUID(),
         name: file.name,
         size: file.size,
@@ -230,10 +265,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }))
     );
 
-    set((state) => ({ files: [...state.files, ...entries], hydrated: true }));
-    void Promise.all(entries.map((entry) => saveFileEntry(entry))).catch((err) => {
-      console.error('[app-store] Failed to persist new file entries:', err);
-    });
+    set((state) => ({ files: [...state.files, ...entries] }));
+    // Ask the browser not to evict saved PDFs under storage pressure.
+    void navigator.storage?.persist?.().catch(() => false);
+    for (const entry of entries) {
+      void saveFileEntry(entry, { assets: { uploaded: entry.uploadedBytes } }).catch((err) => {
+        console.error('[app-store] Failed to persist new file entry:', err);
+        get().updateFile(entry.id, { persistError: describePersistError(err) });
+      });
+    }
+    return { added: entries.length, skipped: Math.max(0, files.length - entries.length) };
   },
   updateFile: (id, patch) => {
     let updatedEntry: FileEntry | undefined;
@@ -250,9 +291,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
 
     if (updatedEntry && shouldPersistPatch(patch)) {
-      void saveFileEntry(updatedEntry, { persistAssets: shouldPersistAssetsForPatch(patch) }).catch((err) => {
-        console.error(`[app-store] Failed to persist update for file ${id}:`, err);
-      });
+      const entry: FileEntry = updatedEntry;
+      void saveFileEntry(entry, { assets: assetsForPatch(patch) })
+        .then(() => {
+          if (entry.persistError) get().updateFile(id, { persistError: undefined });
+        })
+        .catch((err) => {
+          console.error(`[app-store] Failed to persist update for file ${id}:`, err);
+          get().updateFile(id, { persistError: describePersistError(err) });
+        });
     }
   },
   removeFile: (id) => {

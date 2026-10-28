@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 
 interface HelpTipProps {
   label: string;
@@ -10,6 +10,7 @@ interface HelpTipProps {
 export function HelpTip({ label, children }: HelpTipProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const panelId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -18,8 +19,15 @@ export function HelpTip({ label, children }: HelpTipProps) {
         setOpen(false);
       }
     }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [open]);
 
   return (
@@ -28,6 +36,7 @@ export function HelpTip({ label, children }: HelpTipProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        aria-controls={panelId}
         aria-label={`Help: ${label}`}
         className="ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)]"
       >
@@ -35,7 +44,7 @@ export function HelpTip({ label, children }: HelpTipProps) {
       </button>
       {open ? (
         <span
-          role="tooltip"
+          id={panelId}
           className="absolute bottom-full left-1/2 z-10 mb-2 w-64 -translate-x-1/2 rounded border border-[rgba(24,43,73,0.15)] bg-white p-3 text-xs leading-relaxed text-[var(--ucsd-text)] shadow-lg"
         >
           {children}

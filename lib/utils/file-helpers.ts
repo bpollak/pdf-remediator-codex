@@ -12,7 +12,7 @@ function hasPdfHeader(bytes: Uint8Array): boolean {
 }
 
 function isPdfMimeType(type: string | undefined): boolean {
-  if (!type) return true;
+  if (!type) return false;
   const normalized = type.toLowerCase();
   return (
     normalized === 'application/pdf' ||
@@ -22,6 +22,10 @@ function isPdfMimeType(type: string | undefined): boolean {
 }
 
 export async function validatePdfFile(file: File): Promise<PdfFileValidationResult> {
+  if (file.size === 0) {
+    return { ok: false, reason: 'File is empty.' };
+  }
+
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return { ok: false, reason: 'File is larger than 50 MB.' };
   }

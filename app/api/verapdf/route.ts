@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeVerapdfPayload } from '@/lib/verapdf/normalize';
-import { rateLimit } from '@/lib/rate-limit';
+import { guardApiRequest, assertServiceUrlSafe, upstreamErrorStatus } from '@/lib/rate-limit';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import {
   DEFAULT_VERAPDF_TIMEOUT_MS,
@@ -80,6 +80,16 @@ function resolveInfoUrl(serviceUrl: string): string {
   return parsed.toString();
 }
 
+function serviceAuthHeaders(headers = new Headers()): Headers {
+  if (process.env.VERAPDF_SERVICE_TOKEN) {
+    headers.set('Authorization', `Bearer ${process.env.VERAPDF_SERVICE_TOKEN}`);
+  }
+  if (process.env.VERAPDF_SERVICE_API_KEY) {
+    headers.set('x-api-key', process.env.VERAPDF_SERVICE_API_KEY);
+  }
+  return headers;
+}
+
 async function probeVerapdf(serviceUrl: string, timeoutMs = 3_000): Promise<boolean> {
   const infoUrl = resolveInfoUrl(serviceUrl);
   const controller = new AbortController();
@@ -88,6 +98,7 @@ async function probeVerapdf(serviceUrl: string, timeoutMs = 3_000): Promise<bool
   try {
     const response = await fetch(infoUrl, {
       method: 'GET',
+      headers: serviceAuthHeaders(),
       signal: controller.signal,
       cache: 'no-store'
     });
@@ -99,7 +110,10 @@ async function probeVerapdf(serviceUrl: string, timeoutMs = 3_000): Promise<bool
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const refused = guardApiRequest(request, 'verapdf-status', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (refused) return refused;
+
   const profile = getConfiguredProfile();
   const resolved = resolveServiceUrl();
   const serviceUrl = resolved.url;
@@ -138,37 +152,9 @@ export async function GET() {
   );
 }
 
-function resolveClientIp(request: NextRequest): string {
-  // On Vercel, x-forwarded-for is set by the platform and is trustworthy.
-  // For other environments, this is a best-effort heuristic.
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  // x-real-ip is set by some reverse proxies (nginx, Cloudflare).
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  return 'unknown';
-}
-
-function assertServiceUrlSafe(url: string): void {
-  if (url.startsWith('https://') || url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
-    return;
-  }
-  if (process.env.NODE_ENV === 'development') return;
-  throw new Error('VERAPDF_SERVICE_URL must use HTTPS in production.');
-}
-
 export async function POST(request: NextRequest) {
-  const ip = resolveClientIp(request);
-  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
-    );
-  }
+  const refused = guardApiRequest(request, 'verapdf', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (refused) return refused;
 
   const resolved = resolveServiceUrl();
   const serviceUrl = resolved.url;
@@ -197,7 +183,7 @@ export async function POST(request: NextRequest) {
   const profile = getConfiguredProfile();
   let upstreamUrl: string;
   try {
-    assertServiceUrlSafe(serviceUrl);
+    assertServiceUrlSafe(serviceUrl, 'VERAPDF_SERVICE_URL');
     upstreamUrl = resolveValidationUrl(serviceUrl, profile);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid VERAPDF_SERVICE_URL configuration.';
@@ -207,15 +193,7 @@ export async function POST(request: NextRequest) {
   const upstreamForm = new FormData();
   upstreamForm.append('file', file, fileName);
 
-  const headers = new Headers({
-    Accept: 'application/json'
-  });
-  if (process.env.VERAPDF_SERVICE_TOKEN) {
-    headers.set('Authorization', `Bearer ${process.env.VERAPDF_SERVICE_TOKEN}`);
-  }
-  if (process.env.VERAPDF_SERVICE_API_KEY) {
-    headers.set('x-api-key', process.env.VERAPDF_SERVICE_API_KEY);
-  }
+  const headers = serviceAuthHeaders(new Headers({ Accept: 'application/json' }));
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), getConfiguredTimeoutMs());
@@ -242,7 +220,7 @@ export async function POST(request: NextRequest) {
           error: `veraPDF backend failed with status ${upstream.status}.`,
           ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
         },
-        { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 }
+        { status: upstreamErrorStatus(upstream.status) }
       );
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { guardApiRequest } from '@/lib/rate-limit';
 import {
   requestTritonAiAltText,
   TritonAiRequestError,
@@ -17,18 +17,8 @@ const MAX_IMAGE_DATA_URL_LENGTH = 2_500_000;
 const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
 const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
 const DEFAULT_ALT_TEXT_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
-const DEFAULT_TIMEOUT_MS = 45_000;
-
-function resolveClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  return 'unknown';
-}
+// Per model attempt, so a stalled primary still leaves time for a fallback.
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 function getApiKey(): string | undefined {
   return process.env.LITELLM_API_KEY?.trim() || process.env.TRITONAI_API_KEY?.trim();
@@ -66,7 +56,7 @@ function getModelCandidates(): string[] {
 function getTimeoutMs(): number {
   const raw = Number(process.env.LITELLM_TIMEOUT_MS ?? process.env.TRITONAI_TIMEOUT_MS);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_TIMEOUT_MS;
-  return Math.min(Math.max(raw, 5_000), 55_000);
+  return Math.min(Math.max(raw, 5_000), 25_000);
 }
 
 function normalizeBody(value: unknown): AltTextSuggestionInput | undefined {
@@ -89,14 +79,8 @@ function normalizeBody(value: unknown): AltTextSuggestionInput | undefined {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = resolveClientIp(request);
-  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
-    );
-  }
+  const refused = guardApiRequest(request, 'alt-text', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (refused) return refused;
 
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -111,99 +95,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Expected imageDataUrl and imageLabel fields.' }, { status: 400 });
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), getTimeoutMs());
+  const baseUrl = getBaseUrl();
+  const timeoutMs = getTimeoutMs();
+  const failures: Array<{ model: string; status?: number; detail?: string }> = [];
 
-  try {
-    const baseUrl = getBaseUrl();
-    const failures: Array<{ model: string; status?: number; detail?: string }> = [];
-
-    for (const model of getModelCandidates()) {
-      try {
-        const suggestion = await requestTritonAiAltText(input, {
-          apiKey,
-          baseUrl,
-          model,
-          signal: controller.signal
-        });
-
-        return NextResponse.json(suggestion, {
-          status: 200,
-          headers: {
-            'cache-control': 'no-store'
-          }
-        });
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') throw error;
-        if (error instanceof TritonAiRequestError) {
-          failures.push({ model, status: error.status, detail: error.detail });
-        } else {
-          failures.push({
-            model,
-            detail: error instanceof Error ? error.message : 'Unknown alt-text model error'
-          });
-        }
-      }
-    }
-
-    console.error('TritonAI alt-text failed for all model candidates', failures);
-
-    return NextResponse.json(
-      {
-        error: 'Failed to generate alt-text recommendation.',
-        hint: 'All configured TritonAI alt-text models failed.',
-        attemptedModels: failures.map((failure) => ({
-          model: failure.model,
-          status: failure.status,
-          detail: failure.detail?.slice(0, 200)
-        }))
-      },
-      { status: 502 }
-    );
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return NextResponse.json({ error: 'TritonAI alt-text request timed out.' }, { status: 504 });
-    }
-
-    if (error instanceof TritonAiRequestError) {
-      const model = getModel();
-      console.error('TritonAI alt-text upstream request failed', {
-        status: error.status,
+  for (const model of getModelCandidates()) {
+    try {
+      const suggestion = await requestTritonAiAltText(input, {
+        apiKey,
+        baseUrl,
         model,
-        detail: error.detail
+        signal: AbortSignal.timeout(timeoutMs)
       });
 
-      const hint =
-        error.status === 401 || error.status === 403
-          ? 'TritonAI rejected the configured API key.'
-          : error.status === 404
-            ? `TritonAI could not find model "${model}".`
-            : error.status === 400
-              ? `TritonAI rejected the alt-text request for model "${model}".`
-              : 'TritonAI returned an upstream error.';
-
-      return NextResponse.json(
-        {
-          error: 'Failed to generate alt-text recommendation.',
-          hint,
-          upstreamStatus: error.status
-        },
-        { status: 502 }
-      );
+      return NextResponse.json(suggestion, {
+        status: 200,
+        headers: {
+          'cache-control': 'no-store'
+        }
+      });
+    } catch (error) {
+      if (error instanceof TritonAiRequestError) {
+        failures.push({ model, status: error.status, detail: error.detail });
+      } else if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        failures.push({ model, status: 504, detail: 'Timed out.' });
+      } else {
+        failures.push({
+          model,
+          detail: error instanceof Error ? error.message : 'Unknown alt-text model error'
+        });
+      }
     }
-
-    console.error('TritonAI alt-text recommendation failed', error);
-
-    return NextResponse.json(
-      {
-        error: 'Failed to generate alt-text recommendation.',
-        ...(process.env.NODE_ENV === 'development'
-          ? { detail: error instanceof Error ? error.message : 'Unknown error' }
-          : {})
-      },
-      { status: 502 }
-    );
-  } finally {
-    clearTimeout(timer);
   }
+
+  // Upstream detail can name internal deployments, so it stays in the server log.
+  console.error('TritonAI alt-text failed for all model candidates', failures);
+
+  const allTimedOut = failures.length > 0 && failures.every((failure) => failure.status === 504);
+  const authRejected = failures.some((failure) => failure.status === 401 || failure.status === 403);
+
+  return NextResponse.json(
+    {
+      error: allTimedOut ? 'TritonAI alt-text request timed out.' : 'Failed to generate alt-text recommendation.',
+      hint: authRejected ? 'TritonAI rejected the configured API key.' : 'All configured TritonAI alt-text models failed.',
+      attemptedModels: failures.map((failure) => ({
+        model: failure.model,
+        status: failure.status
+      }))
+    },
+    { status: allTimedOut ? 504 : 502 }
+  );
 }

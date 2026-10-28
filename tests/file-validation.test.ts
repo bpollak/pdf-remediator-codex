@@ -54,4 +54,14 @@ describe('PDF upload validation', () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toContain('does not look like a valid PDF');
   });
+
+  it('rejects empty files', async () => {
+    const result = await validatePdfFile(new File([], 'empty.pdf', { type: 'application/pdf' }));
+    expect(result).toEqual({ ok: false, reason: 'File is empty.' });
+  });
+
+  it('rejects a renamed non-PDF file that has no MIME type', async () => {
+    const result = await validatePdfFile(new File(['hello, this is a text file'], 'notes.pdf'));
+    expect(result.ok).toBe(false);
+  });
 });
