@@ -3,7 +3,9 @@ import { assertServiceUrlSafe, guardApiRequest } from '@/lib/rate-limit';
 import { createRequestDeadline, type RequestDeadline } from '@/lib/server/deadline';
 import { contentLengthExceeds, isTimeoutError, jsonError } from '@/lib/server/http';
 import { addTokenUsage, startRequestLog, type RequestLog, type TokenUsage } from '@/lib/server/log';
+import { getAltTextGatewaySettings, getModelCandidates } from '@/lib/tritonai/gateway';
 import {
+  DEFAULT_LITELLM_MODEL,
   requestTritonAiAltText,
   TritonAiRequestError,
   validateImageDataUrl,
@@ -20,10 +22,6 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 2_500_000;
 // Room for the other JSON fields around the image.
 const MAX_BODY_BYTES = MAX_IMAGE_DATA_URL_LENGTH + 64 * 1024;
-const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
-const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
-const DEFAULT_ALT_TEXT_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
-const MAX_MODEL_CANDIDATES = 3;
 // Per model attempt, so a stalled primary still leaves time for a fallback.
 // Every attempt is also capped by what is left of the request deadline.
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -33,37 +31,12 @@ const MAX_PAGE = 10_000;
 
 type Failure = { model: string; status?: number };
 
-function getApiKey(): string | undefined {
-  return process.env.LITELLM_API_KEY?.trim() || process.env.TRITONAI_API_KEY?.trim();
-}
-
-function getBaseUrl(): string {
-  return process.env.LITELLM_BASE_URL?.trim() || process.env.TRITONAI_BASE_URL?.trim() || DEFAULT_LITELLM_BASE_URL;
-}
-
 function getModel(): string {
   return process.env.LITELLM_MODEL?.trim() || process.env.TRITONAI_MODEL?.trim() || DEFAULT_LITELLM_MODEL;
 }
 
-function uniqueValues(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = value.trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(normalized);
-  }
-  return result;
-}
-
-function getModelCandidates(): string[] {
-  const configured = getModel();
-  const fallbackModels = process.env.LITELLM_FALLBACK_MODELS || process.env.TRITONAI_FALLBACK_MODELS;
-  return uniqueValues([
-    configured,
-    ...(fallbackModels ? fallbackModels.split(',') : DEFAULT_ALT_TEXT_FALLBACK_MODELS)
-  ]).slice(0, MAX_MODEL_CANDIDATES);
+function getAltTextModelCandidates(): string[] {
+  return getModelCandidates(getModel(), process.env.LITELLM_FALLBACK_MODELS || process.env.TRITONAI_FALLBACK_MODELS);
 }
 
 function getTimeoutMs(): number {
@@ -120,15 +93,14 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
     return refused;
   }
 
-  const apiKey = getApiKey();
+  const { apiKey, baseUrl, baseUrlSetting } = getAltTextGatewaySettings();
   if (!apiKey) {
     log.finish({ status: 503, code: 'not_configured', detail: 'LITELLM_API_KEY / TRITONAI_API_KEY is not set.' });
     return jsonError(503, 'not_configured', { error: 'Alt-text suggestions are not available on this deployment.' });
   }
 
-  const baseUrl = getBaseUrl();
   try {
-    assertServiceUrlSafe(baseUrl, 'LITELLM_BASE_URL');
+    assertServiceUrlSafe(baseUrl, baseUrlSetting);
   } catch (error) {
     log.finish({ status: 500, code: 'misconfigured', detail: error instanceof Error ? error.message : undefined });
     return jsonError(500, 'misconfigured', { error: 'Alt-text suggestions are misconfigured on this deployment.' });
@@ -157,7 +129,7 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
     usage = addTokenUsage(usage, next);
   };
 
-  for (const model of getModelCandidates()) {
+  for (const model of getAltTextModelCandidates()) {
     const timeoutMs = deadline.attemptTimeoutMs(perModelTimeoutMs);
     // Too little time left for another model: answer now instead of letting
     // the platform end the function mid-request.

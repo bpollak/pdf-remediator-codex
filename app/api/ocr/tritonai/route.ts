@@ -4,15 +4,14 @@ import { validateImageDataUrl } from '@/lib/alt-text/tritonai';
 import { createRequestDeadline, type RequestDeadline } from '@/lib/server/deadline';
 import { contentLengthExceeds, isTimeoutError, jsonError } from '@/lib/server/http';
 import { addTokenUsage, readTokenUsage, startRequestLog, type RequestLog, type TokenUsage } from '@/lib/server/log';
+import { getModelCandidates, getOcrGatewaySettings, stripJsonFences } from '@/lib/tritonai/gateway';
 import { formatUntrustedBlock, sanitizeUntrustedText } from '@/lib/tritonai/prompt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
 const DEFAULT_OCR_MODEL = 'api-lightonocr-1b';
-const DEFAULT_OCR_FALLBACK_MODELS = ['api-mistral-small-3.2-2506', 'api-gemma-4-26b'];
 const ROUTE = 'ocr-tritonai';
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -25,7 +24,6 @@ const MIN_CONFIDENT_PAGE_LINES = 2;
 const PER_MODEL_TIMEOUT_MS = 35_000;
 // Leaves time to build the JSON answer before maxDuration ends the function.
 const DEADLINE_SAFETY_MARGIN_MS = 5_000;
-const MAX_MODEL_CANDIDATES = 3;
 // A page rendered at the client's OCR scale is well under this; larger
 // bodies are near the platform's 4.5 MB request cap anyway.
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
@@ -34,12 +32,6 @@ const MAX_PAGE = 10_000;
 
 interface OcrLine {
   text: string;
-}
-
-function stripJsonFences(value: string): string {
-  const trimmed = value.trim();
-  const fence = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  return (fence ? fence[1] : trimmed).trim();
 }
 
 function normalizeLine(value: unknown): OcrLine | undefined {
@@ -136,24 +128,8 @@ function buildTritonOcrRequest(input: {
   };
 }
 
-function uniqueValues(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = value.trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(normalized);
-  }
-  return result;
-}
-
-function getModelCandidates(): string[] {
-  const configured = process.env.OCR_LITELLM_MODEL || DEFAULT_OCR_MODEL;
-  const fallbackModels = process.env.OCR_LITELLM_FALLBACK_MODELS
-    ? process.env.OCR_LITELLM_FALLBACK_MODELS.split(',')
-    : DEFAULT_OCR_FALLBACK_MODELS;
-  return uniqueValues([configured, ...fallbackModels]).slice(0, MAX_MODEL_CANDIDATES);
+function getOcrModelCandidates(): string[] {
+  return getModelCandidates(process.env.OCR_LITELLM_MODEL || DEFAULT_OCR_MODEL, process.env.OCR_LITELLM_FALLBACK_MODELS);
 }
 
 
@@ -178,15 +154,14 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
     return refused;
   }
 
-  const apiKey = process.env.OCR_LITELLM_API_KEY || process.env.LITELLM_API_KEY;
+  const { apiKey, baseUrl, baseUrlSetting } = getOcrGatewaySettings();
   if (!apiKey) {
     log.finish({ status: 503, code: 'not_configured', detail: 'OCR_LITELLM_API_KEY / LITELLM_API_KEY is not set.' });
     return jsonError(503, 'not_configured', { error: 'TritonAI OCR is not available on this deployment.' });
   }
 
-  const baseUrl = (process.env.OCR_LITELLM_BASE_URL || process.env.LITELLM_BASE_URL || DEFAULT_LITELLM_BASE_URL).replace(/\/+$/, '');
   try {
-    assertServiceUrlSafe(baseUrl, process.env.OCR_LITELLM_BASE_URL ? 'OCR_LITELLM_BASE_URL' : 'LITELLM_BASE_URL');
+    assertServiceUrlSafe(baseUrl, baseUrlSetting);
   } catch (error) {
     log.finish({ status: 500, code: 'misconfigured', detail: error instanceof Error ? error.message : undefined });
     return jsonError(500, 'misconfigured', { error: 'TritonAI OCR is misconfigured on this deployment.' });
@@ -214,7 +189,7 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
     return jsonError(400, 'invalid_request', { error: 'Expected imageDataUrl and page.' });
   }
 
-  const models = getModelCandidates();
+  const models = getOcrModelCandidates();
   const failures: Failure[] = [];
   let bestResult: { model: string; lines: OcrLine[] } | undefined;
   let usage: TokenUsage | undefined;

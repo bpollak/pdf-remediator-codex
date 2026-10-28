@@ -1,3 +1,4 @@
+import { DEFAULT_LITELLM_BASE_URL, stripJsonFences } from '@/lib/tritonai/gateway';
 import { formatUntrustedBlock, sanitizeUntrustedText } from '@/lib/tritonai/prompt';
 import { readTokenUsage, type TokenUsage } from '@/lib/server/log';
 
@@ -24,8 +25,7 @@ export interface TritonAiConfig {
   onUsage?: (usage: TokenUsage) => void;
 }
 
-const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
-const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
+export const DEFAULT_LITELLM_MODEL = 'gpt-5.5';
 const MAX_ALT_TEXT_LENGTH = 240;
 
 export class TritonAiRequestError extends Error {
@@ -41,12 +41,6 @@ export class TritonAiRequestError extends Error {
 
 function supportsCustomTemperature(model: string): boolean {
   return !model.startsWith('gpt-5');
-}
-
-function stripJsonFences(value: string): string {
-  const trimmed = value.trim();
-  const fence = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  return (fence ? fence[1] : trimmed).trim();
 }
 
 /**
