@@ -79,6 +79,9 @@ jobs:
             sleep 1
           done
           echo "Server did not start"; cat next-start.log; exit 1
+      - name: Deployed version
+        if: ${{ inputs.live_base_url }}
+        run: curl -sS --fail-with-body "${{ inputs.live_base_url }}/api/health"
       - name: Browser suite
         env:
           LIVE_BASE_URL: ${{ inputs.live_base_url || 'http://127.0.0.1:3000' }}
