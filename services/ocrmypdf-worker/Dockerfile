@@ -5,6 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# OCRmyPDF itself comes from requirements.txt; these are the external tools it runs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ghostscript \
     qpdf \
@@ -15,9 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt \
+    && ocrmypdf --version
 
 COPY app /app/app
+
+# Run without root; OCR jobs only need the system temp directory.
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin ocr
+USER 10001
 
 EXPOSE 8080
 
