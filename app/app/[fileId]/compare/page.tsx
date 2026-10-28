@@ -1,9 +1,11 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { SimpleResultsPage } from '@/components/report/SimpleResultsPage';
 import { useAppStore } from '@/stores/app-store';
 
-export default function ComparePage({ params }: { params: { fileId: string } }) {
+export default function ComparePage() {
+  const { fileId } = useParams<{ fileId: string }>();
   const hydrated = useAppStore((state) => state.hydrated);
 
   if (!hydrated) {
@@ -15,5 +17,5 @@ export default function ComparePage({ params }: { params: { fileId: string } }) 
     );
   }
 
-  return <SimpleResultsPage fileId={params.fileId} />;
+  return <SimpleResultsPage fileId={fileId} />;
 }

@@ -22,6 +22,7 @@ If `OCR_WORKER_API_KEY` is set, callers must send either:
 - `OCR_MAX_UPLOAD_MB` (optional, default `75`): maximum PDF upload size.
 - `OCR_TIMEOUT_SECONDS` (optional, default `240`): OCR execution timeout.
 - `OCR_OCRMYPDF_JOBS` (optional, default `2`): OCRmyPDF parallel jobs.
+- `OCR_MAX_CONCURRENT` (optional, default `1`): OCR jobs run at once; extra requests wait, then get a 503.
 - `OCRMYPDF_EXTRA_ARGS` (optional): additional OCRmyPDF CLI args.
 
 ## Local Docker run

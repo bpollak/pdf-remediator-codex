@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { guardApiRequest, assertServiceUrlSafe, upstreamErrorStatus } from '@/lib/rate-limit';
 import { DEFAULT_OCR_TIMEOUT_MS, MAX_OCR_TIMEOUT_MS } from '@/lib/ocr/config';
 
 export const runtime = 'nodejs';
@@ -14,34 +14,9 @@ function getConfiguredTimeoutMs(): number {
   return Math.min(raw, MAX_OCR_TIMEOUT_MS);
 }
 
-function resolveClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  return 'unknown';
-}
-
-function assertServiceUrlSafe(url: string): void {
-  if (url.startsWith('https://') || url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
-    return;
-  }
-  if (process.env.NODE_ENV === 'development') return;
-  throw new Error('OCR_SERVICE_URL must use HTTPS in production.');
-}
-
 export async function POST(request: NextRequest) {
-  const ip = resolveClientIp(request);
-  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
-    );
-  }
+  const refused = guardApiRequest(request, 'ocr', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (refused) return refused;
   const serviceUrl = process.env.OCR_SERVICE_URL;
   if (!serviceUrl) {
     return NextResponse.json(
@@ -51,7 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    assertServiceUrlSafe(serviceUrl);
+    assertServiceUrlSafe(serviceUrl, 'OCR_SERVICE_URL');
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid OCR_SERVICE_URL configuration.';
     return NextResponse.json({ error: message }, { status: 500 });
@@ -103,20 +78,27 @@ export async function POST(request: NextRequest) {
           error: `OCR backend failed with status ${upstream.status}.`,
           ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
         },
-        { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 }
+        { status: upstreamErrorStatus(upstream.status) }
       );
     }
 
-    const outputBytes = await upstream.arrayBuffer();
-    if (!outputBytes.byteLength) {
+    const contentType = upstream.headers.get('content-type') ?? '';
+    const contentLength = upstream.headers.get('content-length');
+    if (!upstream.body || contentLength === '0') {
       return NextResponse.json({ error: 'OCR backend returned an empty response.' }, { status: 502 });
     }
+    if (contentType && !contentType.toLowerCase().includes('application/pdf')) {
+      return NextResponse.json({ error: 'OCR backend did not return a PDF.' }, { status: 502 });
+    }
 
-    return new Response(outputBytes, {
+    // Stream the PDF through instead of buffering it: OCR output is often
+    // larger than the upload, and buffered function responses are size-capped.
+    return new Response(upstream.body, {
       status: 200,
       headers: {
         'content-type': 'application/pdf',
-        'cache-control': 'no-store'
+        'cache-control': 'no-store',
+        ...(contentLength ? { 'content-length': contentLength } : {})
       }
     });
   } catch (error) {

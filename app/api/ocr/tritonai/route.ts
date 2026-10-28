@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { guardApiRequest } from '@/lib/rate-limit';
 import { validateImageDataUrl } from '@/lib/alt-text/tritonai';
 
 export const runtime = 'nodejs';
@@ -14,20 +14,12 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_LINES = 120;
 const MAX_LINE_LENGTH = 240;
 const MIN_CONFIDENT_PAGE_LINES = 2;
+// Each model gets its own time budget so a stalled primary still leaves room
+// for the fallbacks inside maxDuration.
+const PER_MODEL_TIMEOUT_MS = 35_000;
 
 interface OcrLine {
   text: string;
-}
-
-function resolveClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  return 'unknown';
 }
 
 function stripJsonFences(value: string): string {
@@ -151,14 +143,8 @@ function getModelCandidates(): string[] {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = resolveClientIp(request);
-  const rl = rateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
-    );
-  }
+  const refused = guardApiRequest(request, 'ocr-tritonai', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (refused) return refused;
 
   const apiKey = process.env.OCR_LITELLM_API_KEY || process.env.LITELLM_API_KEY;
   if (!apiKey) {
@@ -171,8 +157,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const imageDataUrl = validateImageDataUrl(body?.imageDataUrl);
   const page = Number(body?.page);
-  const documentName = typeof body?.documentName === 'string' ? body.documentName : undefined;
-  const language = typeof body?.language === 'string' ? body.language : undefined;
+  const documentName = typeof body?.documentName === 'string' ? body.documentName.trim().slice(0, 180) : undefined;
+  const language = typeof body?.language === 'string' ? body.language.trim().slice(0, 32) : undefined;
 
   if (!imageDataUrl || !Number.isFinite(page) || page < 1) {
     return NextResponse.json({ error: 'Expected imageDataUrl and page.' }, { status: 400 });
@@ -184,23 +170,35 @@ export async function POST(request: NextRequest) {
   let bestResult: { model: string; lines: OcrLine[] } | undefined;
 
   for (const model of models) {
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(
-        buildTritonOcrRequest({
-          imageDataUrl,
-          page,
-          documentName,
-          language,
-          model
-        })
-      ),
-      cache: 'no-store'
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(
+          buildTritonOcrRequest({
+            imageDataUrl,
+            page,
+            documentName,
+            language,
+            model
+          })
+        ),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(PER_MODEL_TIMEOUT_MS)
+      });
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      failures.push({
+        model,
+        status: timedOut ? 504 : 502,
+        message: timedOut ? 'TritonAI OCR request timed out.' : error instanceof Error ? error.message : 'TritonAI OCR request failed.'
+      });
+      continue;
+    }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
