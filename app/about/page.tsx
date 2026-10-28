@@ -1,180 +1,211 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { UPLOAD_PRIVACY_NOTE } from '@/lib/content/privacy';
 import { RELEASE_NOTES } from '@/lib/content/release-notes';
+import { SUPPORT } from '@/lib/content/support';
+
+export const metadata: Metadata = {
+  title: 'About'
+};
+
+const card = 'rounded-lg bg-white px-5 py-8 shadow-md sm:px-10 sm:py-10';
+const linkClass = 'underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]';
 
 export default function AboutPage() {
+  const [latestRelease] = RELEASE_NOTES;
+
   return (
     <div className="space-y-8">
-      <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
+      <section className="rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-5 py-10 shadow-md sm:px-10 sm:py-12">
         <h1>About</h1>
         <p className="mt-4 max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
-          PDF Remediator is an assisted accessibility remediation copilot. Upload a PDF to get an automated first pass,
-          clear remediation-mode labeling (<em>content-bound</em> vs <em>analysis-only</em>), and guided next steps
-          for final manual validation before publishing. It is designed to streamline the work you do before final QA
-          in Acrobat or PAC, not replace that desktop handoff.
+          PDF Remediator checks a PDF for common accessibility problems, fixes the ones it can safely fix, and gives
+          you a checklist of what is left. It does a first pass for you. It does not replace a final check by a person,
+          and some PDFs still need fixes in Word, PowerPoint or Acrobat.
         </p>
       </section>
 
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>Release Notes</h2>
-        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Updated with each deployment to summarize shipped enhancements and quality improvements. The newest
-          entry reflects what is in the current build.
-        </p>
-        <div className="mt-5 max-w-4xl space-y-4">
-          {RELEASE_NOTES.map((release) => (
-            <article key={release.id} className="rounded-md border border-slate-200 bg-slate-50 px-5 py-4">
-              <p className="text-sm font-semibold text-[var(--ucsd-navy)]">
-                {release.versionLabel}{' '}
-                <span className="font-normal text-[var(--ucsd-text)]">({release.deployedOn})</span>
-              </p>
-              {release.summary ? (
-                <p className="mt-2 text-sm leading-relaxed text-[var(--ucsd-text)]">{release.summary}</p>
-              ) : null}
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--ucsd-text)]">
-                {release.highlights.map((highlight) => (
-                  <li key={highlight}>{highlight}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+      <section className={card}>
         <h2>2-Minute Quick Start</h2>
         <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
           <li>Go to the App page and upload your PDF.</li>
-          <li>Wait for the review to finish (usually under a few minutes, depending on file size).</li>
-          <li>Use the manual checklist to save image descriptions, mark decorative images, and track required structure fixes.</li>
-          <li>Download the PDF with descriptions when the app can embed every saved image description safely.</li>
-          <li>Complete any remaining Acrobat or PAC fixes shown in the checklist.</li>
-          <li>Re-upload the revised PDF for a final validation check before publishing.</li>
+          <li>Wait for the check to finish (usually under a few minutes, depending on file size).</li>
+          <li>Open the results. They show what we fixed and what is still left.</li>
+          <li>Work through the checklist: describe images, mark decorative ones, and follow the steps for anything else.</li>
+          <li>Download the updated PDF. Make any fixes the checklist asks for in Word, PowerPoint or Acrobat.</li>
+          <li>Upload the revised PDF so we can check it again before you publish.</li>
         </ol>
       </section>
 
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+      <section className={card}>
         <h2>What This Tool Is Best For</h2>
         <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Fast first-pass remediation of common PDF accessibility issues.</li>
-          <li>Identifying where manual edits are still required before publication.</li>
-          <li>Reviewing the updated output and the remaining manual checklist before handoff to Acrobat or PAC.</li>
-          <li>Reducing remediation effort while keeping humans in control of final compliance decisions.</li>
+          <li>A quick first pass on common PDF accessibility problems.</li>
+          <li>Finding out what still needs a person before you publish.</li>
+          <li>Writing image descriptions and adding them to the PDF.</li>
+          <li>Knowing when to go back to the source file, or when to ask for help.</li>
         </ul>
       </section>
 
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What Happens After You Upload</h2>
+      <section className={card}>
+        <h2>How To Read Your Results</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>
+            <strong>Passed automated checks</strong> is the best result the app can give. No automated tool can
+            confirm a PDF is fully accessible, so a person still needs to look it over before publishing.
+          </li>
+          <li>
+            <strong>Not yet</strong> means there is still something to fix. The results page says what it is and how
+            to fix it.
+          </li>
+          <li>
+            <strong>Not confirmed</strong> means our final automated check could not run. Check the PDF in PAC or
+            Acrobat before publishing.
+          </li>
+          <li>
+            If the app could not add the hidden structure (tags) that screen readers need, the best fix is usually to
+            export the PDF again from the source file with tagging turned on.
+          </li>
+        </ul>
+      </section>
+
+      <section className={card}>
+        <h2>What You Should Still Review Yourself</h2>
+        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>Heading order and structure in long or complex files.</li>
+          <li>Table headers, merged cells and reading order in complex tables.</li>
+          <li>Whether image descriptions for charts, diagrams and instructional images say what matters.</li>
+          <li>Color contrast and anything that relies on color or position alone.</li>
+          <li>How the PDF works with a screen reader, before publishing.</li>
+        </ul>
+      </section>
+
+      <section className={card}>
+        <h2>Getting Help</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          The app runs a step-by-step workflow and shows progress as each phase completes:
+          If the app can&apos;t finish your PDF, the usual fix is to correct the source file (Word, PowerPoint, Google
+          Docs) and export it again as a tagged PDF. If that isn&apos;t possible, ask{' '}
+          <a href={SUPPORT.help.url} className={linkClass}>
+            {SUPPORT.help.name}
+          </a>{' '}
+          for help. Include the PDF and a screenshot of the results page.
         </p>
-        <ol className="mt-4 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
-          <li>
-            <strong>Read the file</strong> &mdash; Reviews text, headings, links, forms, and metadata.
-          </li>
-          <li>
-            <strong>Read scanned pages</strong> &mdash; If the PDF is image-based, TritonAI OCR uses the on-prem
-            LightOn OCR model first, then Mistral Small and Gemma fallback models when needed. Local browser OCR can
-            still run if configured services do not produce usable text.
-          </li>
-          <li>
-            <strong>Check for issues</strong> &mdash; Looks for common problems in headings, images, tables, lists,
-            links, and form fields.
-          </li>
-          <li>
-            <strong>Fix what it can safely</strong> &mdash; Applies supported automatic fixes and builds an updated PDF.
-          </li>
-          <li>
-            <strong>Check again</strong> &mdash; Runs the checks again on the updated PDF and shows what still
-            needs manual work.
-          </li>
-          <li>
-            <strong>Set remediation mode</strong> &mdash; Marks output as <em>content-bound</em> when structural bindings
-            are reliable, or <em>analysis-only</em> when manual structural tagging is still required.
-          </li>
-          <li>
-            <strong>Optional standards check</strong> &mdash; If veraPDF is enabled in your environment, the app runs an
-            additional standards check.
-          </li>
-          <li>
-            <strong>Next steps</strong> &mdash; Produces a practical manual checklist with progress tracking for
-            image descriptions, document structure, tables, and any custom reviewer tasks.
-          </li>
-        </ol>
       </section>
 
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>Accessibility Features Applied</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Preserves and evaluates document tag structure, then flags where manual tag repair is required.</li>
-          <li>Detects unbound structure conditions and prevents those files from being treated as fully remediated.</li>
-          <li>Updates language and file details used by accessibility tools.</li>
-          <li>Keeps or creates bookmarks from detected headings when possible.</li>
-          <li>Rewrites vague link text (like &ldquo;click here&rdquo;) to clearer wording.</li>
-          <li>Adds missing form labels based on field names when possible.</li>
-          <li>Detects real PDF image content from page rendering data and flags missing alt text.</li>
-          <li>Offers TritonAI-assisted alt-text suggestions for reviewers when the LiteLLM gateway is configured.</li>
-          <li>Embeds saved image descriptions as real Figure alt text when every saved image can be safely matched.</li>
-          <li>Blocks partial description downloads when some saved image descriptions cannot be embedded automatically.</li>
-          <li>Recognizes previously embedded Figure alt text by marked-content ID when a remediated PDF is re-uploaded.</li>
-          <li>Stores compact immutable remediation metadata to improve repeat-run consistency.</li>
-          <li>Adds searchable text support for scanned PDFs.</li>
-          <li>Tries to improve reading order in some multi-column layouts.</li>
-          <li>Checks the updated file again and shows a before/after comparison.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>How To Interpret Results</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li><strong>Automated baseline</strong> reflects this app&apos;s internal checks, not a legal/compliance guarantee.</li>
-          <li><strong>veraPDF status</strong> is an independent external PDF/UA technical verification when enabled.</li>
-          <li><strong>100%</strong> is only shown for remediated output when critical internal findings are clear and external verification is compliant.</li>
-          <li><strong>Unbound structure detection</strong> applies a strict score ceiling and routes output to analysis-only mode.</li>
-          <li><strong>Analysis-only mode</strong> means manual structural tagging remains required before release.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
-        <h2>What You Should Still Review Manually</h2>
-        <ul className="mt-4 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Heading order and document structure in long or complex files.</li>
-          <li>Table headers, merged cells, and reading order in complex tables.</li>
-          <li>Meaningful alt text for charts, diagrams, and instructional images.</li>
-          <li>Images that are drawn through nested graphics or Form XObjects when the app cannot safely bind alt text.</li>
-          <li>Color contrast and visual-only cues that automated checks may miss.</li>
-          <li>Final usability with assistive technology before publishing.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+      <section className={card}>
         <h2>Privacy</h2>
-        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          This app is browser-first: uploaded PDFs are processed in your browser session by default, and the app does
-          not store files in an app database.
-        </p>
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">{UPLOAD_PRIVACY_NOTE}</p>
         <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
-          <li>Files and review state are kept in your browser session and local browser storage so the current review can continue.</li>
-          <li>If TritonAI OCR is configured, rendered scanned page images are sent through <code>/api/ocr/tritonai</code> to extract searchable text.</li>
-          <li>If TritonAI alt-text suggestions are configured, cropped image regions are sent through <code>/api/alt-text</code> to draft reviewer-approved descriptions.</li>
-          <li>If a PDF-native OCR backend is configured, the file may also be sent through <code>/api/ocr</code> and forwarded to that OCR service.</li>
-          <li>If configured OCR services are unavailable, local OCR fallback can run in your browser using Tesseract.</li>
-          <li>If veraPDF verification is enabled, the remediated PDF is sent through <code>/api/verapdf</code> and forwarded to the configured veraPDF service.</li>
-          <li>When you download the updated PDF, it is saved locally to your device.</li>
+          <li>The app does not keep your files on a server. Files and your progress are saved in this browser so you can come back to them.</li>
+          <li>When you download the updated PDF, it is saved to your device.</li>
         </ul>
       </section>
 
-      <section className="rounded-lg bg-white px-10 py-10 shadow-md">
+      <section className={card}>
         <h2>Limitations</h2>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
-          Automatic fixes can solve many common issues, but they do not guarantee full WCAG or PDF/UA compliance.
-          Some checks are best-effort only (especially color contrast, infographic layouts, and complex tables), and
-          many files still need manual edits. If content-bound structural tagging cannot be verified, the output is
-          treated as analysis-only. Image descriptions are embedded only when the app can safely match every saved
-          description back to the correct PDF image paint. Some PDFs draw images through nested graphics or Form
-          XObjects; those images may still need alt text or artifact marking in Acrobat or PAC. If veraPDF is enabled,
-          it adds an independent technical check, but you should still complete manual review with desktop tools and
-          assistive technology before publishing.
+          Automatic fixes solve many common problems, but they don&apos;t guarantee that a PDF meets WCAG or PDF/UA.
+          Some checks are best-effort only, especially color contrast, infographics and complex tables, and many
+          files still need manual edits. Image descriptions are added to the PDF only when the app can match every
+          saved description to the right image.
         </p>
+      </section>
+
+      <section className={card} aria-labelledby="for-accessibility-staff">
+        <h2 id="for-accessibility-staff">For accessibility staff</h2>
+        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--ucsd-text)]">
+          Technical detail on what the app does. Each result also has a technical report, linked from the bottom of
+          its results page.
+        </p>
+
+        <h3 className="mt-6 text-xl font-semibold text-[var(--ucsd-navy)]">Processing steps</h3>
+        <ol className="mt-3 max-w-3xl list-decimal space-y-3 pl-6 text-[var(--ucsd-text)]">
+          <li>
+            <strong>Parse</strong> &mdash; reads text, headings, links, forms, images, metadata and the tag tree in the
+            browser with pdf.js.
+          </li>
+          <li>
+            <strong>OCR</strong> &mdash; for image-only PDFs, rendered page images go to TritonAI through{' '}
+            <code>/api/ocr/tritonai</code> (LiteLLM gateway; on-prem LightOn OCR first, then Mistral Small and Gemma
+            fallbacks). Local Tesseract OCR runs in the browser if those don&apos;t return usable text. A PDF-native OCR
+            backend can also be configured behind <code>/api/ocr</code>.
+          </li>
+          <li>
+            <strong>Audit</strong> &mdash; internal rules for document structure, headings, images, tables, lists,
+            links, forms, metadata and color. Rules that can&apos;t be evaluated (for example contrast when no text
+            colors are extracted) are reported as not checked, and block the top result.
+          </li>
+          <li>
+            <strong>Remediate</strong> &mdash; writes language, PDF/UA identifier, bookmarks, link text, form tooltips
+            and tab order, and builds a tag tree bound to marked content (MCIDs and ParentTree) when it can.
+          </li>
+          <li>
+            <strong>Re-audit and verify</strong> &mdash; runs the audit again and, when enabled, sends the updated PDF
+            to veraPDF through <code>/api/verapdf</code> for a PDF/UA check.
+          </li>
+        </ol>
+
+        <h3 className="mt-6 text-xl font-semibold text-[var(--ucsd-navy)]">Remediation modes</h3>
+        <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>
+            <strong>Content-bound</strong>: the tag tree is bound to page content through MCIDs and ParentTree
+            entries.
+          </li>
+          <li>
+            <strong>Analysis-only</strong>: binding could not be verified, so the output is treated as untagged and
+            the checklist requires manual tagging. The score is capped and the result can&apos;t pass.
+          </li>
+        </ul>
+
+        <h3 className="mt-6 text-xl font-semibold text-[var(--ucsd-navy)]">Image descriptions</h3>
+        <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-6 text-[var(--ucsd-text)]">
+          <li>
+            Suggestions come from TritonAI through <code>/api/alt-text</code>; the cropped image region is sent, and
+            the reviewer approves or edits the text.
+          </li>
+          <li>
+            Saved descriptions are embedded as Figure <code>/Alt</code> bound by MCID; decorative images become
+            artifacts. The download is all-or-nothing: if any saved description can&apos;t be matched, no partial PDF
+            is produced.
+          </li>
+          <li>
+            Images painted through nested graphics or Form XObjects may not be bindable and still need Acrobat or PAC.
+          </li>
+          <li>On re-upload, existing Figure alt text is recognized by marked-content ID.</li>
+        </ul>
+      </section>
+
+      <section className={card}>
+        <h2>Release Notes</h2>
+        {latestRelease ? (
+          <details className="mt-4 max-w-4xl">
+            <summary className="cursor-pointer text-[var(--ucsd-text)]">
+              <span className="font-semibold text-[var(--ucsd-navy)]">
+                Latest: {latestRelease.versionLabel} ({latestRelease.deployedOn})
+              </span>
+              {latestRelease.summary ? <span className="mt-1 block text-sm">{latestRelease.summary}</span> : null}
+              <span className="mt-1 block text-sm text-[var(--ucsd-blue)] underline">Show all release notes</span>
+            </summary>
+            <div className="mt-5 space-y-4">
+              {RELEASE_NOTES.map((release) => (
+                <article key={release.id} className="rounded-md border border-slate-200 bg-slate-50 px-5 py-4">
+                  <h3 className="text-sm font-semibold text-[var(--ucsd-navy)]">
+                    {release.versionLabel}{' '}
+                    <span className="font-normal text-[var(--ucsd-text)]">({release.deployedOn})</span>
+                  </h3>
+                  {release.summary ? (
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--ucsd-text)]">{release.summary}</p>
+                  ) : null}
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--ucsd-text)]">
+                    {release.highlights.map((highlight) => (
+                      <li key={highlight}>{highlight}</li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </section>
 
       <div className="pb-4">
@@ -182,7 +213,7 @@ export default function AboutPage() {
           href="/app"
           className="inline-flex items-center gap-2 rounded-md bg-[var(--ucsd-blue)] px-5 py-2.5 text-base font-medium text-white transition hover:bg-[var(--ucsd-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)] focus-visible:ring-offset-2"
         >
-          Start remediating
+          Upload a PDF
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
             <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638l-3.96-3.96a.75.75 0 1 1 1.06-1.06l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06l3.96-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
           </svg>

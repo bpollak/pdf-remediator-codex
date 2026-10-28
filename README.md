@@ -1,143 +1,158 @@
-# PDF-Accessibility-Remediator-CODEX
+# PDF Remediator
 
-## OCR for Scanned PDFs
+A browser-based PDF accessibility checker and helper for UC San Diego. Staff upload a PDF; the app checks it against
+WCAG 2.1 AA / PDF/UA-oriented rules, applies the fixes it can make safely, and gives a plain-language checklist of what a
+person still has to do before the PDF is published.
 
-The app now includes an OCR stage for scan-heavy PDFs before audit/remediation.
+What it does and does not do:
 
-### How it works
+- **Tagged PDFs** (exported from Word, PowerPoint or Google Docs as tagged PDFs): fixes metadata, tab order, bookmarks
+  and heading levels, helps write and embed image descriptions, and verifies the result with veraPDF when configured.
+- **Untagged PDFs**: the app reports what is missing and keeps the file honest (`analysis-only`). It does not invent a
+  tag structure; the fix is to export a tagged PDF from the source file, or to tag it in Acrobat Pro.
+- **Scanned PDFs**: OCR adds a searchable text layer to the first pages; the checklist says how many pages were covered.
+- **No automated tool certifies accessibility.** The best result the app shows is "Passed automated checks — a person
+  still needs to review it".
 
-1. Upload pipeline parses the PDF and checks if it appears scan-only (very low text density).
-2. If likely scanned, the client first calls `POST /api/ocr/tritonai` and uses the TritonAI LightOn OCR model to extract text from page images.
-3. If TritonAI OCR does not add enough usable text, the browser falls back to local Tesseract OCR (first pages only).
-4. A PDF-native OCR backend can still be exposed through `POST /api/ocr` for deployments that configure `OCR_SERVICE_URL`.
-5. Remediation runs against OCR-enriched content when OCR adds usable searchable text.
+See [docs/campus-readiness-2026-10-28.md](docs/campus-readiness-2026-10-28.md) for the current review, the roadmap and
+the decisions still needed before a campus-wide launch.
 
-### Environment variables
+## Quick start
 
-- `OCR_LITELLM_API_KEY` (optional): TritonAI key for OCR. If omitted, `LITELLM_API_KEY` is used.
-- `OCR_LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL for OCR (default `https://tritonai-api.ucsd.edu` or `LITELLM_BASE_URL`).
-- `OCR_LITELLM_MODEL` (optional): TritonAI OCR model (default `api-lightonocr-1b`).
-- `OCR_LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback OCR models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
-- `OCR_SERVICE_URL` (optional): URL of a PDF-native OCR backend endpoint.
-- `OCR_SERVICE_TOKEN` (optional): Bearer token for OCR backend auth.
-- `OCR_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for OCR backend auth.
-- `OCR_TIMEOUT_MS` (optional): OCR request timeout in milliseconds (default `240000`).
-- `VERAPDF_SERVICE_URL` (optional): veraPDF REST base URL or full validate endpoint.
-- `VERAPDF_VALIDATION_PROFILE` (optional): validation profile ID (default `ua1`).
-- `VERAPDF_SERVICE_TOKEN` (optional): Bearer token for veraPDF backend auth.
-- `VERAPDF_SERVICE_API_KEY` (optional): API key header (`x-api-key`) for veraPDF backend auth.
-- `VERAPDF_TIMEOUT_MS` (optional): veraPDF request timeout in milliseconds (default `120000`).
-- `LITELLM_API_KEY` (optional): TritonAI LiteLLM gateway key for AI-assisted alt-text suggestions.
-- `LITELLM_BASE_URL` (optional): TritonAI LiteLLM gateway URL (default `https://tritonai-api.ucsd.edu`).
-- `LITELLM_MODEL` (optional): model for alt-text suggestions (default `gpt-5.5`).
-- `LITELLM_FALLBACK_MODELS` (optional): comma-separated fallback alt-text models (default `api-mistral-small-3.2-2506,api-gemma-4-26b`).
-
-TritonAI OCR is the primary production OCR path when `OCR_LITELLM_API_KEY` or `LITELLM_API_KEY` is configured. Use an on-prem TritonAI key for the default LightOn OCR model.
-If TritonAI OCR and `OCR_SERVICE_URL` are unavailable, local browser OCR fallback is attempted automatically for likely scanned PDFs.
-
-If `VERAPDF_SERVICE_URL` is configured, remediated output is also posted to `POST /api/verapdf` so the compare page
-can show an external PDF/UA check with rule/check counts.
-In local development, if `VERAPDF_SERVICE_URL` is unset, `/api/verapdf` falls back to `http://127.0.0.1:8081`.
-When verification is enabled, remediation now runs in an iterative loop (up to 3 passes) and stops early on:
-external compliance pass, no output change, no failed-check improvement, or service unavailability.
-The results page shows a publishing-readiness summary, the manual checklist and the remediated PDF download.
-
-### Accessibility scan
-
-Run an automated axe scan across core pages:
+Requires Node 22 (see `.nvmrc`).
 
 ```bash
-npm run a11y:scan
+npm ci
 ```
-
-Reports are saved to `docs/ux/a11y-scan/`.
-
-### PDF accessibility regression agent
-
-Run the PDF accessibility regression agent checks (structure binding, two-pass stability, and fixture regressions):
 
 ```bash
-npm run test:pdf-agent
+npm run dev
 ```
 
-Run the stricter release gate suite before deployment:
+Open http://localhost:3000. Optional services are configured in `.env.local` (copy `.env.local.example`); without them
+the app still runs, and OCR falls back to in-browser Tesseract.
+
+## Checks
+
+| Command | What it runs |
+|---|---|
+| `npm run typecheck` | TypeScript |
+| `npm run lint` | ESLint (Next config) |
+| `npm test` | All unit and integration tests (Vitest) |
+| `npm run test:release-gate` | The PDF regression gate (structure binding, two-pass stability, fixture regressions) |
+| `npm run test:coverage` | Unit tests with coverage thresholds |
+| `npm run test:e2e` | Browser suite (Playwright) against `LIVE_BASE_URL`, default the production site |
+
+To run the browser suite locally against a production build:
 
 ```bash
-npm run test:release-gate
+npm run build && npx next start -p 3000
 ```
 
-Agent definition and evaluation scope:
+```bash
+LIVE_BASE_URL=http://127.0.0.1:3000 npm run test:e2e
+```
 
-- `docs/qa/pdf-accessibility-agent.md`
+CI (`.github/workflows/ci.yml`) runs all of these on every pull request and push to `main`, plus a Docker build of the
+OCR worker when it changes. CI needs no secrets: the AI and veraPDF services stay unconfigured and their "not
+configured" paths are tested.
 
-Current remediation policy:
+## How processing works
 
-- If content-bound structure cannot be guaranteed, output is marked `analysis-only` and manual structural tagging is required.
-- Remediated Automated Check Score cannot display `100%` unless internal critical findings are clear and external veraPDF verification is compliant.
-- Files that look like checker/report artifacts are flagged as non-source inputs so users can switch to the original content PDF.
+1. The file is validated (PDF magic bytes, 50 MB limit, up to 10 files per batch, up to 300 pages) and stored in this
+   browser's IndexedDB.
+2. The PDF is parsed in the browser (pdf.js + pdf-lib) and audited.
+3. If it looks scanned, the browser sends page images to `POST /api/ocr/tritonai` (TritonAI LightOn OCR, with fallback
+   models), then falls back to local Tesseract.
+4. The remediated PDF is built in the browser and re-audited. When veraPDF is configured, the result is posted to
+   `POST /api/verapdf` and the loop repeats (up to 3 passes) while the external check improves.
+5. The results page shows the publish verdict, what was fixed, what is left, and the manual checklist. Saved image
+   descriptions can be embedded into the downloaded PDF as content-bound Figure tags.
 
-### Manual review
+Digitally signed and permissions-restricted PDFs are refused with an explanation, because rewriting them would
+invalidate the signature or produce a broken file.
 
-The results page lists what still needs a person: image descriptions (with optional TritonAI suggestions, which can
-be embedded into the downloaded PDF), table confirmations, structure tagging for analysis-only output, and any
-custom tasks. The findings page shows the `Structural Integrity` panel (source-type assessment and
-StructTree/MCID/ParentTree trust signals) and every finding by category.
+## Server routes
 
-### Vercel deployment
+| Route | Purpose |
+|---|---|
+| `POST /api/alt-text` | AI image-description suggestions (TritonAI LiteLLM gateway) |
+| `POST /api/ocr/tritonai` | OCR for one page image |
+| `POST /api/ocr` | Proxy to a PDF-native OCR worker (`services/ocrmypdf-worker`) |
+| `GET/POST /api/verapdf` | veraPDF status and PDF/UA validation |
+| `GET /api/health` | Which services are configured (booleans only, no outbound calls) |
 
-Vercel cannot run Docker Compose in-serverless runtime. For production, host veraPDF REST externally and set:
+All routes refuse cross-site browser requests and apply a per-instance rate limit. Errors are JSON with a stable `code`
+(`invalid_request`, `payload_too_large`, `rate_limited`, `cross_site`, `not_configured`, `misconfigured`,
+`upstream_auth`, `upstream_timeout`, `upstream_error`, `internal_error`); messages never name configuration settings.
+Each request writes one JSON log line (request id, route, status, duration, model, token usage) and never logs
+document content.
 
-- `VERAPDF_SERVICE_URL` (required to enable verification on Vercel)
-- `VERAPDF_VALIDATION_PROFILE` (optional)
-- `VERAPDF_SERVICE_TOKEN` / `VERAPDF_SERVICE_API_KEY` (optional auth)
-- `VERAPDF_TIMEOUT_MS` (optional timeout)
+There is no sign-in yet. Until campus SSO is added, treat the deployment's TritonAI key as exposed to anyone who can
+reach the site, and give it its own budget in the gateway.
 
-If `VERAPDF_SERVICE_URL` is not set in Vercel, verification stays disabled and the UI reports "Not enabled".
+## Environment variables
 
-### Local veraPDF (free/self-hosted)
+AI-assisted image descriptions:
 
-1. Copy local env template:
+- `LITELLM_API_KEY` (alias `TRITONAI_API_KEY`): TritonAI LiteLLM gateway key. Without it, suggestions are disabled.
+- `LITELLM_BASE_URL` (alias `TRITONAI_BASE_URL`): gateway URL, default `https://tritonai-api.ucsd.edu`.
+- `LITELLM_MODEL` (alias `TRITONAI_MODEL`): default `gpt-5.5`.
+- `LITELLM_FALLBACK_MODELS` (alias `TRITONAI_FALLBACK_MODELS`): comma-separated, default
+  `api-mistral-small-3.2-2506,api-gemma-4-26b`.
+- `LITELLM_TIMEOUT_MS` (alias `TRITONAI_TIMEOUT_MS`): per-model timeout, default `20000`. The whole request is also
+  bounded by the route's time limit.
+
+OCR:
+
+- `OCR_LITELLM_API_KEY`: TritonAI key for OCR; falls back to `LITELLM_API_KEY`. Use an on-prem key for the default
+  model.
+- `OCR_LITELLM_BASE_URL`, `OCR_LITELLM_MODEL` (default `api-lightonocr-1b`), `OCR_LITELLM_FALLBACK_MODELS`.
+- `OCR_SERVICE_URL`, `OCR_SERVICE_TOKEN`, `OCR_SERVICE_API_KEY`, `OCR_TIMEOUT_MS` (default `240000`): optional
+  OCRmyPDF worker behind `/api/ocr`.
+
+veraPDF:
+
+- `VERAPDF_SERVICE_URL`: veraPDF REST base URL or full validate endpoint. In local development it defaults to
+  `http://127.0.0.1:8081`; on Vercel verification stays disabled without it.
+- `VERAPDF_VALIDATION_PROFILE` (default `ua1`), `VERAPDF_SERVICE_TOKEN`, `VERAPDF_SERVICE_API_KEY`,
+  `VERAPDF_TIMEOUT_MS` (default `120000`).
+
+Hosting:
+
+- `HTTPS_ONLY_HEADERS=true`: send HSTS and `upgrade-insecure-requests` when hosting behind TLS somewhere other than
+  Vercel (on Vercel they are sent automatically).
+
+Service URLs must use HTTPS except for loopback hosts.
+
+## Local veraPDF
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-2. Start local veraPDF REST service:
-
 ```bash
 npm run verapdf:up
 ```
 
-3. Verify the service:
+`npm run verapdf:status` checks the service, `npm run verapdf:smoke` validates `fixtures/accessible.pdf`, and
+`npm run verapdf:down` stops it.
 
-```bash
-npm run verapdf:status
-```
+## OCR worker
 
-4. Run a smoke test against a fixture PDF:
+`services/ocrmypdf-worker/` is a FastAPI + OCRmyPDF service for `/api/ocr`. It requires `OCR_WORKER_API_KEY` (it refuses
+requests without one unless `OCR_WORKER_ALLOW_UNAUTHENTICATED=true` is set for local development), checks auth and
+size before reading uploads, runs as a non-root user, and limits concurrent jobs. See its README.
 
-```bash
-npm run verapdf:smoke
-```
+## Limits to know
 
-5. Stop service when done:
+- Vercel functions accept request bodies up to about 4.5 MB, so remediated PDFs larger than that are not sent to veraPDF
+  online; the results page says to check them in PAC or Acrobat.
+- Processing runs on the browser's main thread. Very large files (hundreds of pages) take minutes and need a lot of
+  memory; keep the tab in front while they process.
+- Results live only in this browser. Download the updated PDF to keep it; stored files expire after 30 days and can be
+  cleared from the upload page.
 
-```bash
-npm run verapdf:down
-```
+## Release process
 
-`verapdf:smoke` validates `fixtures/accessible.pdf` via `/api/validate/ua1` and confirms a `validationReport` is returned.
-
-### Recommended OCR backend
-
-Use an OCRmyPDF-based worker service (self-hosted) and point `OCR_SERVICE_URL` at that service.
-
-A ready-to-run template is included at:
-
-- `services/ocrmypdf-worker/`
-
-### Vercel note
-
-Vercel function request body limits can affect very large PDF uploads routed through `/api/ocr`.
-For larger scanned files, use an OCR backend that can ingest files directly (object storage URL pattern) and keep `/api/ocr` as orchestration/auth.
-The same upload limit considerations apply to `/api/verapdf` if you run external verification in the request path.
+`AGENTS.md` describes the deployment workflow. Update `lib/content/release-notes.ts` with every user-visible change.

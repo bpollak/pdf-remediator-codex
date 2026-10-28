@@ -5,9 +5,22 @@ import { useSearchParams } from 'next/navigation';
 import { DropZone } from '@/components/upload/DropZone';
 import { FileQueue } from '@/components/upload/FileQueue';
 import { ProcessingNotice } from '@/components/upload/ProcessingNotice';
+import { useDocumentTitle } from '@/components/ux/useDocumentTitle';
+import { UPLOAD_PRIVACY_NOTE } from '@/lib/content/privacy';
+import { pageTitle } from '@/lib/content/site';
 import { useAppStore } from '@/stores/app-store';
 
+function PrivacyNote() {
+  return (
+    <p className="max-w-3xl rounded border border-[rgba(24,43,73,0.15)] bg-slate-50 p-3 text-sm leading-relaxed text-[var(--ucsd-text)]">
+      <span className="font-semibold text-[var(--ucsd-navy)]">Privacy: </span>
+      {UPLOAD_PRIVACY_NOTE}
+    </p>
+  );
+}
+
 function AppPageFallback() {
+  useDocumentTitle(pageTitle('Upload PDFs'));
   return (
     <div className="space-y-6">
       <div id="upload-revised-pdf" className="border-b border-gray-200 pb-4 scroll-mt-24">
@@ -19,6 +32,7 @@ function AppPageFallback() {
       <div className="rounded border border-[rgba(24,43,73,0.15)] bg-slate-50 p-4 text-sm text-[var(--ucsd-text)]">
         Loading upload workflow...
       </div>
+      <PrivacyNote />
     </div>
   );
 }
@@ -31,6 +45,7 @@ function AppPageContent() {
   const revalidateFor = searchParams.get('revalidateFor');
   const baseFile = revalidateFor ? files.find((file) => file.id === revalidateFor) : undefined;
   const hasCompletedWorkflow = files.some((file) => file.status === 'remediated');
+  useDocumentTitle(pageTitle(baseFile ? 'Upload revised PDF' : 'Upload PDFs'));
 
   return (
     <div className="space-y-6">
@@ -60,6 +75,7 @@ function AppPageContent() {
           The earlier review could not be found. Uploading here will start a new remediation workflow.
         </div>
       ) : null}
+      <PrivacyNote />
       {hydrationError ? (
         <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
           {hydrationError}

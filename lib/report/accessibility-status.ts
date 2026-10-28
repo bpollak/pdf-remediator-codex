@@ -1,7 +1,9 @@
 import type { FileEntry } from '@/types/file-entry';
 import { computeDisplayedAutomatedScore } from './display-score';
-import { hasPendingManualReviewChanges } from './manual-review';
+import { summarizeNotChecked } from './remediation-diff';
+import { hasPendingManualReviewChanges, summarizeManualCompletion } from './manual-review';
 import { getVerapdfComplianceVerdict, getVerapdfUnavailableReason } from '@/lib/verapdf/result';
+import { redactDiagnostic } from './diagnostics';
 
 export type AccessibilityStatus =
   | 'accessible'
@@ -16,6 +18,7 @@ export type AccessibilityReasonCode =
   | 'internal-findings'
   | 'failed-rules'
   | 'failed-checks'
+  | 'not-checked'
   | 'analysis-only'
   | 'source-artifact'
   | 'pending-revalidation'
@@ -32,14 +35,12 @@ export interface AccessibilityStatusResult {
   message: string;
   reasons: AccessibilityReason[];
   automatedScore?: number;
+  /** Raw diagnostic for "Details for support", with server setting names removed. */
+  detail?: string;
 }
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function remainLabel(count: number, noun: string): string {
-  return `${pluralize(count, noun)} ${count === 1 ? 'remains' : 'remain'}`;
 }
 
 export function getAccessibilityStatus(file: FileEntry | undefined): AccessibilityStatusResult {
@@ -47,7 +48,7 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
     return {
       status: 'processing',
       label: 'Processing',
-      message: 'Remediation is still running. Accessibility status appears after the updated PDF is ready.',
+      message: "We're still working on this PDF. The result appears here when it's ready.",
       reasons: [{ code: 'processing', label: 'Updated PDF not ready yet' }]
     };
   }
@@ -55,9 +56,13 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   if (file.status === 'error') {
     return {
       status: 'not-yet-accessible',
-      label: 'Not yet accessible',
-      message: 'Processing did not complete. Resolve the file error and run remediation again before making an accessibility decision.',
-      reasons: [{ code: 'processing-error', label: 'Processing failed before completion' }]
+      label: 'Not ready to publish',
+      // file.error is already plain-language copy from the queue (for example
+      // the signed or password-protected explanations).
+      message: file.error
+        ? `${file.error} This PDF has not been checked.`
+        : 'Processing did not finish, so this PDF has not been checked. Use Try again on the upload page.',
+      reasons: [{ code: 'processing-error', label: 'Processing did not finish' }]
     };
   }
 
@@ -65,21 +70,23 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   const automatedScore = computeDisplayedAutomatedScore({
     auditResult,
     variant: 'remediated',
-    verapdfResult: file.verapdfResult
+    verapdfResult: file.verapdfResult,
+    remediationMode: file.remediationMode
   });
 
   if (!auditResult) {
     return {
       status: 'processing',
       label: 'Processing',
-      message: 'Remediation finished without a complete audit snapshot. Re-run the file before making an accessibility decision.',
-      reasons: [{ code: 'processing', label: 'Audit snapshot unavailable' }],
+      message: 'Processing finished without a complete check. Upload the PDF again before deciding whether to publish it.',
+      reasons: [{ code: 'processing', label: 'Check results unavailable' }],
       automatedScore
     };
   }
 
   const reasons: AccessibilityReason[] = [];
   const remainingInternal = auditResult.findings.length;
+  const notChecked = summarizeNotChecked(auditResult);
   const failedRules = file.verapdfResult?.summary?.failedRules ?? 0;
   const failedChecks = file.verapdfResult?.summary?.failedChecks ?? 0;
   const hasPendingReviewChanges = hasPendingManualReviewChanges(file);
@@ -90,28 +97,35 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   if (file.sourceType === 'checker-report-artifact') {
     reasons.push({
       code: 'source-artifact',
-      label: 'Source looks like a checker or report PDF'
+      label: 'Looks like a checker or report PDF, not a document to publish'
     });
   }
 
   if (file.remediationMode === 'analysis-only') {
     reasons.push({
       code: 'analysis-only',
-      label: 'Manual structure tagging is still required'
+      label: 'Hidden structure (tags) still needs to be added'
     });
   }
 
   if (hasPendingReviewChanges) {
     reasons.push({
       code: 'pending-revalidation',
-      label: 'Manual draft changes are waiting for re-validation'
+      label: 'Your changes have not been checked yet'
     });
   }
 
   if (remainingInternal > 0) {
     reasons.push({
       code: 'internal-findings',
-      label: remainLabel(remainingInternal, 'internal issue')
+      label: `Our checks found ${pluralize(remainingInternal, 'problem')} still in the PDF`
+    });
+  }
+
+  if (notChecked.length > 0) {
+    reasons.push({
+      code: 'not-checked',
+      label: `Could not check: ${notChecked.join(', ')}`
     });
   }
 
@@ -132,44 +146,150 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   if (typeof automatedScore === 'number' && automatedScore < 100 && reasons.length === 0) {
     reasons.push({
       code: 'score-below-100',
-      label: 'Automated baseline is below 100%'
+      label: 'Automated score is below 100%'
     });
   }
 
   if (verificationUnavailable) {
     return {
       status: 'verification-unavailable',
-      label: 'Verification unavailable',
-      message: `This document cannot be confirmed accessible yet because the external PDF/UA check is unavailable: ${verificationUnavailableReason} Manual remediation and desktop validation are still required before publishing.`,
-      reasons: [...reasons, { code: 'verification-unavailable', label: 'External PDF/UA verification unavailable' }],
-      automatedScore
+      label: 'Final check unavailable',
+      message: 'Our final automated check (veraPDF) did not run. Check the PDF in PAC or Acrobat before publishing.',
+      reasons: [...reasons, { code: 'verification-unavailable', label: 'Final automated check unavailable' }],
+      automatedScore,
+      detail: redactDiagnostic(verificationUnavailableReason)
     };
   }
 
   if (reasons.length > 0 || verificationVerdict !== true || automatedScore !== 100) {
     return {
       status: 'not-yet-accessible',
-      label: 'Not yet accessible',
-      message: 'Additional remediation is still required before this document can be considered accessible.',
+      label: 'Not ready to publish',
+      message: 'This PDF still has problems to fix before you publish it.',
       reasons:
         reasons.length > 0
           ? reasons
           : [
               {
                 code: 'score-below-100',
-                label: 'Automated baseline is below 100%'
+                label: 'Automated score is below 100%'
               }
             ],
       automatedScore
     };
   }
 
+  // No automated tool can certify accessibility, so the best state says so.
   return {
     status: 'accessible',
-    label: 'Accessible',
+    label: 'Passed automated checks — a person still needs to review it',
     message:
-      'This document passed the current automated baseline and external PDF/UA verification. Complete your normal final spot-check before publishing.',
+      'Every automated check passed. No tool can confirm a PDF is fully accessible, so before publishing, open it and check that the reading order, headings and image descriptions make sense.',
     reasons: [],
     automatedScore
   };
+}
+
+export type ReadinessBlocker =
+  | 'processing'
+  | 'processing-error'
+  | 'analysis-only'
+  | 'checklist'
+  | 'revalidation'
+  | 'verification-unavailable'
+  | 'source-artifact'
+  | 'not-checked'
+  | 'remaining-issues'
+  | 'none';
+
+export interface PublishReadiness {
+  status: AccessibilityStatus;
+  /** Short answer to "Is this PDF ready to publish?". */
+  verdict: string;
+  /** One or two sentences naming what is actually in the way. */
+  message: string;
+  blocker: ReadinessBlocker;
+  /** Required checklist items still open. */
+  checklistRemaining: number;
+}
+
+/**
+ * The results-page banner. It agrees with the checklist and names the one
+ * thing actually in the way, in the order the user has to deal with them.
+ */
+export function getPublishReadiness(file: FileEntry | undefined): PublishReadiness {
+  const status = getAccessibilityStatus(file);
+  const completion = summarizeManualCompletion(file);
+  const checklistRemaining = Math.max(completion.total - completion.completed, 0);
+  const has = (code: AccessibilityReasonCode) => status.reasons.some((reason) => reason.code === code);
+  const base = { status: status.status, checklistRemaining };
+
+  if (status.status === 'processing') {
+    return { ...base, verdict: 'Still processing', message: status.message, blocker: 'processing' };
+  }
+  if (has('processing-error')) {
+    return { ...base, verdict: 'Not yet', message: status.message, blocker: 'processing-error' };
+  }
+  if (has('source-artifact')) {
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message:
+        'This looks like a checker or report PDF rather than a document you would publish. Upload the original document instead.',
+      blocker: 'source-artifact'
+    };
+  }
+  if (has('analysis-only') && checklistRemaining > 0) {
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message:
+        "We couldn't add the hidden structure (tags) that screen readers need. Fix it in the source file (Word, PowerPoint, Google Docs) and export again as a tagged PDF, or add tags in Acrobat Pro.",
+      blocker: 'analysis-only'
+    };
+  }
+  if (checklistRemaining > 0) {
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message: `${checklistRemaining === 1 ? '1 checklist item is' : `${checklistRemaining} checklist items are`} still open. Work through the checklist below before you publish.`,
+      blocker: 'checklist'
+    };
+  }
+  if (has('pending-revalidation')) {
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message: 'Checklist done. Upload the revised PDF so we can confirm the fixes.',
+      blocker: 'revalidation'
+    };
+  }
+  if (status.status === 'verification-unavailable') {
+    return {
+      ...base,
+      verdict: 'Not confirmed',
+      message:
+        'Our final automated check is unavailable right now. You can download the PDF, but check it in PAC or Acrobat before publishing.',
+      blocker: 'verification-unavailable'
+    };
+  }
+  if (has('internal-findings') || has('failed-rules') || has('failed-checks') || has('score-below-100')) {
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message:
+        'Our automated checks still found problems. See “What’s still left” below, fix them in the source file or Acrobat Pro, then upload the revised PDF.',
+      blocker: 'remaining-issues'
+    };
+  }
+  if (has('not-checked')) {
+    const label = status.reasons.find((reason) => reason.code === 'not-checked')?.label ?? '';
+    return {
+      ...base,
+      verdict: 'Not yet',
+      message: `Some checks couldn’t run on this file (${label.replace(/^Could not check: /, '')}). Check these yourself, or ask accessibility staff, before publishing.`,
+      blocker: 'not-checked'
+    };
+  }
+  return { ...base, verdict: status.label, message: status.message, blocker: 'none' };
 }

@@ -1,175 +1,62 @@
-# Accessible PDF Application Summary
+# Application summary
 
-## 1) Purpose
+Last updated October 28, 2026. For setup and configuration see [README.md](README.md); for the review history and
+roadmap see [docs/campus-readiness-2026-10-28.md](docs/campus-readiness-2026-10-28.md).
 
-This application is a browser-first PDF accessibility workflow for:
+## Purpose
 
-1. Uploading PDF files.
-2. Auditing each file against deterministic WCAG 2.1 AA-oriented rules.
-3. Automatically generating a remediated PDF.
-4. Comparing original vs remediated files side-by-side.
-5. Reviewing before/after scores and findings in one place.
+A self-service tool for UC San Diego faculty, staff and students to check a PDF for accessibility problems, apply the
+fixes that can be made safely, and learn exactly what a person still has to do before publishing it. It is designed to
+be honest: it never shows a PDF as accessible on the strength of automated checks alone.
 
-The landing page states that manual review is still recommended for full WCAG compliance.
+The original scope was: upload PDFs, audit them, produce a remediated PDF, and present the results in a web app. It has
+since grown OCR for scans, veraPDF verification, AI-assisted image descriptions, a manual checklist and re-validation of
+revised files.
 
-## 2) Original Prompt Baseline (Initial Scope)
+## Architecture
 
-The initial scope was:
+- **Next.js 15 / React 19 app** on Vercel. PDF parsing, auditing and remediation run in the browser (pdf.js, pdf-lib,
+  tesseract.js); state lives in a Zustand store persisted to IndexedDB.
+- **Server routes** (`app/api/*`) proxy to services that need credentials: TritonAI (OCR and image descriptions) and
+  veraPDF. They share a guard (cross-site refusal, per-instance rate limit), request deadlines, JSON error codes and
+  structured logs (`lib/server/`).
+- **OCR worker** (`services/ocrmypdf-worker/`): optional FastAPI + OCRmyPDF service for PDF-native OCR, hosted outside
+  Vercel.
 
-1. Upload PDFs.
-2. Run automated accessibility audit checks.
-3. Create a remediated PDF.
-4. Present results in a usable web app experience.
+## Processing pipeline (per file)
 
-## 3) Current End-to-End Flow
+1. **Validate and queue**: PDF magic bytes, 50 MB, 10 files per batch, page limit. Files process one at a time; the
+   queue runs from the `/app` layout so it continues while results are open.
+2. **Parse and audit the original**: structure tree, MCID/ParentTree binding, text coverage by tags, metadata, links,
+   forms, images and page geometry.
+3. **OCR** when most pages are image-only: TritonAI per page, then local Tesseract. Coverage (pages processed of total) is
+   recorded and shown.
+4. **Remediate**: metadata (never invented: missing titles stay missing and are flagged; an assumed language is
+   flagged), tab order, outline, heading levels, form tooltips only from labels that are clearly adjacent, OCR text
+   layer for scans. Untagged documents are not given a synthetic tag tree; they stay `analysis-only`. PDF/UA is
+   claimed only when the source's own structure is content-bound. Signed and encrypted PDFs are refused.
+5. **Verify**: re-parse and re-audit the output; post it to veraPDF when configured and small enough, looping up to 3
+   passes while the external result improves.
+6. **Results**: one publish verdict naming the blocker, what was fixed automatically, what is left, the manual
+   checklist (image descriptions with optional AI suggestions, table confirmations, structure tagging, OCR, remaining
+   serious findings), the download, and a technical report for accessibility staff.
 
-For each uploaded file, the app now performs:
+## Audit and scoring
 
-1. **Validation and queuing**
-   - Accepts up to 10 files per batch.
-   - Validates file type and PDF magic bytes.
-   - Enforces a 50 MB per-file size limit.
-2. **Parsing original uploaded bytes**
-   - Parses structure, metadata, links, forms, outlines, tags, and text items.
-3. **Scanned-document detection**
-   - Detects likely image-only/scanned documents using text-density heuristics.
-4. **OCR attempt for scanned documents**
-   - Primary path: `/api/ocr` to upstream OCR service.
-   - Fallback path: local browser Tesseract OCR when upstream OCR is unavailable.
-5. **Original audit**
-   - Runs audit on the original uploaded document parse (not OCR-augmented parse).
-6. **Remediation**
-   - Builds remediated output with semantic and metadata improvements.
-   - If local OCR fallback was used, embeds an invisible OCR text layer into remediated PDF.
-7. **Post-remediation parse and audit**
-   - Re-parses remediated bytes and computes post-remediation score/findings.
-8. **Compare + reports**
-   - Side-by-side previews with score, file size, and SHA-256 hash per pane.
-   - Original and remediated findings/reports shown together on compare page.
+Deterministic rules across document structure, headings, images, tables, lists, links, color, forms and metadata
+(`lib/audit/rules/`). Severity-weighted score with guardrails: untagged and analysis-only output is capped at 40,
+scanned documents lower, and repeated violations cost more than one. Checks that cannot run (such as color contrast)
+are reported as not checked and block the top verdict.
 
-## 4) Major Functional Areas
+## Honesty guarantees
 
-### Upload and state management
+- The top verdict is "Passed automated checks — a person still needs to review it", never "accessible".
+- The checklist cannot reach 100% while a blocking problem has no item.
+- The downloaded PDF does not claim PDF/UA, a title, an author or a language it was not given.
+- Results that need work outside the app say so and point to campus help.
 
-1. Uses a client-side Zustand store for per-file lifecycle state.
-2. Stores immutable `uploadedBytes` to preserve exact original source.
-3. Tracks status: `queued -> parsing -> ocr -> auditing -> remediating -> remediated` (or `error`).
+## Tests
 
-### OCR subsystem
-
-1. `isLikelyScannedPdf` heuristics identify scan-heavy documents.
-2. OCR API route (`/api/ocr`) proxies to external OCR backend with timeout/auth support.
-3. Local OCR fallback runs Tesseract in browser for a capped page count.
-4. Local OCR fallback now persists searchable text into remediated PDF via invisible text layer embedding.
-
-### Audit subsystem
-
-1. Deterministic ruleset across categories:
-   - Document structure
-   - Headings
-   - Images
-   - Tables
-   - Lists
-   - Links/navigation
-   - Color (placeholder rules)
-   - Forms
-   - Metadata/navigation
-2. Severity-weighted scoring model.
-3. Additional score caps for high-risk structure issues:
-   - Untagged document cap.
-   - Scanned/image-only detection cap.
-
-### Remediation subsystem
-
-1. Preserves original page dimensions when source bytes are available.
-2. Injects semantic manifest/metadata used for post-remediation parse fidelity.
-3. Handles unsupported glyphs safely when building remediated output.
-4. Adds invisible OCR text layer when local OCR fallback data is available.
-
-### Compare and report UX
-
-1. Side-by-side iframed PDF preview.
-2. Clear per-pane download actions:
-   - Original PDF
-   - Remediated PDF
-3. Per-pane integrity and diagnostics metadata:
-   - Compliance score
-   - File size
-   - SHA-256 hash
-4. Unified before/after findings and summary cards on compare page.
-
-## 5) Enhancements Added Beyond Original Prompt
-
-The following enhancements were implemented after the baseline scope:
-
-1. Automatic queue processing for uploaded files.
-2. Stabilized PDF.js worker and production bundling behavior.
-3. In-browser side-by-side compare previews.
-4. Fixes for blank/remediated preview rendering issues.
-5. Improved file action links and post-processing UX.
-6. Correct post-remediation audit based on re-parsed remediated bytes.
-7. Robust handling for unsupported glyphs in PDF generation.
-8. Display of both original and remediated compliance scores.
-9. Persistence of remediation analysis for more accurate post-remediation scoring.
-10. Unified report details into compare view (single before/after workflow).
-11. UC San Diego branding and UI refinements.
-12. Corrected original-preview source so it uses uploaded bytes.
-13. Separated original-audit source from OCR/remediation source path.
-14. Added scanned-document rule and low-score enforcement for scan-heavy originals.
-15. Added fixture-based regression tests for scanned documents and remediation outcomes.
-16. Added per-pane SHA-256 and size metadata to verify file identity in UI.
-17. Persisted local OCR fallback into final remediated PDF (invisible text layer).
-18. Added regression coverage for invisible OCR text-layer behavior.
-
-## 6) Scoring Behavior (Current)
-
-1. Starts from weighted penalties based on finding severity.
-2. Applies guardrails:
-   - Untagged (`DOC-002`) can cap score to a lower ceiling.
-   - Scanned/image-only (`DOC-004`) can cap score to a very low ceiling.
-3. Result is an integer percent score shown in reports and compare panes.
-
-Practical effect:
-
-1. Scanned originals should score low until OCR/structure remediation is applied.
-2. Remediated documents should generally improve and remove key structure findings.
-
-## 7) OCR Configuration and Deployment Notes
-
-Required/optional environment support in the Next.js app:
-
-1. `OCR_SERVICE_URL` (OCR backend URL).
-2. `OCR_SERVICE_TOKEN` (optional bearer token).
-3. `OCR_SERVICE_API_KEY` (optional API key header).
-4. `OCR_TIMEOUT_MS` (optional timeout tuning).
-
-Included backend template:
-
-1. `services/ocrmypdf-worker/` (FastAPI + OCRmyPDF worker).
-2. Supports authenticated `POST /ocr` PDF processing.
-
-Operational note:
-
-1. Hosting upload limits (for example serverless body size constraints) can affect large OCR requests.
-
-## 8) Test and Quality Coverage
-
-The project includes targeted tests for:
-
-1. OCR scan detection heuristics.
-2. Audit engine scoring and scanned-document penalty expectations.
-3. Uploaded-byte immutability across processing updates.
-4. Remediation builder behavior (page size preservation, manifest embedding, OCR text-layer embedding).
-5. Public PDF fixture regressions (scanned detection, low original score, remediated non-regression).
-
-## 9) Current User-Visible Guarantees
-
-The app now explicitly supports these guarantees:
-
-1. Original pane represents uploaded source bytes.
-2. Remediated pane represents generated output bytes.
-3. Both panes provide direct download links.
-4. Compare pane surfaces per-file hash/size for byte-level verification.
-5. Scanned originals are identified and scored appropriately low.
-6. OCR fallback output can be persisted into remediated PDFs for searchability.
-
+Vitest unit and integration tests (`tests/`), a release gate of PDF regression fixtures (`fixtures/`,
+`fixtures/regression/`), and a Playwright browser suite (`e2e-live/`) that runs against a local production build in CI
+and against production after deploys.

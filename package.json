@@ -2,16 +2,22 @@
   "name": "accessible-pdf",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9 <23"
+  },
   "scripts": {
+    "predev": "node scripts/copy-pdf-worker.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-pdf-worker.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:pdf-agent": "vitest run tests/pdf-accessibility-agent.regression.test.ts",
     "test:release-gate": "vitest run tests/pdf-accessibility-agent.regression.test.ts tests/public-fixtures-regression.test.ts tests/pipeline.integration.test.ts tests/remediate-builder.test.ts",
     "test:coverage": "vitest run --coverage",
-    "a11y:scan": "bash ./scripts/run-a11y-scan.sh",
+    "test:e2e": "playwright test --config playwright.live.config.ts",
     "verapdf:up": "bash ./scripts/verapdf-local.sh up",
     "verapdf:down": "bash ./scripts/verapdf-local.sh down",
     "verapdf:status": "bash ./scripts/verapdf-local.sh status",
@@ -27,11 +33,12 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
-    "@axe-core/cli": "^4.11.1",
+    "@axe-core/playwright": "4.11.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^20.14.10",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "2.1.9",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "15.5.28",

@@ -2,8 +2,11 @@ import type { AuditResult } from '@/lib/audit/types';
 import type { ParsedPDF } from '@/lib/pdf/types';
 import type { RemediationOptions } from '@/lib/remediate/engine';
 
-// Keep the queue API stable while lazily loading the heavy PDF toolchain.
-// This trims the initial /app bundle even before full worker orchestration lands.
+// These run on the main thread; nothing here uses a Web Worker yet (pdf.js
+// parses in its own worker, but pdf-lib remediation and the audit do not).
+// The *InWorker names mark the seam where a real worker can be added without
+// changing the queue. The dynamic imports keep the heavy PDF toolchain out of
+// the initial /app bundle.
 export async function parsePdfInWorker(_fileId: string, bytes: ArrayBuffer): Promise<ParsedPDF> {
   const { parsePdfBytes } = await import('@/lib/pdf/parser');
   return parsePdfBytes(bytes);

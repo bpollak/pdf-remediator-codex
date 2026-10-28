@@ -1,6 +1,13 @@
 import type { AuditRule } from '../types';
 import { isLikelyScannedPdf } from '@/lib/ocr/detection';
 
+/** Below this share of page text reachable through tags, DOC-007 fails. */
+export const MIN_TEXT_TAG_COVERAGE = 0.9;
+/** Below this share, most of the text is invisible to assistive technology. */
+export const CRITICAL_TEXT_TAG_COVERAGE = 0.5;
+/** Too little text to judge coverage (e.g. a cover page with a logo). */
+const MIN_COVERAGE_SAMPLE_CHARS = 50;
+
 export const docStructureRules: AuditRule[] = [
   {
     id: 'DOC-001',
@@ -71,8 +78,20 @@ export const docStructureRules: AuditRule[] = [
     evaluate: ({ parsed }) => {
       const summary = parsed.structureBinding;
       if (!parsed.hasStructTree || !summary) return [];
-      if (summary.structElemCount === 0) return [];
       if (summary.hasContentBinding) return [];
+
+      if (summary.structElemCount === 0) {
+        return [{
+          ruleId: 'DOC-005',
+          category: 'Document Structure',
+          severity: 'critical',
+          description: 'Tag tree is empty: StructTreeRoot exists but contains no structure elements.',
+          wcagCriterion: '1.3.1 Info and Relationships',
+          location: { element: 'StructTreeRoot' },
+          recommendation: 'Tag the document content; an empty tag tree gives assistive technology nothing to read.',
+          autoFixable: false
+        }];
+      }
 
       return [{
         ruleId: 'DOC-005',
@@ -82,6 +101,45 @@ export const docStructureRules: AuditRule[] = [
         wcagCriterion: '1.3.1 Info and Relationships',
         location: { element: 'StructTreeRoot' },
         recommendation: 'Bind structure tags to content items before claiming tagged accessibility output.',
+        autoFixable: false
+      }];
+    }
+  },
+  {
+    id: 'DOC-006',
+    evaluate: ({ parsed }) =>
+      parsed.languageAssumed && parsed.language
+        ? [{
+            ruleId: 'DOC-006',
+            category: 'Document Structure',
+            severity: 'major',
+            description: `Document language was set automatically to "${parsed.language}" because the original had none; it has not been confirmed.`,
+            wcagCriterion: '3.1.1 Language of Page',
+            location: {},
+            recommendation: 'Confirm the document language in its properties and correct it if it is wrong.',
+            autoFixable: false
+          }]
+        : []
+  },
+  {
+    id: 'DOC-007',
+    evaluate: ({ parsed }) => {
+      const coverage = parsed.textTagCoverage;
+      // Unbound or empty trees are already reported by DOC-005.
+      if (!coverage || !parsed.structureBinding?.hasContentBinding) return [];
+      const total = coverage.taggedChars + coverage.untaggedChars;
+      if (total < MIN_COVERAGE_SAMPLE_CHARS) return [];
+      const share = coverage.taggedChars / total;
+      if (share >= MIN_TEXT_TAG_COVERAGE) return [];
+
+      return [{
+        ruleId: 'DOC-007',
+        category: 'Document Structure',
+        severity: share < CRITICAL_TEXT_TAG_COVERAGE ? 'critical' : 'major',
+        description: `Only ${Math.floor(share * 100)}% of the page text is connected to the tag tree; the rest is skipped by screen readers.`,
+        wcagCriterion: '1.3.1 Info and Relationships',
+        location: { element: 'StructTreeRoot' },
+        recommendation: 'Tag the untagged text (or mark it as an artifact if it is decorative) so every piece of content is in the tag tree.',
         autoFixable: false
       }];
     }

@@ -62,7 +62,7 @@ function formatPageList(findings: AuditFinding[]): string {
     .map((f) => f.location.page)
     .filter((p): p is number => typeof p === 'number')
     .sort((a, b) => a - b);
-  if (pages.length === 0) return '';
+  if (pages.length === 0) return 'Whole document';
   const unique = [...new Set(pages)];
   if (unique.length === 1) return `Page ${unique[0]}`;
   return `Pages ${unique.join(', ')}`;
@@ -170,10 +170,10 @@ export function IssueList({ fileId, variant = 'original' }: IssueListProps) {
         const ruleGroups = groupByRule(findings);
         return (
           <div key={category}>
-            <h3 className="mb-2 flex items-baseline gap-2 text-base">
-              {category}
+            <h3 className="mb-2 text-base">
+              {category}{' '}
               <span className="text-xs font-normal text-gray-600">
-                {findings.length} {findings.length === 1 ? 'issue' : 'issues'}
+                ({findings.length} {findings.length === 1 ? 'issue' : 'issues'})
               </span>
             </h3>
             <div className="space-y-2">

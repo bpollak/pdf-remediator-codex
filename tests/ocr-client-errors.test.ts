@@ -113,4 +113,31 @@ describe('runOcrViaApi error paths', () => {
     expect(result.attempted).toBe(true);
     expect(result.reason).toBe('OCR request failed (400)');
   });
+
+  it('does not start the long cooldown when a busy worker answers 503 upstream_error', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ code: 'upstream_error', error: 'Busy' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await runOcrViaApi(createSampleBytes(), 'a.pdf', 'en-US');
+    await runOcrViaApi(createSampleBytes(), 'b.pdf', 'en-US');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts the cooldown on 503 not_configured', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ code: 'not_configured', error: 'Not set up' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await runOcrViaApi(createSampleBytes(), 'a.pdf', 'en-US');
+    const skipped = await runOcrViaApi(createSampleBytes(), 'b.pdf', 'en-US');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(skipped.attempted).toBe(false);
+  });
 });

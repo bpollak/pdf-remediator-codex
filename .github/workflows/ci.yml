@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      live_base_url:
+        description: 'Run the browser suite against this deployed URL instead of a local build'
+        required: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Typecheck, lint, audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Fails on critical production advisories. The remaining high advisory is
+      # the PostCSS copy bundled inside Next 15 (build time only); it clears
+      # with the Next 16 upgrade.
+      - run: npm audit --omit=dev --audit-level=critical
+
+  unit:
+    name: Unit tests and release gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - name: Release gate
+        run: npm run test:release-gate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  browser:
+    name: Build and browser regression suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Start the production build
+        if: ${{ !inputs.live_base_url }}
+        run: |
+          npx next start -p 3000 > next-start.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sSf http://127.0.0.1:3000/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "Server did not start"; cat next-start.log; exit 1
+      - name: Deployed version
+        if: ${{ inputs.live_base_url }}
+        run: curl -sS --fail-with-body "${{ inputs.live_base_url }}/api/health"
+      - name: Browser suite
+        env:
+          LIVE_BASE_URL: ${{ inputs.live_base_url || 'http://127.0.0.1:3000' }}
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.live_base_url }}
+        with:
+          name: live-walkthrough
+          path: test-results/walkthrough/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: |
+            test-results/
+            next-start.log
+          retention-days: 7
+
+  ocr-worker:
+    name: OCR worker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            worker:
+              - 'services/ocrmypdf-worker/**'
+      - if: steps.changes.outputs.worker == 'true'
+        run: docker build -t ocrmypdf-worker services/ocrmypdf-worker
+      - if: steps.changes.outputs.worker == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - if: steps.changes.outputs.worker == 'true'
+        name: Worker tests
+        working-directory: services/ocrmypdf-worker
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          pip install -r requirements.txt httpx
+          python -m unittest discover -s tests -v

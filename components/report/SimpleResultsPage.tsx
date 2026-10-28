@@ -1,19 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { HelpTip } from '@/components/report/HelpTip';
 import { PdfRegionThumbnail } from '@/components/report/PdfRegionThumbnail';
+import { ResultsChanges } from '@/components/report/ResultsChanges';
+import { NeedHelpBox } from '@/components/report/NeedHelpBox';
+import { SUGGEST_DESCRIPTION_PRIVACY_NOTE } from '@/lib/content/privacy';
 import { renderPdfRegionToDataUrl } from '@/lib/pdf/renderer';
 import { detectTables } from '@/lib/remediate/heuristics';
-import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
+import { getAccessibilityStatus, getPublishReadiness } from '@/lib/report/accessibility-status';
+import { redactDiagnostic } from '@/lib/report/diagnostics';
 import {
   getAltTextDraftForImage,
   getManualReviewDrafts,
+  getRequiredChecklistItems,
+  getReviewableImages,
   getStructureTableDecision,
   getTableDraftKey,
-  summarizeManualCompletion
+  summarizeManualCompletion,
+  type ChecklistWorkflowProgress
 } from '@/lib/report/manual-review';
 import { useAppStore } from '@/stores/app-store';
 import type { ManualCustomElementCategory } from '@/types/file-entry';
@@ -22,7 +29,7 @@ type SuggestionState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; alt: string; decorative: boolean }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; detail?: string };
 
 type ApplyState =
   | { status: 'idle' }
@@ -112,34 +119,66 @@ function manualStatusLabel(remaining: number) {
   return `${remaining} checklist items left`;
 }
 
-function readinessLabel(status: ReturnType<typeof getAccessibilityStatus>) {
-  if (status.status === 'accessible') return 'Ready for final review';
-  if (status.status === 'processing') return 'Still processing';
-  return 'Not ready yet';
-}
-
-function readinessMessage(status: ReturnType<typeof getAccessibilityStatus>) {
-  if (status.status === 'accessible') {
-    return 'The automated checks passed. Download the PDF and complete your normal final spot-check before publishing.';
-  }
-  if (status.status === 'processing') return status.message;
-  return 'The automated pass is complete, but this PDF still needs the checklist below before it can be published.';
-}
-
-function primaryReasonLabels(status: ReturnType<typeof getAccessibilityStatus>) {
-  return status.reasons
-    .filter((reason) =>
-      ['analysis-only', 'pending-revalidation', 'source-artifact', 'verification-unavailable'].includes(reason.code)
-    )
-    .map((reason) => reason.label);
-}
-
 const statusToneClasses: Record<ReturnType<typeof getAccessibilityStatus>['status'], string> = {
   accessible: 'border-green-200 bg-green-50',
   'not-yet-accessible': 'border-amber-200 bg-amber-50',
   'verification-unavailable': 'border-amber-200 bg-amber-50',
   processing: 'border-[rgba(0,98,155,0.25)] bg-[rgba(0,98,155,0.06)]'
 };
+
+/**
+ * A required checklist item ticked by the user once they have made the fix
+ * outside the app. The title is the checkbox's name; the instructions are its
+ * description.
+ */
+function RequiredItem({
+  title,
+  done,
+  onChange,
+  children,
+  detail
+}: {
+  title: string;
+  done: boolean;
+  onChange: (done: boolean) => void;
+  children: ReactNode;
+  detail?: string;
+}) {
+  const id = useId();
+  return (
+    <article
+      className={`rounded-md border p-3 ${done ? 'border-green-200 bg-green-50' : 'border-[rgba(24,43,73,0.14)]'}`}
+    >
+      <div className="flex items-start gap-3 text-sm">
+        <input
+          id={`${id}-input`}
+          type="checkbox"
+          checked={done}
+          onChange={(event) => onChange(event.target.checked)}
+          aria-labelledby={`${id}-title`}
+          aria-describedby={`${id}-description`}
+          className="mt-1 h-5 w-5 shrink-0 cursor-pointer"
+        />
+        <div className="min-w-0">
+          <label
+            id={`${id}-title`}
+            htmlFor={`${id}-input`}
+            className="block cursor-pointer break-words font-semibold text-[var(--ucsd-navy)]"
+          >
+            {title}
+          </label>
+          <div id={`${id}-description`} className="mt-1 space-y-1 leading-relaxed text-[var(--ucsd-text)]">
+            {detail ? <p>{detail}</p> : null}
+            <p>{children}</p>
+          </div>
+          <p className="mt-2 text-xs font-semibold text-[var(--ucsd-text)]">
+            {done ? 'Done' : 'Required before publishing. Tick this once you have made the fix.'}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const file = useAppStore((state) => state.files.find((entry) => entry.id === fileId));
@@ -155,6 +194,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const [suggestions, setSuggestions] = useState<Record<string, SuggestionState>>({});
   const [applyState, setApplyState] = useState<ApplyState>({ status: 'idle' });
   const [showAddManualItem, setShowAddManualItem] = useState(false);
+  const [downloadNotice, setDownloadNotice] = useState('');
 
   const parsed = file?.remediatedParsedData ?? file?.parsedData;
   const sourceBytes = file?.remediatedParsedData ? file?.remediatedBytes ?? file?.uploadedBytes : file?.uploadedBytes;
@@ -163,10 +203,11 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
   const remaining = Math.max(completion.total - completion.completed, 0);
   const manualStructureRequired = file?.remediationMode === 'analysis-only';
   const manualStructureDone = Boolean(file?.workflowProgress?.structureConfirmedAt);
+  const requiredItems = getRequiredChecklistItems(file);
   const revalidationHref = file ? `/app?revalidateFor=${encodeURIComponent(file.id)}#upload-revised-pdf` : '/app';
 
   const imageEntries = useMemo(() => {
-    const images = [...(parsed?.images ?? [])].sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
+    const images = [...getReviewableImages(file, parsed)].sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
     return images
       .map((image, index) => {
         const draft = getAltTextDraftForImage(file, image);
@@ -178,7 +219,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         };
       })
       .filter((entry) => entry.needsWork || drafts.altText[entry.image.id]);
-  }, [drafts.altText, file, parsed?.images]);
+  }, [drafts.altText, file, parsed]);
 
   const tableEntries = useMemo(() => {
     if (!parsed) return [];
@@ -214,6 +255,9 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     markWorkflowProgress(fileId, {
       downloadedAt: file?.workflowProgress?.downloadedAt ?? new Date().toISOString()
     });
+    // Clear first so a second download of the same file is announced again.
+    setDownloadNotice('');
+    setTimeout(() => setDownloadNotice(`Downloaded ${name}. Check your Downloads folder.`), 100);
   }
 
   function downloadUpdatedPdf() {
@@ -260,6 +304,16 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     updateAltTextDraft(fileId, imageId, { alt, decorative });
   }
 
+  function setChecklistItemDone(itemId: string, done: boolean) {
+    const doneAt = {
+      ...((file?.workflowProgress as ChecklistWorkflowProgress | undefined)?.checklistItemsDoneAt ?? {})
+    };
+    if (done) doneAt[itemId] = doneAt[itemId] ?? new Date().toISOString();
+    else delete doneAt[itemId];
+    const patch: Partial<ChecklistWorkflowProgress> = { checklistItemsDoneAt: doneAt };
+    markWorkflowProgress(fileId, patch);
+  }
+
   function setManualStructureDone(done: boolean) {
     markWorkflowProgress(fileId, {
       structureConfirmedAt: done ? file?.workflowProgress?.structureConfirmedAt ?? new Date().toISOString() : undefined
@@ -300,9 +354,9 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const baseMessage = typeof payload.error === 'string' ? payload.error : 'Could not suggest text for this image.';
+        const baseMessage = typeof payload.error === 'string' ? payload.error : `Request failed (${response.status}).`;
         const hint = typeof payload.hint === 'string' ? ` ${payload.hint}` : '';
-        throw new Error(`${baseMessage}${hint} You can still write the description yourself below.`);
+        throw new Error(`${baseMessage}${hint}`);
       }
       setSuggestions((state) => ({
         ...state,
@@ -317,7 +371,8 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         ...state,
         [entry.image.id]: {
           status: 'error',
-          message: error instanceof Error ? error.message : 'Could not suggest text for this image.'
+          message: "We couldn't suggest a description right now. You can still write it yourself below.",
+          detail: redactDiagnostic(error instanceof Error ? error.message : undefined)
         }
       }));
     }
@@ -353,12 +408,15 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
     );
   }
 
-  const accessibility = getAccessibilityStatus(file);
-  const prominentReasons = primaryReasonLabels(accessibility);
+  const readiness = getPublishReadiness(file);
+  const { reasons: checkReasons, detail: verificationDetail } = getAccessibilityStatus(file);
   const hasSavedDescriptions = savedDescriptionDrafts.length > 0;
+  const manualFixRequired = manualStructureRequired || requiredItems.length > 0;
+  const ocrSupportDetail = file.ocrAttempted && !file.ocrApplied ? redactDiagnostic(file.ocrReason) : undefined;
+  const reportHref = `/app/${encodeURIComponent(file.id)}`;
   const nextStepTitle =
     remaining > 0
-      ? 'Finish the manual checklist'
+      ? 'Finish the checklist'
       : hasSavedDescriptions
         ? 'Download the PDF with descriptions'
         : 'Download the updated PDF';
@@ -367,7 +425,9 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
       ? 'Work through the checklist below. When it is complete, download the best available PDF and upload your revised file for a final check.'
       : hasSavedDescriptions
         ? 'Your image descriptions are saved. Download the PDF that includes them, then upload that revised file to check it again.'
-        : 'No manual checklist items are left in this browser. Download the updated PDF, then do your normal final review before publishing.';
+        : readiness.blocker === 'none'
+          ? 'Download the updated PDF, then give it a final look before you publish.'
+          : 'Download the updated PDF. The status above says what still needs to happen before you publish.';
 
   return (
     <div className="space-y-6">
@@ -376,60 +436,49 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         <p className="break-words text-sm text-[var(--ucsd-text)]">{file.name}</p>
       </div>
 
-      <section className={`rounded-lg border p-5 shadow-sm ${statusToneClasses[accessibility.status]}`}>
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Readiness</p>
-        <p className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{readinessLabel(accessibility)}</p>
+      <section
+        aria-labelledby="readiness-heading"
+        className={`rounded-lg border p-5 shadow-sm ${statusToneClasses[readiness.status]}`}
+      >
+        <h2 id="readiness-heading">Is this PDF ready to publish?</h2>
+        <p className="mt-2 text-2xl font-semibold text-[var(--ucsd-navy)]">{readiness.verdict}</p>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-          {readinessMessage(accessibility)}
-        </p>
-        {prominentReasons.length > 0 ? (
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {prominentReasons.map((reason) => (
-              <li
-                key={reason}
-                className="inline-flex items-center rounded-full border border-[rgba(24,43,73,0.2)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--ucsd-navy)]"
-              >
-                {reason}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {file.remediationMode === 'analysis-only' ? (
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-            <span className="font-semibold">Analysis-only result</span>
-            <HelpTip label="analysis-only result">
-              Analysis-only means the app could check this document but could not safely add the hidden structure
-              tags that screen readers rely on. Those tags must be added manually before the PDF can be considered
-              accessible.
+          {readiness.message}
+          {readiness.blocker === 'analysis-only' ? (
+            <HelpTip label="tags">
+              Tags are hidden labels inside a PDF that tell screen readers what each part is (a heading, a list, a
+              table, an image) and the order to read it in. Without them, a screen reader can&apos;t read the PDF
+              properly.
             </HelpTip>
-            : this file was checked but could not be fully auto-fixed. Add document tags manually in Adobe Acrobat
-            or the free{' '}
-            <a
-              href="https://pac.pdf-accessibility.org/"
-              target="_blank"
-              rel="noreferrer"
-              className="underline text-[var(--ucsd-blue)] hover:text-[var(--ucsd-navy)]"
-            >
-              PAC tool
-            </a>{' '}
-            before publishing.
-          </p>
-        ) : null}
+          ) : null}
+        </p>
         {file.ocrAttempted && !file.ocrApplied ? (
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
-            <span className="font-semibold">Scanned text notice:</span> this file looks like a scanned document, but
-            OCR could not add searchable text{file.ocrReason ? ` (${file.ocrReason})` : ''}. The updated PDF may not
-            be readable by screen readers. Run OCR in a desktop tool (such as Adobe Acrobat), then upload the
-            OCR&rsquo;d file for a new check.
-          </p>
+          <div className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
+            <p>
+              <span className="font-semibold">Scanned document:</span> we couldn&apos;t read the text in this scan,
+              so screen readers can&apos;t read it either. The checklist below shows how to fix this.
+            </p>
+            {ocrSupportDetail ? (
+              <details className="mt-1">
+                <summary className="cursor-pointer font-semibold text-[var(--ucsd-navy)]">Details for support</summary>
+                <p className="mt-1 break-words">{ocrSupportDetail}</p>
+              </details>
+            ) : null}
+          </div>
         ) : null}
-        {accessibility.reasons.length > 0 ? (
+        {readiness.blocker === 'verification-unavailable' && verificationDetail ? (
+          <details className="mt-3 max-w-2xl text-sm text-[var(--ucsd-text)]">
+            <summary className="cursor-pointer font-semibold text-[var(--ucsd-navy)]">Details for support</summary>
+            <p className="mt-1 break-words">{verificationDetail}</p>
+          </details>
+        ) : null}
+        {readiness.status !== 'processing' && checkReasons.length > 0 ? (
           <details className="mt-3 max-w-2xl text-sm text-[var(--ucsd-text)]">
             <summary className="cursor-pointer font-semibold text-[var(--ucsd-navy)]">
               Show automated check details
             </summary>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              {accessibility.reasons.map((reason) => (
+              {checkReasons.map((reason) => (
                 <li key={`${reason.code}-${reason.label}`}>{reason.label}</li>
               ))}
             </ul>
@@ -437,11 +486,16 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm">
+      <section
+        aria-labelledby="next-step-heading"
+        className="rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm"
+      >
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Next step</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[var(--ucsd-navy)]">{nextStepTitle}</h2>
+            <h2 id="next-step-heading" className="mt-1">
+              {nextStepTitle}
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">{nextStepDescription}</p>
             <div className="mt-4 flex flex-wrap gap-3">
               {remaining > 0 ? (
@@ -496,11 +550,22 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                     : 'border-amber-200 bg-amber-50 text-amber-950'
                 }`}
               >
-                <p>
-                  {applyState.downloaded
-                    ? `Embedded all ${applyState.applied} ${applyState.applied === 1 ? 'description' : 'descriptions'} into the downloaded PDF. Upload that file above to re-check it.`
-                    : `Could not embed every saved image description. ${applyState.applied} of ${applyState.expected} ${applyState.expected === 1 ? 'description was' : 'descriptions were'} embedded, so no partial PDF was downloaded.`}
-                </p>
+                {applyState.downloaded ? (
+                  <p>
+                    Embedded all {applyState.applied} {applyState.applied === 1 ? 'description' : 'descriptions'} into
+                    the downloaded PDF. To re-check it,{' '}
+                    <Link href={revalidationHref} className="font-semibold underline">
+                      upload the downloaded file
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <p>
+                    Could not embed every saved image description. {applyState.applied} of {applyState.expected}{' '}
+                    {applyState.expected === 1 ? 'description was' : 'descriptions were'} embedded, so no partial PDF
+                    was downloaded.
+                  </p>
+                )}
                 {applyState.skipped.length > 0 ? (
                   <p className="mt-1 text-amber-900">
                     {applyState.skipped.length} {applyState.skipped.length === 1 ? 'image' : 'images'} still need Acrobat:{' '}
@@ -514,6 +579,9 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                 {applyState.message}
               </p>
             ) : null}
+            <p aria-live="polite" className="mt-3 max-w-2xl text-sm font-medium text-[var(--ucsd-navy)] empty:hidden">
+              {downloadNotice}
+            </p>
             {remaining === 0 ? (
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--ucsd-text)]">
                 {savedDescriptionDrafts.length > 0
@@ -523,32 +591,39 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
             ) : null}
           </div>
           <div className="rounded-md border border-[rgba(24,43,73,0.14)] bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-[var(--ucsd-navy)]">Manual checklist progress</p>
+            <p id="checklist-progress-label" className="text-sm font-semibold text-[var(--ucsd-navy)]">
+              Checklist progress
+            </p>
             <p className="mt-1 text-3xl font-semibold text-[var(--ucsd-navy)]">{completion.percent}%</p>
             <div
-              className="mt-3 h-2 rounded-full bg-white"
+              className="mt-3 h-2 rounded-full border border-slate-500 bg-white"
               role="progressbar"
-              aria-label="Manual edit completion"
+              aria-labelledby="checklist-progress-label"
               aria-valuenow={completion.percent}
               aria-valuemin={0}
               aria-valuemax={100}
             >
-              <div className="h-2 rounded-full bg-[var(--ucsd-blue)]" style={{ width: `${completion.percent}%` }} />
+              <div className="h-full rounded-full bg-[var(--ucsd-blue)]" style={{ width: `${completion.percent}%` }} />
             </div>
             <p className="mt-3 text-sm text-[var(--ucsd-text)]">{manualStatusLabel(remaining)}</p>
           </div>
         </div>
       </section>
 
+      <ResultsChanges file={file} reportHref={reportHref} />
+
+      {manualFixRequired ? <NeedHelpBox /> : null}
+
       <section
         id="manual-checklist"
+        aria-labelledby="manual-checklist-heading"
         className="space-y-4 rounded-lg border border-[rgba(24,43,73,0.18)] bg-white p-5 shadow-sm"
       >
         <div>
-          <h2>Manual checklist</h2>
+          <h2 id="manual-checklist-heading">Manual checklist</h2>
           <p className="mt-1 text-sm text-[var(--ucsd-text)]">
             Complete each item that applies to this PDF. The progress meter updates as you save descriptions,
-            confirm tables, or mark manual tasks done.
+            confirm tables, or tick items done.
           </p>
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p>
@@ -557,50 +632,51 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
             <ol className="mt-2 list-decimal space-y-1 pl-5">
               <li>Save any image descriptions, or mark decorative images so screen readers can skip them.</li>
               <li>
-                If a document structure or table item appears, apply that fix in Acrobat, PAC, or the source file.
+                For items marked &ldquo;Required before publishing&rdquo;, make the fix in the source file or Acrobat
+                Pro, then tick the item.
               </li>
               <li>
-                Download the best available PDF, make any desktop edits, then upload the revised PDF for validation.
+                Download the best available PDF, make any desktop edits, then upload the revised PDF so we can check
+                it again.
               </li>
             </ol>
           </div>
         </div>
 
-        {manualStructureRequired ? (
+        {manualStructureRequired || requiredItems.length > 0 ? (
           <div className="space-y-3">
-            <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Document structure</h3>
-            <article
-              className={`rounded-md border p-3 ${
-                manualStructureDone ? 'border-green-200 bg-green-50' : 'border-[rgba(24,43,73,0.14)]'
-              }`}
-            >
-              <label className="flex cursor-pointer items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={manualStructureDone}
-                  onChange={(event) => setManualStructureDone(event.target.checked)}
-                  className="mt-1 h-5 w-5"
-                />
-                <span>
-                  <span className="block font-semibold text-[var(--ucsd-navy)]">
-                    Fix document structure in Acrobat or PAC
-                  </span>
-                  <span className="mt-1 block leading-relaxed text-[var(--ucsd-text)]">
-                    Add or repair the hidden tags that screen readers use, including heading order, reading order, and
-                    table structure. Check this only after you have made those edits in the PDF or source file.
-                  </span>
-                  <span className="mt-2 block text-xs font-semibold text-[var(--ucsd-text)]">
-                    {manualStructureDone ? 'Done' : 'Required before publishing'}
-                  </span>
-                </span>
-              </label>
-            </article>
+            <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Fixes to make outside this app</h3>
+            {manualStructureRequired ? (
+              <RequiredItem
+                title="Add the hidden structure (tags) screen readers need"
+                done={manualStructureDone}
+                onChange={setManualStructureDone}
+              >
+                The easiest way is to go back to the source file (Word, PowerPoint, Google Docs) and export it again as
+                a tagged PDF. Otherwise, add tags in Acrobat Pro, including heading order, reading order and table
+                structure.
+              </RequiredItem>
+            ) : null}
+            {requiredItems.map((item) => (
+              <RequiredItem
+                key={item.id}
+                title={item.title}
+                detail={item.detail}
+                done={item.done}
+                onChange={(done) => setChecklistItemDone(item.id, done)}
+              >
+                {item.instructions}
+              </RequiredItem>
+            ))}
           </div>
         ) : null}
 
         {imageEntries.length > 0 ? (
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-[var(--ucsd-navy)]">Image descriptions</h3>
+            <p id="suggest-privacy-note" className="text-sm text-[var(--ucsd-text)]">
+              {SUGGEST_DESCRIPTION_PRIVACY_NOTE}
+            </p>
             {imageEntries.map((entry) => {
               const suggestion = suggestions[entry.image.id] ?? { status: 'idle' };
               return (
@@ -626,6 +702,7 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                           type="button"
                           onClick={() => suggestAltText(entry)}
                           disabled={suggestion.status === 'loading'}
+                          aria-describedby="suggest-privacy-note"
                           className="rounded-md border border-[rgba(24,43,73,0.25)] px-3 py-1.5 text-xs font-medium text-[var(--ucsd-text)] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {suggestion.status === 'loading' ? 'Suggesting...' : 'Suggest description'}
@@ -644,9 +721,15 @@ export function SimpleResultsPage({ fileId }: { fileId: string }) {
                         </div>
                       ) : null}
                       {suggestion.status === 'error' ? (
-                        <p role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">
-                          {suggestion.message}
-                        </p>
+                        <div role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                          <p>{suggestion.message}</p>
+                          {suggestion.detail ? (
+                            <details className="mt-1">
+                              <summary className="cursor-pointer font-semibold">Details for support</summary>
+                              <p className="mt-1 break-words">{suggestion.detail}</p>
+                            </details>
+                          ) : null}
+                        </div>
                       ) : null}
                       <div className="mt-3 flex items-center gap-2 text-sm text-[var(--ucsd-text)]">
                         <label className="flex cursor-pointer items-center gap-2 py-1">

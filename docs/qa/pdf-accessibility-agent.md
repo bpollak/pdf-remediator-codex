@@ -10,7 +10,7 @@ This agent validates that remediation output is structurally truthful and stable
 
 ## Inputs
 
-Run this agent against fixture PDFs in `public/`, especially:
+Run this agent against fixture PDFs in `fixtures/regression/`, especially:
 
 1. `Impressionist Period Reading - 2 column - structurally remediated.pdf`
 2. `AI - remediated-Impressionist Period Reading - 2 column - structurally remediated.pdf`

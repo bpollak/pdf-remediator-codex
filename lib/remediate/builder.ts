@@ -1,5 +1,6 @@
 import {
   PDFArray,
+  PDFBool,
   PDFDict,
   PDFDocument,
   PDFName,
@@ -7,9 +8,11 @@ import {
   PDFNumber,
   PDFOperator,
   PDFOperatorNames,
+  PDFRawStream,
   StandardFonts,
   TextRenderingMode,
   beginText,
+  decodePDFRawStream,
   endMarkedContent,
   endText,
   popGraphicsState,
@@ -26,7 +29,7 @@ import { createHeadingLevelNormalizer } from './heuristics';
 import { encodePdfTextString } from './pdf-text';
 import { decodePageContent, maxMcidInContent } from './page-content';
 import { buildXmpMetadata } from './xmp';
-import { assertNotEncrypted } from '@/lib/pdf/encryption';
+import { assertNotEncrypted, assertNotSigned } from '@/lib/pdf/encryption';
 import { mapFontName } from './font-mapper';
 import { buildTagTree } from './tagger';
 import { injectStructTree } from './struct-tree';
@@ -36,7 +39,6 @@ import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
 const MAX_OCR_TEXT_LAYER_ITEMS = 20000;
 const MAX_TAGGED_TEXT_ITEMS = 1200;
-const MAX_TAGGED_TEXT_LENGTH = 500;
 
 interface TaggedTextLayerItem {
   role: string;
@@ -106,10 +108,6 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function shortMatchKey(value: string): string {
-  return normalizeText(value).toLowerCase().slice(0, 40);
-}
-
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
@@ -124,22 +122,16 @@ function cleanLabelText(value: string | undefined): string | undefined {
   return normalized;
 }
 
-function humanizeFormName(name: string): string | undefined {
-  const normalized = name
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[_\-.]+/g, ' ')
-    .replace(/\b(txt|fld|field|input|form)\b/gi, ' ')
-    .replace(/\d+$/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+/** Largest gap (pt) between a label's right edge and the field it labels. */
+const MAX_LEFT_LABEL_GAP = 100;
+/** Largest gap (pt) between a label's baseline and the top of the field below it. */
+const MAX_ABOVE_LABEL_GAP = 24;
 
-  const label = cleanLabelText(normalized);
-  if (!label || /^(text|button|checkbox|radio|choice|unknown)$/i.test(label)) return undefined;
-
-  return label.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
+/**
+ * Text that clearly labels a field: on the same line immediately to its left
+ * (vertically overlapping the field), or directly above it. Anything looser
+ * is left for a person to label; a wrong tooltip is worse than none.
+ */
 function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number]): string | undefined {
   if (
     typeof form.page !== 'number' ||
@@ -151,12 +143,11 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
     return undefined;
   }
 
-  const formX = form.x;
-  const formY = form.y;
-  const formWidth = form.width;
+  const formLeft = form.x;
+  const formRight = form.x + form.width;
+  const formBottom = form.y;
+  const formTop = form.y + form.height;
   const formHeight = form.height;
-  const formCenterY = formY + formHeight / 2;
-  const formCenterX = formX + formWidth / 2;
 
   const candidates = parsed.textItems
     .filter((item) => item.page === form.page)
@@ -164,26 +155,27 @@ function inferNearbyFormLabel(parsed: ParsedPDF, form: ParsedPDF['forms'][number
       const text = cleanLabelText(item.text);
       if (!text) return undefined;
 
-      const itemCenterY = item.y + item.height / 2;
-      const itemCenterX = item.x + item.width / 2;
-      const leftOfField = item.x + item.width <= formX + 8 && formX - (item.x + item.width) <= 180;
+      const itemLeft = item.x;
+      const itemRight = item.x + item.width;
+      // y is the baseline; allow a little descender below it.
+      const itemBottom = item.y - item.height * 0.2;
+      const itemTop = item.y + item.height;
+
+      const verticalOverlap = Math.min(itemTop, formTop) - Math.max(itemBottom, formBottom);
+      const leftGap = formLeft - itemRight;
+      const leftOfField =
+        verticalOverlap >= 0.5 * Math.min(item.height, formHeight) && leftGap >= -2 && leftGap <= MAX_LEFT_LABEL_GAP;
+
+      const aboveGap = itemBottom - formTop;
+      const horizontalOverlap = Math.min(itemRight, formRight) - Math.max(itemLeft, formLeft);
       const aboveField =
-        item.y >= formY + formHeight - 4 &&
-        item.y - (formY + formHeight) <= 42 &&
-        Math.abs(itemCenterX - formCenterX) <= Math.max(120, formWidth);
+        aboveGap >= -2 && aboveGap <= MAX_ABOVE_LABEL_GAP && horizontalOverlap > 0 && itemLeft >= formLeft - 12;
 
       if (!leftOfField && !aboveField) return undefined;
-
-      return {
-        text,
-        score:
-          (leftOfField ? 0 : 80) +
-          Math.abs(itemCenterY - formCenterY) +
-          Math.max(0, formX - (item.x + item.width)) / 4
-      };
+      return { text, distance: leftOfField ? Math.max(0, leftGap) : Math.max(0, aboveGap) };
     })
-    .filter((item): item is { text: string; score: number } => Boolean(item))
-    .sort((a, b) => a.score - b.score);
+    .filter((item): item is { text: string; distance: number } => Boolean(item))
+    .sort((a, b) => a.distance - b.distance);
 
   return candidates[0]?.text;
 }
@@ -193,7 +185,8 @@ function inferFormLabels(parsed: ParsedPDF): Map<string, string> {
 
   for (const form of parsed.forms) {
     if (cleanLabelText(form.label)) continue;
-    const label = inferNearbyFormLabel(parsed, form) ?? humanizeFormName(form.name);
+    // Field names ("Text1", "Check Box2") are never used as labels.
+    const label = inferNearbyFormLabel(parsed, form);
     if (!label) continue;
     labels.set(form.name.replace(/\s+/g, ' ').trim(), label);
   }
@@ -220,11 +213,14 @@ function resolveTaggedLayerItems(
   const fallbackCursor = new Map<number, number>();
 
   function pushItem(role: string, page: number, rawText: string, x?: number, y?: number, fontSize?: number) {
-    const text = normalizeText(rawText).slice(0, MAX_TAGGED_TEXT_LENGTH);
+    // Full text, never truncated. Only an exact repeat at the same position
+    // is dropped: different lines that share wording ("Status: pending")
+    // are all kept.
+    const text = normalizeText(rawText);
     if (!text) return;
     if (page < 1 || page > parsed.pageCount) return;
 
-    const dedupeKey = `${role}|${page}|${shortMatchKey(text)}`;
+    const dedupeKey = `${role}|${page}|${Math.round(x ?? -1)}|${Math.round(y ?? -1)}|${text}`;
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
 
@@ -244,7 +240,6 @@ function resolveTaggedLayerItems(
   if (ocrOnly) {
     for (const item of parsed.textItems.filter((textItem) => textItem.fontName === 'OCR').slice(0, MAX_OCR_TEXT_LAYER_ITEMS)) {
       pushItem('P', item.page, item.text, item.x, item.y, item.fontSize);
-      if (items.length >= MAX_TAGGED_TEXT_ITEMS) break;
     }
     return items;
   }
@@ -262,8 +257,14 @@ function resolveTaggedLayerItems(
   return items;
 }
 
-function beginMarkedContentSequence(tag: string, mcid: number, context: PDFDocument['context']): PDFOperator {
+function beginMarkedContentSequence(
+  tag: string,
+  mcid: number,
+  context: PDFDocument['context'],
+  actualText?: string
+): PDFOperator {
   const props = context.obj({ MCID: PDFNumber.of(mcid) }) as PDFDict;
+  if (actualText) props.set(PDFName.of('ActualText'), encodePdfTextString(actualText));
   // pdf-lib's PDFOperator.of types the second element as PDFName, but the
   // PDF spec expects a dictionary here.  The cast is required because
   // pdf-lib doesn't model BDC operator arguments precisely.
@@ -309,6 +310,9 @@ async function embedTaggedInvisibleTextLayer(
 
     const safeText = sanitizeTextForFont(font, item.text).trim();
     if (!safeText) continue;
+    // Helvetica only covers WinAnsi. When characters had to be replaced,
+    // the real text goes in /ActualText so assistive technology reads it.
+    const actualText = safeText === item.text.trim() ? undefined : item.text.trim();
 
     const pageWidth = page.getWidth();
     const pageHeight = page.getHeight();
@@ -318,14 +322,19 @@ async function embedTaggedInvisibleTextLayer(
     const fontKey = fontResourceForPage(item.page, page);
     const mcid = nextMcidByPage.get(item.page) ?? 0;
     nextMcidByPage.set(item.page, mcid + 1);
+    // Run the text along the displayed page: on a page with /Rotate the
+    // user-space text direction is rotated by the same angle.
+    const rotation = ((((page.getRotation().angle ?? 0) % 360) + 360) % 360) * (Math.PI / 180);
+    const cos = Math.round(Math.cos(rotation));
+    const sin = Math.round(Math.sin(rotation));
 
     page.pushOperators(
       pushGraphicsState(),
-      beginMarkedContentSequence('Span', mcid, pdf.context),
+      beginMarkedContentSequence('Span', mcid, pdf.context, actualText),
       beginText(),
       setTextRenderingMode(TextRenderingMode.Invisible),
       setFontAndSize(fontKey, size),
-      setTextMatrix(1, 0, 0, 1, x, y),
+      setTextMatrix(cos, sin, -sin, cos, x, y),
       showText(font.encodeText(safeText)),
       endText(),
       endMarkedContent(),
@@ -348,9 +357,13 @@ function injectBoundStructTreeFromBindings(pdf: PDFDocument, bindings: TaggedBin
   const context = pdf.context;
   const pages = pdf.getPages();
 
-  const markInfoDict = context.obj({ Marked: true });
-  const markInfoRef = context.register(markInfoDict);
-  pdf.catalog.set(PDFName.of('MarkInfo'), markInfoRef);
+  // Keep any existing MarkInfo entries (Suspects, UserProperties); only
+  // Marked is set, because the document now has a bound structure tree.
+  const markInfoDict = lookupMaybeDict(pdf, pdf.catalog.get(PDFName.of('MarkInfo'))) ?? context.obj({});
+  markInfoDict.set(PDFName.of('Marked'), PDFBool.True);
+  if (!pdf.catalog.get(PDFName.of('MarkInfo'))) {
+    pdf.catalog.set(PDFName.of('MarkInfo'), context.register(markInfoDict));
+  }
 
   const structTreeRootDict = context.obj({ Type: 'StructTreeRoot' });
   const structTreeRootRef = context.register(structTreeRootDict);
@@ -668,8 +681,25 @@ export interface BuildRemediatedPdfOptions {
   addInvisibleTextLayer?: boolean;
   strictPdfUa?: boolean;
   verapdfFeedback?: VerapdfResult;
+  /**
+   * Opt-in (experimental): tag an invisible Helvetica copy of the text of an
+   * untagged, non-OCR document. Off by default, because the visible text
+   * stays untagged and the copy cannot match it exactly; such documents get
+   * metadata fixes only and stay analysis-only.
+   */
   injectBoundTextLayer?: boolean;
   injectUnboundStructTree?: boolean;
+}
+
+function readExistingXmpPacket(pdf: PDFDocument): string | undefined {
+  try {
+    const stream = pdf.context.lookup(pdf.catalog.get(PDFName.of('Metadata')));
+    if (!(stream instanceof PDFRawStream)) return undefined;
+    const packet = new TextDecoder('utf-8', { fatal: true }).decode(decodePDFRawStream(stream).decode());
+    return packet.includes('<x:xmpmeta') || packet.includes('<rdf:RDF') ? packet : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function shouldForceStrictMetadata(options: BuildRemediatedPdfOptions): boolean {
@@ -696,22 +726,37 @@ export async function buildRemediatedPdf(
   const plan = extractRemediationPlan(parsed);
   const sourcePdfUaPart = parsed.metadata['pdfuaid:part']?.trim();
   const hasBoundStructure = Boolean(parsed.structureBinding?.hasContentBinding);
+  // A manifest means `parsed` is this tool's own earlier output. Its mode
+  // was decided from the original source and sticks: structure this tool
+  // injected (OCR text layer) never upgrades a file to content-bound.
   const remediationMode: RemediationMode =
     parsed.remediationMode === 'analysis-only'
       ? 'analysis-only'
       : hasBoundStructure
         ? 'content-bound'
         : 'analysis-only';
+  // PDF/UA is claimed only when the source declared it, or when the source
+  // itself has structure bound to its content. On a later pass the claim is
+  // read back from what the earlier pass wrote, which followed this rule.
+  const pdfUaPart = sourcePdfUaPart || (remediationMode === 'content-bound' ? '1' : undefined);
+  // The language is assumed when the source had none (or an earlier pass
+  // recorded the assumption in its manifest). The `language` argument is
+  // never evidence: callers pass a default. OCR results copy the source
+  // metadata but fill `language` with a default, so for them the source
+  // /Lang (metadata.Language) or XMP dc:language decides.
+  const sourceMetadataLanguage =
+    parsed.metadata.Language ?? parsed.metadata.Lang ?? parsed.metadata['dc:language'];
+  const languageAssumed =
+    parsed.languageAssumed === true ||
+    (parsed.remediationMode === undefined &&
+      (!parsed.language || (Boolean(options.addInvisibleTextLayer) && !sourceMetadataLanguage)));
 
   const manifest = {
     version: 3,
     language: chosenLanguage,
     remediationMode,
-    ...(sourcePdfUaPart
-      ? { pdfUaPart: sourcePdfUaPart }
-      : hasBoundStructure
-        ? { pdfUaPart: '1' }
-        : {})
+    ...(pdfUaPart ? { pdfUaPart } : {}),
+    ...(languageAssumed ? { languageAssumed: true } : {})
   };
 
   const loadableSourceBytes =
@@ -726,8 +771,10 @@ export async function buildRemediatedPdf(
       ? await PDFDocument.load(loadableSourceBytes, { updateMetadata: false, ignoreEncryption: true })
       : await PDFDocument.create();
   // pdf-lib cannot decrypt: a restricted (owner-password) PDF would be
-  // written back half-encrypted and unreadable. Refuse with a clear error.
+  // written back half-encrypted and unreadable. A signed PDF would lose its
+  // signature. Refuse both with a clear error.
   assertNotEncrypted(pdf);
+  assertNotSigned(pdf);
 
   if (!loadableSourceBytes) {
     const helvetica = await pdf.embedFont(StandardFonts.Helvetica);
@@ -762,7 +809,7 @@ export async function buildRemediatedPdf(
     }
   }
 
-  if (!hasBoundStructure && options.injectBoundTextLayer !== false && !options.addInvisibleTextLayer) {
+  if (!hasBoundStructure && options.injectBoundTextLayer === true && !options.addInvisibleTextLayer) {
     const taggedItems = resolveTaggedLayerItems(parsed, plan, false);
     const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
     if (bindings.length > 0) {
@@ -789,48 +836,54 @@ export async function buildRemediatedPdf(
       (keyword) => !keyword.includes(MANIFEST_PREFIX)
     )
   );
-  existingKeywords.add('accessible');
-  existingKeywords.add('wcag');
-  existingKeywords.add('remediated');
   const encodedManifest = encodeManifest(manifest);
   existingKeywords.add(encodedManifest);
 
-  const metadataTitle = parsed.title ?? safeReadPdfMetadata(() => pdf.getTitle()) ?? 'Accessible remediated PDF';
-  const metadataAuthor =
-    parsed.metadata.Author ?? safeReadPdfMetadata(() => pdf.getAuthor()) ?? 'PDF Remediator';
-  const metadataSubject =
-    parsed.metadata.Subject ?? safeReadPdfMetadata(() => pdf.getSubject()) ?? 'Accessibility remediated document';
+  // Existing values are kept and missing ones stay missing: a placeholder
+  // title or author would hide the problem from the audit and from readers.
+  const metadataTitle = parsed.title ?? safeReadPdfMetadata(() => pdf.getTitle());
+  const metadataAuthor = parsed.metadata.Author ?? safeReadPdfMetadata(() => pdf.getAuthor());
+  const metadataSubject = parsed.metadata.Subject ?? safeReadPdfMetadata(() => pdf.getSubject());
+  const metadataCreator = parsed.metadata.Creator ?? safeReadPdfMetadata(() => pdf.getCreator());
 
+  // PDF/UA needs /Lang; when it was not in the source, the manifest records
+  // that it was assumed so the audit asks a person to confirm it.
   pdf.setLanguage(chosenLanguage);
-  pdf.setTitle(metadataTitle);
-  pdf.setAuthor(metadataAuthor);
-  pdf.setSubject(metadataSubject);
-  pdf.setCreator('PDF Remediator');
+  if (metadataTitle) pdf.setTitle(metadataTitle);
+  if (metadataAuthor) pdf.setAuthor(metadataAuthor);
+  if (metadataSubject) pdf.setSubject(metadataSubject);
+  // /Creator names the authoring application and is left alone.
   pdf.setProducer('PDF Remediator');
 
   if (strictMetadata) {
-    // Display document title in viewers and keep metadata explicit for stricter validators.
-    const viewerPreferences = pdf.context.obj({ DisplayDocTitle: true });
-    const viewerPreferencesRef = pdf.context.register(viewerPreferences);
-    pdf.catalog.set(PDFName.of('ViewerPreferences'), viewerPreferencesRef);
+    // Display document title in viewers. Other viewer preferences are kept.
+    const existingViewerPreferences = lookupMaybeDict(pdf, pdf.catalog.get(PDFName.of('ViewerPreferences')));
+    const viewerPreferences = existingViewerPreferences ?? pdf.context.obj({});
+    viewerPreferences.set(PDFName.of('DisplayDocTitle'), PDFBool.True);
+    if (!existingViewerPreferences) {
+      pdf.catalog.set(PDFName.of('ViewerPreferences'), pdf.context.register(viewerPreferences));
+    }
   }
 
   pdf.setKeywords([...existingKeywords]);
 
   const modifiedAt = new Date();
   pdf.setModificationDate(modifiedAt);
-  const xmpBytes = buildXmpMetadata({
-    title: metadataTitle,
-    author: metadataAuthor,
-    subject: metadataSubject,
-    keywords: [...existingKeywords].join(' '),
-    language: chosenLanguage,
-    creatorTool: 'PDF Remediator',
-    producer: 'PDF Remediator',
-    createdAt: safeReadPdfDate(() => pdf.getCreationDate()),
-    modifiedAt,
-    pdfUaPart: manifest.pdfUaPart
-  });
+  const xmpBytes = buildXmpMetadata(
+    {
+      title: metadataTitle,
+      author: metadataAuthor,
+      subject: metadataSubject,
+      keywords: [...existingKeywords].join(' '),
+      language: chosenLanguage,
+      creatorTool: metadataCreator,
+      producer: 'PDF Remediator',
+      createdAt: safeReadPdfDate(() => pdf.getCreationDate()),
+      modifiedAt,
+      pdfUaPart
+    },
+    readExistingXmpPacket(pdf)
+  );
   const metadataStream = pdf.context.stream(xmpBytes, { Type: 'Metadata', Subtype: 'XML' });
   pdf.catalog.set(PDFName.of('Metadata'), pdf.context.register(metadataStream));
 

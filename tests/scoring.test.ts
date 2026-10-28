@@ -41,8 +41,23 @@ describe('computeComplianceScore', () => {
       makeFinding('IMG-001', 'critical'),
       makeFinding('IMG-001', 'major')
     ];
-    // Same rule ID: only counted once at critical severity (-15)
-    expect(computeComplianceScore(findings)).toBe(85);
+    // Same rule ID: weighted at critical severity (15), plus a quarter of
+    // the weight for each of the 2 repeats: 15 * 1.5 = 22.5
+    expect(computeComplianceScore(findings)).toBe(78);
+  });
+
+  it('charges more for many findings of one rule, up to 3x its weight', () => {
+    const images = (count: number) => Array.from({ length: count }, () => makeFinding('IMG-001', 'critical'));
+    expect(computeComplianceScore(images(1))).toBe(85);
+    expect(computeComplianceScore(images(5))).toBe(70);
+    // Capped at 3x the weight from the 9th finding on.
+    expect(computeComplianceScore(images(9))).toBe(55);
+    expect(computeComplianceScore(images(50))).toBe(55);
+  });
+
+  it('caps DOC-007 only when it is critical', () => {
+    expect(computeComplianceScore([makeFinding('DOC-007', 'critical')])).toBe(40);
+    expect(computeComplianceScore([makeFinding('DOC-007', 'major')])).toBe(92);
   });
 
   it('sums penalties across distinct rules', () => {

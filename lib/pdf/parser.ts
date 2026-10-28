@@ -530,7 +530,64 @@ function hasParentTreeContentEntries(context: PDFDocument['context'], parentTree
   return false;
 }
 
-async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['structureBinding'] | undefined> {
+/** Flattens a number tree (ParentTree) into key -> value. */
+function flattenNumberTree(context: PDFDocument['context'], rootObject: unknown): Map<number, unknown> {
+  const entries = new Map<number, unknown>();
+  const root = asPdfDict(safeLookup(context, rootObject));
+  if (!root) return entries;
+
+  const stack: PDFDict[] = [root];
+  const visited = new WeakSet<object>();
+  while (stack.length > 0 && entries.size < MAX_STRUCT_BINDING_NODES) {
+    const node = stack.pop()!;
+    if (visited.has(node)) continue;
+    visited.add(node);
+
+    const nums = safeLookup(context, node.get(PDFName.of('Nums')));
+    if (isPdfArrayLike(nums)) {
+      for (let index = 0; index + 1 < nums.size(); index += 2) {
+        const key = safeLookup(context, nums.get(index)) ?? nums.get(index);
+        if (isPdfNumberLike(key)) entries.set(key.asNumber(), nums.get(index + 1));
+      }
+    }
+
+    const kids = safeLookup(context, node.get(PDFName.of('Kids')));
+    if (!isPdfArrayLike(kids)) continue;
+    for (let index = 0; index < kids.size(); index += 1) {
+      const kid = asPdfDict(safeLookup(context, kids.get(index)));
+      if (kid) stack.push(kid);
+    }
+  }
+  return entries;
+}
+
+/**
+ * MCIDs per page (0-based page index) that the ParentTree maps to a
+ * structure element: the marked content a screen reader can reach.
+ * Undefined for pages without a /StructParents entry.
+ */
+function collectReferencedMcids(pdf: PDFDocument, parentTreeObject: unknown): Array<Set<number> | undefined> {
+  const context = pdf.context;
+  const parentTree = flattenNumberTree(context, parentTreeObject);
+  return pdf.getPages().map((page) => {
+    const key = page.node.get(PDFName.of('StructParents'));
+    if (!isPdfNumberLike(key)) return undefined;
+    const referenced = new Set<number>();
+    const parents = safeLookup(context, parentTree.get(key.asNumber())) ?? parentTree.get(key.asNumber());
+    if (!isPdfArrayLike(parents)) return referenced;
+    for (let mcid = 0; mcid < parents.size(); mcid += 1) {
+      if (asPdfDict(safeLookup(context, parents.get(mcid)))) referenced.add(mcid);
+    }
+    return referenced;
+  });
+}
+
+interface StructureInspection {
+  summary: NonNullable<ParsedPDF['structureBinding']>;
+  referencedMcidsByPage: Array<Set<number> | undefined>;
+}
+
+async function inspectStructureBinding(bytes: ArrayBuffer): Promise<StructureInspection | undefined> {
   try {
     const structureBytes = bytes.slice(0);
     const pdf = await PDFDocument.load(structureBytes, { ignoreEncryption: true, updateMetadata: false });
@@ -639,7 +696,14 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
       }
     }
 
-    return {
+    let referencedMcidsByPage: Array<Set<number> | undefined> = [];
+    try {
+      if (hasParentTree) referencedMcidsByPage = collectReferencedMcids(pdf, parentTreeObject);
+    } catch {
+      referencedMcidsByPage = [];
+    }
+
+    const summary = {
       structElemCount,
       structElemWithPageRef,
       structElemWithMcid,
@@ -658,6 +722,7 @@ async function inspectStructureBinding(bytes: ArrayBuffer): Promise<ParsedPDF['s
         hasParentTreeEntries
       )
     };
+    return { summary, referencedMcidsByPage };
   } catch {
     return undefined;
   }
@@ -682,6 +747,18 @@ function readXmpPdfUaPart(
     // Element form <pdfuaid:part>1</pdfuaid:part> or attribute form pdfuaid:part="1".
     const match = raw.match(/<pdfuaid:part>\s*(\d+)\s*<\/pdfuaid:part>/i) ?? raw.match(/pdfuaid:part\s*=\s*["'](\d+)["']/i);
     return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function readXmpValue(
+  metadataObj: { get?: (key: string) => unknown } | null | undefined,
+  key: string
+): string | undefined {
+  try {
+    const value = typeof metadataObj?.get === 'function' ? metadataObj.get(key) : undefined;
+    return cleanText(Array.isArray(value) ? value[0] : value);
   } catch {
     return undefined;
   }
@@ -717,7 +794,12 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
         : {};
 
     const manifest = decodeManifest(metadata.Keywords) ?? decodeManifest(metadata.Subject);
-    const structureBinding = await structureBindingPromise;
+    const structureInspection = await structureBindingPromise;
+    const structureBinding = structureInspection?.summary;
+    const measureTagCoverage = Boolean(structureBinding && (structureBinding.structElemCount > 0 || structureBinding.hasParentTree));
+    let taggedChars = 0;
+    let untaggedChars = 0;
+    const pageBoxes: NonNullable<ParsedPDF['pageBoxes']> = [];
 
     const textItems: ParsedPDF['textItems'] = [];
     const discoveredTags: ParsedPDF['tags'] = [];
@@ -731,14 +813,47 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
 
       try {
         const [content, annotations, structTree, imageItems] = await Promise.all([
-          page.getTextContent(),
+          // Marked-content markers are only requested when the tag coverage
+          // is measured; text items are the same either way.
+          page.getTextContent(measureTagCoverage ? { includeMarkedContent: true } : undefined),
           page.getAnnotations({ intent: 'display' }).catch(() => []),
           page.getStructTree().catch(() => null),
           extractPageImages(page, pageNumber)
         ]);
 
+        const view = Array.isArray(page.view) ? page.view : [0, 0, 612, 792];
+        pageBoxes.push({
+          x: Math.min(view[0]!, view[2]!),
+          y: Math.min(view[1]!, view[3]!),
+          width: Math.abs(view[2]! - view[0]!),
+          height: Math.abs(view[3]! - view[1]!)
+        });
+
+        const referencedMcids = structureInspection?.referencedMcidsByPage[pageNumber - 1];
+        const markedContentStack: Array<{ tag?: string; mcid?: number }> = [];
         for (const item of content.items) {
-          if (!('str' in item) || !item.str.trim()) continue;
+          if (!('str' in item)) {
+            const marker = item as { type?: string; tag?: string; id?: string | null };
+            if (marker.type === 'beginMarkedContent' || marker.type === 'beginMarkedContentProps') {
+              const mcid = typeof marker.id === 'string' ? marker.id.match(/_mc(\d+)$/)?.[1] : undefined;
+              markedContentStack.push({ tag: marker.tag, mcid: mcid === undefined ? undefined : Number(mcid) });
+            } else if (marker.type === 'endMarkedContent') {
+              markedContentStack.pop();
+            }
+            continue;
+          }
+          if (!item.str.trim()) continue;
+
+          if (measureTagCoverage && !markedContentStack.some((entry) => entry.tag === 'Artifact')) {
+            const chars = item.str.replace(/\s+/g, '').length;
+            const innermostMcid = [...markedContentStack].reverse().find((entry) => entry.mcid !== undefined)?.mcid;
+            // Pages without /StructParents cannot be checked against the
+            // ParentTree; any MCID there is given the benefit of the doubt.
+            const reachable =
+              innermostMcid !== undefined && (referencedMcids === undefined ? true : referencedMcids.has(innermostMcid));
+            if (reachable) taggedChars += chars;
+            else untaggedChars += chars;
+          }
 
           const transform = item.transform;
           const fontName = item.fontName ?? 'Helvetica';
@@ -848,21 +963,26 @@ export async function parsePdfBytes(bytes: ArrayBuffer): Promise<ParsedPDF> {
     } else if (manifest?.pdfUaPart && !metadata['pdfuaid:part']) {
       metadata['pdfuaid:part'] = manifest.pdfUaPart;
     }
-    const metadataLang =
-      cleanText(metadata.Language) ??
-      cleanText(metadata.Lang) ??
-      (typeof metadataObj?.get === 'function'
-        ? cleanText(metadataObj.get('dc:language'))
-        : undefined);
+    const xmpLanguage = readXmpValue(metadataObj, 'dc:language');
+    if (xmpLanguage && !metadata['dc:language']) metadata['dc:language'] = xmpLanguage;
+    const metadataLang = cleanText(metadata.Language) ?? cleanText(metadata.Lang) ?? xmpLanguage;
+    // The document's own /Lang and Title win; the manifest only fills gaps,
+    // so a stale manifest never hides a language someone set later.
+    const language = metadataLang ?? manifest?.language;
+    const languageAssumed =
+      manifest?.languageAssumed === true && (!metadataLang || !manifest.language || metadataLang === manifest.language);
 
     return {
       pageCount: doc.numPages,
       metadata,
-      language: manifest?.language ?? metadataLang,
-      title: cleanText(metadata.Title),
+      language,
+      ...(languageAssumed ? { languageAssumed: true } : {}),
+      title: cleanText(metadata.Title) ?? readXmpValue(metadataObj, 'dc:title'),
       remediationMode: manifest?.remediationMode,
       hasStructTree: Boolean(discoveredHasStructTree || structureBinding?.structElemCount || structureBinding?.hasParentTree),
       structureBinding,
+      ...(measureTagCoverage ? { textTagCoverage: { taggedChars, untaggedChars } } : {}),
+      pageBoxes,
       tags: dedupeTags(discoveredTags),
       textItems,
       images: dedupeImages(discoveredImages),
