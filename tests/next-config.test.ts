@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-async function loadHeaders(nodeEnv: string) {
+async function loadHeaders(nodeEnv: string, vercel = '') {
   vi.stubEnv('NODE_ENV', nodeEnv);
+  vi.stubEnv('VERCEL', vercel);
   vi.resetModules();
   const { default: config } = await import('../next.config.mjs');
   const [rule] = await config.headers();
@@ -17,14 +18,24 @@ describe('security headers', () => {
     vi.unstubAllEnvs();
   });
 
-  it('adds HSTS, upgrade-insecure-requests, frame-ancestors and form-action in production', async () => {
-    const headers = await loadHeaders('production');
+  it('adds HSTS, upgrade-insecure-requests, frame-ancestors and form-action on Vercel', async () => {
+    const headers = await loadHeaders('production', '1');
     const csp = directives(headers.get('Content-Security-Policy'));
 
     expect(headers.get('Strict-Transport-Security')).toMatch(/max-age=\d+/);
     expect(csp.get('frame-ancestors')).toBe("frame-ancestors 'none'");
     expect(csp.get('form-action')).toBe("form-action 'self'");
     expect(csp.has('upgrade-insecure-requests')).toBe(true);
+    expect(csp.get('script-src')).not.toContain("'unsafe-eval'");
+  });
+
+  it('keeps a local production build usable over plain http', async () => {
+    const headers = await loadHeaders('production');
+    const csp = directives(headers.get('Content-Security-Policy'));
+
+    expect(headers.has('Strict-Transport-Security')).toBe(false);
+    expect(csp.has('upgrade-insecure-requests')).toBe(false);
+    expect(csp.get('frame-ancestors')).toBe("frame-ancestors 'none'");
     expect(csp.get('script-src')).not.toContain("'unsafe-eval'");
   });
 

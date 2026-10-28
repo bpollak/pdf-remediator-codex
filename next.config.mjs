@@ -1,5 +1,9 @@
-const isProduction = process.env.NODE_ENV === 'production';
 const isDevelopment = process.env.NODE_ENV === 'development';
+// Vercel deployments are HTTPS only. Local and CI `next start` builds are
+// served over plain http, where upgrade-insecure-requests would break every
+// asset request, so the HTTPS-only headers follow the deployment, not
+// NODE_ENV. Set HTTPS_ONLY_HEADERS=true when hosting behind TLS elsewhere.
+const isHttpsDeployment = process.env.VERCEL === '1' || process.env.HTTPS_ONLY_HEADERS === 'true';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -15,12 +19,7 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()'
           },
-          // Production is served over HTTPS only (Vercel). `next dev` runs on
-          // plain http://localhost, so it gets neither HSTS nor
-          // upgrade-insecure-requests. (A local `next start` over http gets
-          // both; browsers ignore HSTS on http, but some upgrade its asset
-          // requests to https, so use `next dev` for local work.)
-          ...(isProduction
+          ...(isHttpsDeployment
             ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' }]
             : []),
           {
@@ -45,7 +44,7 @@ const nextConfig = {
               // The app is never embedded; X-Frame-Options covers older browsers.
               "frame-ancestors 'none'",
               "form-action 'self'",
-              ...(isProduction ? ['upgrade-insecure-requests'] : [])
+              ...(isHttpsDeployment ? ['upgrade-insecure-requests'] : [])
             ].join('; ')
           }
         ]
