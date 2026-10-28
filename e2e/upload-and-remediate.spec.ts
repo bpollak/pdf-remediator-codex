@@ -9,7 +9,7 @@ test.describe('PDF upload and remediation workflow', () => {
   });
 
   test('landing page loads with upload drop zone', async ({ page }) => {
-    await expect(page).toHaveTitle(/accessible/i);
+    await expect(page).toHaveTitle(/PDF Remediator \| UC San Diego/);
     // The drop zone should be visible.
     const dropZone = page.getByText(/drag.*drop|upload|choose/i).first();
     await expect(dropZone).toBeVisible();
