@@ -1,3 +1,5 @@
+import { SUPPORT } from '@/lib/content/support';
+
 export function Footer() {
   const year = new Date().getFullYear();
 
@@ -22,7 +24,7 @@ export function Footer() {
                 <a href="https://ucsd.edu/about/terms-of-use.html">Terms of Use</a>
               </li>
               <li>
-                <a href="mailto:brand@ucsd.edu">Feedback</a>
+                <a href={SUPPORT.feedback.url}>Feedback</a>
               </li>
             </ul>
           </div>

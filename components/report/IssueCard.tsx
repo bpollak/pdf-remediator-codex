@@ -30,7 +30,9 @@ export function IssueCard({ finding }: { finding: AuditFinding }) {
         </p>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-[var(--ucsd-blue)]">Page {finding.location.page ?? '-'}</span>
+        <span className="text-[var(--ucsd-blue)]">
+          {typeof finding.location.page === 'number' ? `Page ${finding.location.page}` : 'Whole document'}
+        </span>
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyles[finding.severity]}`}>
           {severityLabel[finding.severity]}
         </span>

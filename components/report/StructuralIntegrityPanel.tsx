@@ -26,8 +26,20 @@ function sourceTypeLabel(sourceType: string | undefined): string {
   return 'Not classified';
 }
 
-function structureHealthSummary(parsed?: ParsedPDF, audit?: AuditResult): { label: string; tone: string } {
+function structureHealthSummary(
+  parsed?: ParsedPDF,
+  audit?: AuditResult,
+  remediationMode?: string
+): { label: string; tone: string } {
   if (!parsed) return { label: 'No structure data available', tone: 'text-gray-500' };
+  // Matches the results page: an analysis-only result has no usable tags,
+  // whatever the parsed tree looks like.
+  if (remediationMode === 'analysis-only') {
+    return {
+      label: 'No usable tags — analysis-only result, tags must be added manually (see the results page checklist)',
+      tone: 'text-red-700'
+    };
+  }
   const hasTree = parsed.hasStructTree;
   const hasBinding = parsed.structureBinding?.hasContentBinding;
   const hasParent = parsed.structureBinding?.hasParentTreeEntries;
@@ -103,14 +115,18 @@ export function StructuralIntegrityPanel({ fileId }: { fileId: string }) {
   const [showDetails, setShowDetails] = useState(false);
 
   const originalHealth = structureHealthSummary(file?.parsedData, file?.auditResult);
-  const remediatedHealth = structureHealthSummary(file?.remediatedParsedData, file?.postRemediationAudit);
+  const remediatedHealth = structureHealthSummary(
+    file?.remediatedParsedData,
+    file?.postRemediationAudit,
+    file?.remediationMode
+  );
 
   return (
     <section className="space-y-3 rounded border border-[rgba(24,43,73,0.2)] bg-white p-4 shadow-sm">
       <div>
-        <h2>Document Health</h2>
+        <h2>Document structure (tags)</h2>
         <p className="mt-1 text-sm text-[var(--ucsd-text)]">
-          How well your PDF is set up for screen readers and assistive tools.
+          Whether the tag tree exists and is bound to page content (MCIDs and ParentTree).
         </p>
       </div>
 
