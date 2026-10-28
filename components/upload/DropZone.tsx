@@ -3,7 +3,13 @@
 import { useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MAX_FILES_PER_UPLOAD, useAppStore } from '@/stores/app-store';
-import { validatePdfFile } from '@/lib/utils/file-helpers';
+import { formatBytes, validatePdfFile } from '@/lib/utils/file-helpers';
+import { planUploadsForStorage } from '@/lib/persistence/storage-quota';
+import { UPLOAD_INPUT_ID } from './FileQueue';
+
+function listNames(names: string[]): string {
+  return names.join(', ');
+}
 
 export function DropZone() {
   const addFiles = useAppStore((s) => s.addFiles);
@@ -31,10 +37,21 @@ export function DropZone() {
       }
     }
 
-    if (accepted.length > 0) {
+    // Check browser storage before reading files in, so a full disk is
+    // reported up front rather than as a save error after processing.
+    const storagePlan = await planUploadsForStorage(accepted);
+    if (storagePlan.refused.length > 0) {
+      rejected.push(
+        `There isn't enough storage space left in this browser for ${listNames(storagePlan.refused.map((file) => file.name))}` +
+          `${typeof storagePlan.availableBytes === 'number' ? ` (about ${formatBytes(storagePlan.availableBytes)} free)` : ''}. ` +
+          'Remove older files from the list below, or free up space on this computer, then add them again.'
+      );
+    }
+
+    if (storagePlan.accepted.length > 0) {
       try {
-        const { skipped } = await addFiles(
-          accepted,
+        const { skippedNames } = await addFiles(
+          storagePlan.accepted,
           baseFile
             ? {
                 uploadIntent: 'revalidation',
@@ -42,9 +59,10 @@ export function DropZone() {
               }
             : undefined
         );
-        if (skipped > 0) {
+        if (skippedNames.length > 0) {
+          const skipped = skippedNames.length;
           rejected.push(
-            `Only ${MAX_FILES_PER_UPLOAD} files can be added at a time, so ${skipped} file${skipped === 1 ? ' was' : 's were'} not added. Add ${skipped === 1 ? 'it' : 'them'} after these finish.`
+            `Only ${MAX_FILES_PER_UPLOAD} files can be added at a time, so ${skipped === 1 ? 'this file was' : 'these files were'} not added: ${listNames(skippedNames)}. Add ${skipped === 1 ? 'it' : 'them'} after these finish.`
           );
         }
         if (baseFile) {
@@ -107,7 +125,7 @@ export function DropZone() {
               ? 'This upload will stay linked to the earlier review for re-validation.'
               : `Up to ${MAX_FILES_PER_UPLOAD} files, 50 MB each`}
         </span>
-        <input aria-label="Upload PDF files" type="file" accept="application/pdf" multiple disabled={!hydrated} className="mx-auto mt-3 text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" onChange={onChange} />
+        <input id={UPLOAD_INPUT_ID} aria-label="Upload PDF files" type="file" accept="application/pdf" multiple disabled={!hydrated} className="mx-auto mt-3 text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" onChange={onChange} />
       </label>
 
       {validationErrors.length > 0 ? (
