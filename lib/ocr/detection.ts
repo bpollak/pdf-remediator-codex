@@ -29,8 +29,49 @@ export function summarizePdfTextSignal(parsed: ParsedPDF): PdfTextSignal {
   };
 }
 
+/** A page is image-dominated when its images cover at least this share of it. */
+export const SCANNED_PAGE_MIN_IMAGE_COVERAGE = 0.5;
+/** An image-dominated page with fewer extractable characters than this reads as a scan. */
+export const SCANNED_PAGE_MAX_TEXT_CHARS = 120;
+
+function imageCoverageByPage(parsed: ParsedPDF): number[] {
+  const boxes = parsed.pageBoxes ?? [];
+  const covered = boxes.map(() => 0);
+  for (const image of parsed.images) {
+    const box = boxes[image.page - 1];
+    if (!box || box.width <= 0 || box.height <= 0) continue;
+    const width = Math.min(image.x + image.width, box.x + box.width) - Math.max(image.x, box.x);
+    const height = Math.min(image.y + image.height, box.y + box.height) - Math.max(image.y, box.y);
+    if (width <= 0 || height <= 0) continue;
+    covered[image.page - 1] += (width * height) / (box.width * box.height);
+  }
+  return covered.map((share) => Math.min(1, share));
+}
+
+/**
+ * Scanned (image-only) documents: most pages are covered by images and
+ * expose little extractable text. OCR text counts as text, and a structure
+ * tree does not change the answer (a tagged scan is still unreadable).
+ *
+ * When page geometry is unknown, or no images were found, the older
+ * text-density heuristic is used.
+ */
 export function isLikelyScannedPdf(parsed: ParsedPDF): boolean {
   const signal = summarizePdfTextSignal(parsed);
+
+  if (parsed.pageBoxes?.length && parsed.images.length > 0) {
+    const coverage = imageCoverageByPage(parsed);
+    const charsByPage = coverage.map(() => 0);
+    for (const item of parsed.textItems) {
+      if (item.page >= 1 && item.page <= charsByPage.length) {
+        charsByPage[item.page - 1] += item.text.replace(/\s+/g, '').length;
+      }
+    }
+    const scannedPages = coverage.filter(
+      (share, index) => share >= SCANNED_PAGE_MIN_IMAGE_COVERAGE && charsByPage[index]! < SCANNED_PAGE_MAX_TEXT_CHARS
+    ).length;
+    return scannedPages >= Math.max(1, Math.ceil(coverage.length / 2));
+  }
 
   const hasSemanticSignals =
     parsed.hasStructTree || parsed.tags.length > 0 || parsed.forms.length > 0 || parsed.outlines.length > 0;

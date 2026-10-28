@@ -141,7 +141,8 @@ describe('buildRemediatedPdf fixes', () => {
     }
     const source = await doc.save();
     const parsed = await parsePdfBytes(toArrayBuffer(source));
-    const output = await buildRemediatedPdf(parsed, 'en-US', toArrayBuffer(source));
+    // The invisible tagged copy is opt-in (off by default).
+    const output = await buildRemediatedPdf(parsed, 'en-US', toArrayBuffer(source), { injectBoundTextLayer: true });
 
     const result = await PDFDocument.load(output);
     const pageRefs = result.getPages().map((page) => page.ref.toString());
@@ -177,7 +178,7 @@ describe('buildRemediatedPdf fixes', () => {
     const source = await doc.save();
 
     const parsed = await parsePdfBytes(toArrayBuffer(source));
-    const output = await buildRemediatedPdf(parsed, 'en-US', toArrayBuffer(source));
+    const output = await buildRemediatedPdf(parsed, 'en-US', toArrayBuffer(source), { injectBoundTextLayer: true });
     const result = await PDFDocument.load(output);
 
     const mcids = structKids(result).map((elem) => (elem.get(PDFName.of('K')) as PDFNumber).asNumber());

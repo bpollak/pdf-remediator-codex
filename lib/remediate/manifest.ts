@@ -7,6 +7,11 @@ export interface RemediationManifest {
   language?: string;
   pdfUaPart?: string;
   remediationMode?: RemediationMode;
+  /**
+   * True when the source document had no language and /Lang was set to a
+   * default that a person still has to confirm.
+   */
+  languageAssumed?: boolean;
 }
 
 export function encodeManifest(manifest: RemediationManifest): string {
@@ -40,6 +45,7 @@ export function decodeManifest(value?: string): RemediationManifest | null {
     if (parsed.language !== undefined && typeof parsed.language !== 'string') return null;
     if (parsed.pdfUaPart !== undefined && typeof parsed.pdfUaPart !== 'string') return null;
     if (parsed.version !== undefined && typeof parsed.version !== 'number') return null;
+    if (parsed.languageAssumed !== undefined && typeof parsed.languageAssumed !== 'boolean') return null;
     if (parsed.remediationMode !== undefined && parsed.remediationMode !== 'analysis-only' && parsed.remediationMode !== 'content-bound') {
       return null;
     }
@@ -58,7 +64,8 @@ export function decodeManifest(value?: string): RemediationManifest | null {
       ...(typeof parsed.pdfUaPart === 'string' ? { pdfUaPart: parsed.pdfUaPart } : {}),
       ...(parsed.remediationMode === 'analysis-only' || parsed.remediationMode === 'content-bound'
         ? { remediationMode: parsed.remediationMode }
-        : {})
+        : {}),
+      ...(parsed.languageAssumed === true ? { languageAssumed: true } : {})
     };
 
     return manifest;

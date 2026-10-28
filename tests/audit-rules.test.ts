@@ -44,7 +44,7 @@ function accessibleParsed(): ParsedPDF {
 /**
  * Untagged PDF: no structure, no metadata, no language.
  * Triggers: DOC-001, DOC-002, DOC-003, HDG-002, LST-001, LNK-002,
- *           FRM-001, FRM-002, META-001, META-002, IMG-001
+ *           FRM-001, FRM-002, META-002, META-003, IMG-001
  */
 function untaggedParsed(): ParsedPDF {
   return {
@@ -151,8 +151,8 @@ const failingFixtureByRuleId: Record<string, 'untagged' | 'partial' | 'unbound'>
   'LNK-002': 'untagged',
   'FRM-001': 'untagged',
   'FRM-002': 'untagged',
-  'META-001': 'untagged',
-  'META-002': 'untagged'
+  'META-002': 'untagged',
+  'META-003': 'untagged'
 };
 
 function fixture(name: 'untagged' | 'partial' | 'unbound'): ParsedPDF {
@@ -210,9 +210,10 @@ describe('audit rules', () => {
     expect(clr001.evaluate({ parsed })).toEqual([]);
   });
 
-  it('CLR-002 is placeholder (returns no findings)', () => {
+  it('CLR-002 is placeholder (returns no findings, reported as not checked)', () => {
     const parsed = accessibleParsed();
     const clr002 = allRules.find((r) => r.id === 'CLR-002')!;
     expect(clr002.evaluate({ parsed })).toEqual([]);
+    expect(clr002.canEvaluate?.({ parsed })).toBe(false);
   });
 });

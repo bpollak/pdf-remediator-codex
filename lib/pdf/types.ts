@@ -41,14 +41,42 @@ export interface StructureBindingSummary {
 
 export type RemediationMode = 'analysis-only' | 'content-bound';
 
+/** Page box (CropBox, else MediaBox) in PDF user space. */
+export interface PageBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * How much of the page text a screen reader reaches through the tag tree:
+ * non-whitespace characters inside marked content whose MCID the ParentTree
+ * maps to a structure element, versus the rest. Artifacts are not counted.
+ */
+export interface TextTagCoverage {
+  taggedChars: number;
+  untaggedChars: number;
+}
+
 export interface ParsedPDF {
   pageCount: number;
   metadata: Record<string, string | undefined>;
   language?: string;
+  /**
+   * True when /Lang was set by this tool to a default because the original
+   * document had no language (recorded in the remediation manifest). A
+   * person still has to confirm it.
+   */
+  languageAssumed?: boolean;
   title?: string;
   remediationMode?: RemediationMode;
   hasStructTree: boolean;
   structureBinding?: StructureBindingSummary;
+  /** Only present when the document has a structure tree. */
+  textTagCoverage?: TextTagCoverage;
+  /** One entry per page, in page order. Absent for hand-built data. */
+  pageBoxes?: PageBox[];
   tags: Array<{ type: string; page?: number; text?: string; alt?: string; scope?: string; markedContentId?: number }>;
   textItems: TextItem[];
   images: ImageItem[];

@@ -8,7 +8,7 @@ import {
   PDFRawStream,
   PDFRef
 } from 'pdf-lib';
-import { assertNotEncrypted } from '@/lib/pdf/encryption';
+import { assertNotEncrypted, assertNotSigned } from '@/lib/pdf/encryption';
 import { binaryStringToBytes, encodePdfTextString } from './pdf-text';
 import { decodePageContent, maxMcidInContent } from './page-content';
 
@@ -395,21 +395,85 @@ function ensureParentArrayForPage(
   return parentArray;
 }
 
+/** Where a new Figure goes: right after `after` in `parent`'s kid array. */
+interface FigureAnchor {
+  parentRef: PDFRef;
+  kids: PDFArray;
+  after: PDFRef;
+}
+
+/** Inline roles a Figure should follow from outside, not nest inside. */
+const INLINE_ROLES = new Set(['/Span', '/Link', '/Quote', '/Code', '/Reference', '/Note', '/Lbl']);
+
+/**
+ * The structure element of the marked content painted just before `offset`
+ * (climbing out of inline elements), so a new Figure can be placed after it
+ * in reading order. Undefined when there is none or the tree shape is not
+ * one this transform understands.
+ */
+function precedingAnchor(
+  pdf: PDFDocument,
+  content: string,
+  offset: number,
+  parentArray: PDFArray
+): FigureAnchor | undefined {
+  let mcid: number | undefined;
+  for (const match of content.slice(0, offset).matchAll(/\/MCID\s+(\d+)/g)) {
+    const candidate = Number(match[1]);
+    if (candidate < parentArray.size() && parentArray.get(candidate) instanceof PDFRef) mcid = candidate;
+  }
+  if (mcid === undefined) return undefined;
+
+  let elemRef = parentArray.get(mcid) as PDFRef;
+  for (let depth = 0; depth < 32; depth += 1) {
+    const elem = lookupDict(pdf, elemRef);
+    const parentRef = elem?.get(PDFName.of('P'));
+    if (!elem || !(parentRef instanceof PDFRef)) return undefined;
+    const parent = lookupDict(pdf, parentRef);
+    if (!parent) return undefined;
+
+    const role = elem.get(PDFName.of('S'));
+    const parentRole = parent.get(PDFName.of('S'));
+    if (role instanceof PDFName && INLINE_ROLES.has(role.toString()) && parentRole instanceof PDFName) {
+      elemRef = parentRef;
+      continue;
+    }
+
+    const parentK = parent.get(PDFName.of('K'));
+    if (parentK instanceof PDFArray) return { parentRef, kids: parentK, after: elemRef };
+    if (parentK instanceof PDFRef && parentK === elemRef) {
+      const kids = PDFArray.withContext(pdf.context);
+      kids.push(parentK);
+      parent.set(PDFName.of('K'), kids);
+      return { parentRef, kids, after: elemRef };
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
 function createFigureElement(
   pdf: PDFDocument,
   tree: StructTreeHandles,
   page: ReturnType<PDFDocument['getPages']>[number],
   mcid: number,
-  alt: string
+  alt: string,
+  anchor?: FigureAnchor
 ): PDFRef {
   const context = pdf.context;
   const figureDict = context.obj({ Type: 'StructElem', S: 'Figure' });
-  figureDict.set(PDFName.of('P'), tree.parentRef);
+  figureDict.set(PDFName.of('P'), anchor?.parentRef ?? tree.parentRef);
   figureDict.set(PDFName.of('Pg'), page.ref);
   figureDict.set(PDFName.of('K'), PDFNumber.of(mcid));
   figureDict.set(PDFName.of('Alt'), encodePdfTextString(alt));
   const figureRef = context.register(figureDict);
-  tree.parentKids.push(figureRef);
+
+  const index = anchor ? anchor.kids.asArray().indexOf(anchor.after) : -1;
+  if (anchor && index >= 0) {
+    anchor.kids.insert(index + 1, figureRef);
+  } else {
+    tree.parentKids.push(figureRef);
+  }
   return figureRef;
 }
 
@@ -436,6 +500,7 @@ export async function applyManualAltText(
   const loadable = sourceBytes instanceof Uint8Array ? sourceBytes.slice() : sourceBytes.slice(0);
   const pdf = await PDFDocument.load(loadable, { updateMetadata: false, ignoreEncryption: true });
   assertNotEncrypted(pdf);
+  assertNotSigned(pdf);
   const pages = pdf.getPages();
   const context = pdf.context;
 
@@ -559,7 +624,7 @@ export async function applyManualAltText(
     const planned = toWrap.map((entry) => ({ entry, mcid: entry.decorative ? -1 : nextMcid++ }));
 
     let nextContent = content;
-    const figureBindings: Array<{ mcid: number; alt: string; imageId: string }> = [];
+    const figureBindings: Array<{ mcid: number; alt: string; imageId: string; offset: number }> = [];
 
     for (const { entry, mcid } of [...planned].sort((a, b) => b.entry.order - a.entry.order)) {
       const paint = paints[entry.order - 1]!;
@@ -570,7 +635,7 @@ export async function applyManualAltText(
       }
 
       nextContent = `${nextContent.slice(0, paint.start)}/Figure <</MCID ${mcid}>> BDC\n${nextContent.slice(paint.start, paint.end)}\nEMC${nextContent.slice(paint.end)}`;
-      figureBindings.push({ mcid, alt: entry.alt, imageId: entry.imageId });
+      figureBindings.push({ mcid, alt: entry.alt, imageId: entry.imageId, offset: paint.start });
       applied.push(entry.imageId);
     }
 
@@ -579,8 +644,17 @@ export async function applyManualAltText(
     const newStream = context.flateStream(binaryStringToBytes(nextContent));
     page.node.set(PDFName.of('Contents'), context.register(newStream));
 
+    // Each Figure goes after the element of the content painted just before
+    // it (reading order), or after the previous new Figure with the same
+    // anchor; without an anchor it is appended as before.
+    const lastFigureByAnchor = new Map<PDFRef, PDFRef>();
     for (const binding of figureBindings.sort((a, b) => a.mcid - b.mcid)) {
-      const figureRef = createFigureElement(pdf, tree, page, binding.mcid, binding.alt);
+      const anchor = precedingAnchor(pdf, content, binding.offset, parentArray);
+      const placed = anchor
+        ? { ...anchor, after: lastFigureByAnchor.get(anchor.after) ?? anchor.after }
+        : undefined;
+      const figureRef = createFigureElement(pdf, tree, page, binding.mcid, binding.alt, placed);
+      if (anchor) lastFigureByAnchor.set(anchor.after, figureRef);
       while (parentArray.size() <= binding.mcid) {
         parentArray.push(PDFNull);
       }
