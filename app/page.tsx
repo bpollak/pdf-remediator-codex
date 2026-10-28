@@ -18,21 +18,22 @@ const steps = [
   },
   {
     number: '4',
-    title: 'Publish',
-    description: 'Download your improved PDF and a checklist of any remaining items.',
+    title: 'Finish',
+    description: 'Download the improved PDF, finish any items left on the checklist, then check it before you publish.',
   },
 ];
 
 export default function LandingPage() {
   return (
     <div className="space-y-8">
-      <section className="space-y-5 rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-10 py-12 shadow-md">
+      <section className="space-y-5 rounded-lg border-t-4 border-t-[var(--ucsd-blue)] bg-white px-5 py-10 sm:px-10 sm:py-12 shadow-md">
         <h1>Make Your PDF More Accessible</h1>
         <p className="max-w-3xl text-lg leading-relaxed text-[var(--ucsd-text)]">
           Accessible PDFs work for everyone — including people who use screen readers, keyboard navigation, or other assistive tools. Upload your PDF and this app will check for common issues, fix what it can, and show you what to do next.
         </p>
         <p className="max-w-3xl text-base leading-relaxed text-[var(--ucsd-text)]">
-          Most PDFs are processed in under a minute. No accessibility expertise required.
+          Most PDFs are processed in under a minute. The app fixes common issues automatically and tells you exactly
+          what&apos;s left. Some PDFs still need fixes in Word or Acrobat; we&apos;ll show you how or where to get help.
         </p>
         <Link
           href="/app"
@@ -46,7 +47,7 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section className="rounded-lg bg-white px-10 py-8 shadow-md">
+      <section className="rounded-lg bg-white px-5 py-8 sm:px-10 shadow-md">
         <h2 className="text-xl font-semibold text-[var(--ucsd-navy)]">How it works</h2>
         <ol className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step) => (
@@ -69,7 +70,7 @@ export default function LandingPage() {
       </section>
 
       {/* What you'll need */}
-      <section className="rounded-lg bg-white px-10 py-8 shadow-md">
+      <section className="rounded-lg bg-white px-5 py-8 sm:px-10 shadow-md">
         <h2 className="text-xl font-semibold text-[var(--ucsd-navy)]">What you&apos;ll need</h2>
         <ul className="mt-4 space-y-2 text-sm text-[var(--ucsd-text)]">
           <li className="flex items-start gap-2">

@@ -1,4 +1,6 @@
-import type { ParsedPDF } from '@/lib/pdf/types';
+import type { AuditFinding } from '@/lib/audit/types';
+import { isLikelyScannedPdf } from '@/lib/ocr/detection';
+import type { ImageItem, ParsedPDF } from '@/lib/pdf/types';
 import { detectHeadings, detectTables } from '@/lib/remediate/heuristics';
 import type {
   FileEntry,
@@ -7,8 +9,36 @@ import type {
   ManualCustomElementDraft,
   ManualReviewDrafts,
   ManualStructureHeadingDraft,
-  ManualStructureTableDecision
+  ManualStructureTableDecision,
+  WorkflowProgress
 } from '@/types/file-entry';
+import { findingPlainHowTo, findingPlainTitle } from './finding-copy';
+
+/** OCR page coverage, recorded by the processing queue when available. */
+interface OcrCoverage {
+  pagesProcessed: number;
+  totalPages: number;
+}
+
+type FileWithOcrCoverage = FileEntry & { ocrCoverage?: OcrCoverage };
+
+/** Workflow progress plus ticks on the required checklist items below. */
+export interface ChecklistWorkflowProgress extends WorkflowProgress {
+  /** When the user marked each required item done, keyed by item id. */
+  checklistItemsDoneAt?: Record<string, string>;
+}
+
+export interface RequiredChecklistItem {
+  /** Stable id, used to store the user's tick. */
+  id: string;
+  kind: 'ocr' | 'finding';
+  title: string;
+  /** Plain-language instructions. */
+  instructions: string;
+  /** Extra context, e.g. how many pages OCR covered. */
+  detail?: string;
+  done: boolean;
+}
 
 interface LegacyManualStructureDrafts {
   includeHeadings?: Record<string, boolean>;
@@ -193,6 +223,123 @@ export function getAltTextDraftForImage(
   return drafts[image.id] ?? { alt: image.alt ?? '', decorative: Boolean(image.decorative) };
 }
 
+/** True when the uploaded PDF looks like a scan (image-only pages). */
+export function isScannedDocument(file: FileEntry | undefined): boolean {
+  if (!file) return false;
+  if (file.ocrAttempted) return true;
+  return file.parsedData ? isLikelyScannedPdf(file.parsedData) : false;
+}
+
+// 40% of a US Letter page. A scanned page is stored as one image covering
+// (nearly) the whole page; anything this large in a scan is the page itself.
+const SCAN_PAGE_IMAGE_MIN_AREA = 0.4 * 612 * 792;
+
+function isScanPageImage(image: ImageItem): boolean {
+  return image.width * image.height >= SCAN_PAGE_IMAGE_MIN_AREA;
+}
+
+/**
+ * Images the user should describe. In a scanned document the full-page scan
+ * image is left out: describing it would put the page's text in an image
+ * description, when the real fix is OCR (its own checklist item), after which
+ * the scan is just the background behind real text.
+ */
+export function getReviewableImages(file: FileEntry | undefined, parsed: ParsedPDF | undefined): ImageItem[] {
+  const images = parsed?.images ?? [];
+  if (!isScannedDocument(file)) return images;
+  return images.filter((image) => !isScanPageImage(image));
+}
+
+function getChecklistItemsDoneAt(file: FileEntry | undefined): Record<string, string> {
+  return (file?.workflowProgress as ChecklistWorkflowProgress | undefined)?.checklistItemsDoneAt ?? {};
+}
+
+function pagesLabel(count: number): string {
+  return `${count} ${count === 1 ? 'page' : 'pages'}`;
+}
+
+function getOcrChecklistItem(file: FileEntry | undefined): Omit<RequiredChecklistItem, 'done'> | undefined {
+  if (!isScannedDocument(file)) return undefined;
+  const coverage = (file as FileWithOcrCoverage | undefined)?.ocrCoverage;
+  const partial =
+    coverage !== undefined &&
+    Number.isFinite(coverage.pagesProcessed) &&
+    Number.isFinite(coverage.totalPages) &&
+    coverage.pagesProcessed < coverage.totalPages;
+  if (file?.ocrApplied && !partial) return undefined;
+
+  const detail =
+    file?.ocrApplied && coverage
+      ? `We could only read the text on ${coverage.pagesProcessed} of ${pagesLabel(coverage.totalPages)}. Screen readers can't read the rest.`
+      : "This looks like a scan, and we couldn't read any text in it. Screen readers can't read it yet.";
+
+  return {
+    id: 'ocr',
+    kind: 'ocr',
+    title: 'Make the scanned text readable (OCR)',
+    instructions:
+      'If you have the original file (Word, PowerPoint, Google Docs), export the PDF again from it instead. Otherwise, in Acrobat Pro use Scan & OCR → Recognize text on every page, then upload the new PDF.',
+    detail
+  };
+}
+
+// Findings that other checklist items already cover. Rule ids below are the
+// existing ones; anything new falls through and gets its own required item.
+function isCoveredByOtherItems(
+  finding: AuditFinding,
+  context: { structureItem: boolean; scanned: boolean; imageItems: boolean; tableItems: boolean }
+): boolean {
+  if (finding.ruleId === 'DOC-004') return context.scanned;
+  if (finding.category === 'Images & Non-Text Content') return context.imageItems || context.scanned;
+  if (finding.ruleId === 'TBL-002' && context.tableItems) return true;
+  if (context.structureItem) {
+    // DOC-001 (PDF/UA identifier) only means something once real tags exist.
+    if (['DOC-001', 'DOC-002', 'DOC-005', 'META-002'].includes(finding.ruleId)) return true;
+    if (['Headings & Structure', 'Lists', 'Tables'].includes(finding.category)) return true;
+  }
+  return false;
+}
+
+/**
+ * Required items the app adds to the checklist on top of images, tables and
+ * the structure tick: OCR for scans that weren't fully read, and every
+ * serious (critical or major) problem left in the updated PDF that no other
+ * item covers. Without these the checklist could reach 100% while blocking
+ * problems remain.
+ */
+export function getRequiredChecklistItems(file: FileEntry | undefined): RequiredChecklistItem[] {
+  if (!file) return [];
+  const doneAt = getChecklistItemsDoneAt(file);
+  const parsed = getParsedReviewBase(file);
+  const items: Array<Omit<RequiredChecklistItem, 'done'>> = [];
+
+  const ocrItem = getOcrChecklistItem(file);
+  if (ocrItem) items.push(ocrItem);
+
+  const context = {
+    structureItem: file.remediationMode === 'analysis-only',
+    scanned: isScannedDocument(file),
+    imageItems: getReviewableImages(file, parsed).length > 0,
+    tableItems: parsed ? detectTables(parsed).length > 0 : false
+  };
+  const seen = new Set<string>();
+  for (const finding of file.postRemediationAudit?.findings ?? []) {
+    if (finding.severity === 'minor' || seen.has(finding.ruleId)) continue;
+    if (isCoveredByOtherItems(finding, context)) continue;
+    seen.add(finding.ruleId);
+    const count = file.postRemediationAudit!.findings.filter((entry) => entry.ruleId === finding.ruleId).length;
+    items.push({
+      id: `finding:${finding.ruleId}`,
+      kind: 'finding',
+      title: findingPlainTitle(finding),
+      instructions: findingPlainHowTo(finding),
+      ...(count > 1 ? { detail: `Found in ${count} places.` } : {})
+    });
+  }
+
+  return items.map((item) => ({ ...item, done: Boolean(doneAt[item.id]) }));
+}
+
 export function getHeadingDraftKey(heading: { page: number; level: number }, index: number): string {
   return `h-${index}-${heading.page}-${heading.level}`;
 }
@@ -301,14 +448,20 @@ export function getOrderedStructureHeadingKeys(
 
 export function hasPendingManualReviewChanges(file: FileEntry | undefined): boolean {
   if (!file) return false;
-  if (!file.manualReviewDrafts) return Boolean(file.workflowProgress?.structurePreparedAt);
+  // Ticking a required item means the user changed the PDF outside the app,
+  // so the current result no longer describes their file.
+  const outsideEdits =
+    Boolean(file.workflowProgress?.structurePreparedAt) ||
+    Boolean(file.workflowProgress?.structureConfirmedAt) ||
+    Object.keys(getChecklistItemsDoneAt(file)).length > 0;
+  if (!file.manualReviewDrafts) return outsideEdits;
   const drafts = getManualReviewDrafts(file);
   return (
     Object.keys(drafts.altText).length > 0 ||
     hasHeadingDraftChanges(file) ||
     Object.keys(drafts.structure.tableDecisions).length > 0 ||
     drafts.customElements.length > 0 ||
-    Boolean(file.workflowProgress?.structurePreparedAt)
+    outsideEdits
   );
 }
 
@@ -340,7 +493,7 @@ export function summarizeManualReviewState(file: FileEntry | undefined) {
     };
   }
 
-  const images = parsed.images;
+  const images = getReviewableImages(file, parsed);
   const altEditedCount = Object.keys(drafts.altText).length;
   const missingCount = images.filter((image) => {
     const draft = drafts.altText[image.id] ?? { alt: image.alt ?? '', decorative: Boolean(image.decorative) };
@@ -397,13 +550,18 @@ export function summarizeManualCompletion(file: FileEntry | undefined) {
   const tableCompleted = review.structure.reviewedTables;
   const customTotal = review.customElements.totalCount;
   const customCompleted = review.customElements.completedCount;
-  const total = altTextTotal + manualStructureTotal + tableTotal + customTotal;
-  const completed = altTextCompleted + manualStructureCompleted + tableCompleted + customCompleted;
+  const requiredItems = getRequiredChecklistItems(file);
+  const requiredTotal = requiredItems.length;
+  const requiredCompleted = requiredItems.filter((item) => item.done).length;
+  const total = altTextTotal + manualStructureTotal + tableTotal + customTotal + requiredTotal;
+  const completed =
+    altTextCompleted + manualStructureCompleted + tableCompleted + customCompleted + requiredCompleted;
 
   return {
     total,
     completed,
-    percent: total === 0 ? 100 : Math.round((completed / total) * 100),
+    // Round down, so the meter never shows 100% while an item is still open.
+    percent: completed >= total ? 100 : Math.floor((completed / total) * 100),
     altText: {
       total: altTextTotal,
       completed: altTextCompleted
@@ -419,6 +577,10 @@ export function summarizeManualCompletion(file: FileEntry | undefined) {
     customElements: {
       total: customTotal,
       completed: customCompleted
+    },
+    required: {
+      total: requiredTotal,
+      completed: requiredCompleted
     }
   };
 }

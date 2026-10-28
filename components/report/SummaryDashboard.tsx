@@ -6,6 +6,8 @@ import { ALL_CATEGORIES, type Category } from '@/lib/audit/types';
 import { computeDisplayedAutomatedScore } from '@/lib/report/display-score';
 import { getAccessibilityStatus } from '@/lib/report/accessibility-status';
 import { summarizeManualReviewState } from '@/lib/report/manual-review';
+import { redactDiagnostic } from '@/lib/report/diagnostics';
+import { summarizeNotChecked } from '@/lib/report/remediation-diff';
 import { formatTimestamp } from '@/lib/report/time-format';
 import { getVerapdfComplianceVerdict } from '@/lib/verapdf/result';
 
@@ -48,6 +50,7 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
     verapdfResult
   });
 
+  const notChecked = summarizeNotChecked(auditResult);
   const criticalCount = findings.filter((f) => f.severity === 'critical').length;
   const majorCount = findings.filter((f) => f.severity === 'major').length;
   const minorCount = findings.filter((f) => f.severity === 'minor').length;
@@ -63,13 +66,13 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       : 'Accessibility score — original upload';
   const scoreDescription =
     variant === 'remediated'
-      ? 'This score reflects the auto-fixed PDF. Draft edits you make below won\u2019t update this score until you upload a revised file.'
+      ? 'This score reflects the auto-fixed PDF. Edits made on the results page won\u2019t update this score until a revised file is uploaded.'
       : 'This score reflects the original file you uploaded, before any fixes.';
   const originalOcrMessage =
     variant === 'original' && file?.ocrAttempted
       ? file.ocrApplied
         ? 'OCR was applied during remediation, but this page still shows the original uploaded-PDF baseline. Review the compare page for OCR-influenced remediation results.'
-        : `OCR was attempted during remediation but did not yield usable searchable text${file.ocrReason ? `: ${file.ocrReason}.` : '.'}`
+        : `OCR was attempted during remediation but did not yield usable searchable text${file.ocrReason ? `: ${redactDiagnostic(file.ocrReason)}.` : '.'}`
       : undefined;
 
   return (
@@ -86,9 +89,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
       ) : null}
       {variant === 'remediated' ? (
         <div className="rounded border border-[rgba(24,43,73,0.12)] bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Accessibility decision</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ucsd-text)]">Publish decision</p>
           <p className="mt-1 text-lg font-semibold text-[var(--ucsd-navy)]">{accessibilityStatus.label}</p>
           <p className="mt-1 text-sm text-[var(--ucsd-text)]">{accessibilityStatus.message}</p>
+          {accessibilityStatus.detail ? (
+            <p className="mt-1 text-sm text-[var(--ucsd-text)]">Details: {accessibilityStatus.detail}</p>
+          ) : null}
         </div>
       ) : null}
       {variant === 'remediated' && (
@@ -127,6 +133,12 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
           Auto-fixes improved this file, but the independent accessibility check still found issues to resolve manually.
         </p>
       )}
+
+      {notChecked.length > 0 ? (
+        <p className="text-sm text-[var(--ucsd-text)]">
+          Not checked: {notChecked.join(', ')} (rules {auditResult.notChecked?.join(', ')}). These block the top result.
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {criticalCount > 0 && (

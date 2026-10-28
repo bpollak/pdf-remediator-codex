@@ -39,13 +39,42 @@ h2 {
 
 h1 {
   color: var(--ucsd-blue);
-  font-size: 3.5em;
+  /* Scales down on narrow screens so long titles never overflow at 320px. */
+  font-size: clamp(2.25rem, 1.5rem + 4vw, 3.5rem);
+  overflow-wrap: anywhere;
+}
+
+/* Headings get focus after client-side navigation (see RouteFocus); the
+   focus is for screen readers and keyboard position, not a visible control. */
+h1[tabindex='-1']:focus,
+main[tabindex='-1']:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -100px;
+  z-index: 50;
+  padding: 0.75rem 1rem;
+  background: var(--ucsd-navy);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  border-radius: 0 0 0.375rem 0.375rem;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--ucsd-gold);
+  outline-offset: 2px;
 }
 
 h2,
 .h2 {
   color: var(--ucsd-navy);
   font-size: 2.2em;
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 768px) {
