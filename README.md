@@ -162,3 +162,7 @@ size before reading uploads, runs as a non-root user, and limits concurrent jobs
 ## Release process
 
 `AGENTS.md` describes the deployment workflow. Update `lib/content/release-notes.ts` with every user-visible change.
+
+To release `main` from your own computer and check the live site, run `bash scripts/release-to-production.sh`
+(see [docs/HANDOFF.md](docs/HANDOFF.md)). It runs every check, deploys with the Vercel CLI, confirms production serves
+that commit, and runs the browser suite against production.
