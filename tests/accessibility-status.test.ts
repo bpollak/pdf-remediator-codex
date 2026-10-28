@@ -46,6 +46,15 @@ function file(overrides: Partial<FileEntry> = {}): FileEntry {
 }
 
 describe('getAccessibilityStatus', () => {
+  it('explains why processing stopped using the queue\'s plain-language error', () => {
+    const result = getAccessibilityStatus(
+      file({ status: 'error', error: 'This PDF is digitally signed. Changing it would invalidate the signature.' })
+    );
+    expect(result.status).toBe('not-yet-accessible');
+    expect(result.message).toContain('digitally signed');
+    expect(result.message).not.toMatch(/upload/i);
+  });
+
   it('shows the analysis-only cap on scores stored before the audit applied it', () => {
     const result = getAccessibilityStatus(
       file({ remediationMode: 'analysis-only', postRemediationAudit: auditResult(92) })

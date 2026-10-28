@@ -68,6 +68,8 @@ export interface WorkflowProgress {
   structurePreparedAt?: string;
   /** Set only when the user ticks "Fix document structure in Acrobat or PAC" as done. */
   structureConfirmedAt?: string;
+  /** When the user marked each required checklist item done, keyed by item id. */
+  checklistItemsDoneAt?: Record<string, string>;
 }
 
 export interface FileEntry {

@@ -57,7 +57,11 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
     return {
       status: 'not-yet-accessible',
       label: 'Not ready to publish',
-      message: 'Processing did not finish, so this PDF has not been checked. Try uploading it again.',
+      // file.error is already plain-language copy from the queue (for example
+      // the signed or password-protected explanations).
+      message: file.error
+        ? `${file.error} This PDF has not been checked.`
+        : 'Processing did not finish, so this PDF has not been checked. Use Try again on the upload page.',
       reasons: [{ code: 'processing-error', label: 'Processing did not finish' }]
     };
   }

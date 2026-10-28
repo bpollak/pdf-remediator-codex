@@ -15,18 +15,8 @@ import type {
 import { findingPlainHowTo, findingPlainTitle } from './finding-copy';
 
 /** OCR page coverage, recorded by the processing queue when available. */
-interface OcrCoverage {
-  pagesProcessed: number;
-  totalPages: number;
-}
-
-type FileWithOcrCoverage = FileEntry & { ocrCoverage?: OcrCoverage };
-
-/** Workflow progress plus ticks on the required checklist items below. */
-export interface ChecklistWorkflowProgress extends WorkflowProgress {
-  /** When the user marked each required item done, keyed by item id. */
-  checklistItemsDoneAt?: Record<string, string>;
-}
+/** Workflow progress, including ticks on the required checklist items below. */
+export type ChecklistWorkflowProgress = WorkflowProgress;
 
 export interface RequiredChecklistItem {
   /** Stable id, used to store the user's tick. */
@@ -260,7 +250,7 @@ function pagesLabel(count: number): string {
 
 function getOcrChecklistItem(file: FileEntry | undefined): Omit<RequiredChecklistItem, 'done'> | undefined {
   if (!isScannedDocument(file)) return undefined;
-  const coverage = (file as FileWithOcrCoverage | undefined)?.ocrCoverage;
+  const coverage = file?.ocrCoverage;
   const partial =
     coverage !== undefined &&
     Number.isFinite(coverage.pagesProcessed) &&

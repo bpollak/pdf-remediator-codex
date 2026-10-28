@@ -27,6 +27,14 @@ function audit(findings: AuditFinding[], notChecked?: string[]): AuditResult {
 }
 
 describe('summarizeAutomaticFixes', () => {
+  it('does not present an assumed language as settled', () => {
+    const original = audit([finding('DOC-003')]);
+    const remediated = audit([finding('DOC-006')]);
+    expect(summarizeAutomaticFixes(original, remediated)).toEqual([
+      { ruleId: 'DOC-003', label: 'Set a document language for you to confirm', fixedCount: 1, partial: false }
+    ]);
+  });
+
   it('lists problems the automatic pass removed, in plain words, worst first', () => {
     const original = audit([
       finding('META-003', { severity: 'minor', category: 'Metadata & Navigation' }),

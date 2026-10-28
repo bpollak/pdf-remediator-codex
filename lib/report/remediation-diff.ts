@@ -69,7 +69,11 @@ export function summarizeAutomaticFixes(
     rank.set(ruleId, severityRank[worstSeverity(instances)]);
     fixed.push({
       ruleId,
-      label: findingFixedLabel(instances[0]),
+      // DOC-006 means the language was guessed, so don't present it as settled.
+      label:
+        ruleId === 'DOC-003' && after.has('DOC-006')
+          ? 'Set a document language for you to confirm'
+          : findingFixedLabel(instances[0]),
       fixedCount,
       partial: remaining > 0
     });
