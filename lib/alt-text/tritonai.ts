@@ -1,3 +1,6 @@
+import { formatUntrustedBlock, sanitizeUntrustedText } from '@/lib/tritonai/prompt';
+import { readTokenUsage, type TokenUsage } from '@/lib/server/log';
+
 export interface AltTextSuggestionInput {
   imageDataUrl: string;
   imageLabel: string;
@@ -17,6 +20,8 @@ export interface TritonAiConfig {
   baseUrl?: string;
   model?: string;
   signal?: AbortSignal;
+  /** Called with the token counts the gateway reports, for server logs. */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 const DEFAULT_LITELLM_BASE_URL = 'https://tritonai-api.ucsd.edu';
@@ -126,15 +131,15 @@ export function buildAltTextPrompt(input: AltTextSuggestionInput): string {
     'Keep the rationale under 25 words.',
     'Do not start with "image of", "picture of", or "graphic of".',
     '',
-    `Document: ${input.documentName?.trim() || 'uploaded PDF'}`,
-    `Image: ${input.imageLabel}`,
-    typeof input.page === 'number' ? `Page: ${input.page}` : undefined,
-    input.nearbyText?.trim() ? `Nearby text: ${input.nearbyText.trim()}` : 'Nearby text: none detected',
+    formatUntrustedBlock([
+      ['Document', sanitizeUntrustedText(input.documentName, 180) ?? 'uploaded PDF'],
+      ['Image', sanitizeUntrustedText(input.imageLabel, 120)],
+      ['Page', typeof input.page === 'number' ? input.page : undefined],
+      ['Nearby text', sanitizeUntrustedText(input.nearbyText, 800) ?? 'none detected']
+    ]),
     '',
     'Return JSON only with keys: alt, decorative, rationale.'
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].join('\n');
 }
 
 // Reasoning models can spend most of the budget on hidden reasoning tokens
@@ -208,6 +213,8 @@ async function requestTritonAiAltTextOnce(
 
   const payload = await response.json();
   const choice = payload?.choices?.[0];
+  const usage = readTokenUsage(payload);
+  if (usage) config.onUsage?.(usage);
   return { content: choice?.message?.content, finishReason: choice?.finish_reason };
 }
 
