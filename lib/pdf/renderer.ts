@@ -60,10 +60,10 @@ function releasePdfDocument(entry: CachedDocument) {
   if (entry.evicted && entry.users === 0) destroyEntry(entry);
 }
 
-async function withPdfDocument<T>(bytes: ArrayBuffer, use: (doc: PdfDocumentProxy) => Promise<T>): Promise<T> {
+async function withPdfDocument<T>(bytes: ArrayBuffer, render: (doc: PdfDocumentProxy) => Promise<T>): Promise<T> {
   const entry = acquirePdfDocument(bytes);
   try {
-    return await use(await entry.promise);
+    return await render(await entry.promise);
   } finally {
     releasePdfDocument(entry);
   }

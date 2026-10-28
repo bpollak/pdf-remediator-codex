@@ -62,14 +62,11 @@ test.describe('upload and remediation workflow', () => {
     // Results page shows the new publish-readiness banner.
     await page.getByRole('link', { name: /view results/i }).click();
     await expect(page.getByRole('heading', { name: /finish your pdf/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/is this pdf ready to publish\?/i)).toBeVisible();
-    await expect(
-      page.getByText(/^(Accessible|Not yet accessible|Verification unavailable|Processing)$/).first()
-    ).toBeVisible();
+    await expect(page.getByText(/^(Ready for final review|Not ready yet|Still processing)$/).first()).toBeVisible();
 
-    // Download action is available, with the worksheet disclaimer.
+    // Download action and the manual checklist are available.
     await expect(page.getByRole('button', { name: /download updated pdf/i })).toBeEnabled();
-    await expect(page.getByText(/not.*added to the downloaded pdf/i).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Manual checklist', exact: true })).toBeVisible();
   });
 
   test('saved image description can be embedded into the downloaded PDF', async ({ page }) => {
@@ -88,7 +85,7 @@ test.describe('upload and remediation workflow', () => {
     await embedButton.click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/^remediated-/);
-    await expect(page.getByText(/embedded 1 description into the downloaded pdf/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/embedded all 1 description into the downloaded pdf/i)).toBeVisible({ timeout: 30_000 });
   });
 
   test('already-accessible PDF still completes and offers download', async ({ page }) => {
@@ -97,7 +94,7 @@ test.describe('upload and remediation workflow', () => {
     await expect(page.getByText('Ready: review results')).toBeVisible({ timeout: PROCESSING_TIMEOUT_MS });
 
     await page.getByRole('link', { name: /view results/i }).click();
-    await expect(page.getByText(/is this pdf ready to publish\?/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/^(Ready for final review|Not ready yet|Still processing)$/).first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /download updated pdf/i })).toBeEnabled();
   });
 });
