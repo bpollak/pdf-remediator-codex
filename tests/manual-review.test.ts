@@ -244,7 +244,8 @@ describe('manual review utilities', () => {
     expect(completion).toMatchObject({
       total: 3,
       completed: 2,
-      percent: 67
+      // Rounded down, so the meter never reaches 100% early.
+      percent: 66
     });
   });
 
