@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeVerapdfPayload } from '@/lib/verapdf/normalize';
 import { guardApiRequest, assertServiceUrlSafe, upstreamErrorStatus } from '@/lib/rate-limit';
+import {
+  contentLengthExceeds,
+  jsonError,
+  PLATFORM_MAX_BODY_BYTES,
+  readTextCapped,
+  upstreamErrorCode
+} from '@/lib/server/http';
+import { startRequestLog, type RequestLog } from '@/lib/server/log';
 import type { VerapdfResult } from '@/lib/verapdf/types';
 import {
   DEFAULT_VERAPDF_TIMEOUT_MS,
@@ -17,6 +25,9 @@ const DEFAULT_VERAPDF_PROFILE = 'ua1';
 const DEFAULT_LOCAL_VERAPDF_URL = 'http://127.0.0.1:8081';
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+// A veraPDF JSON report for a large, badly tagged PDF can be big, but nothing
+// legitimate comes near this; past it the backend is misbehaving.
+const MAX_REPORT_BYTES = 10 * 1024 * 1024;
 
 function getConfiguredTimeoutMs(): number {
   const raw = Number(process.env.VERAPDF_TIMEOUT_MS);
@@ -61,9 +72,13 @@ function resolveServiceUrl(): { url?: string; source: 'env' | 'dev-default' | 'n
 
 function notConfiguredReason(): string {
   if (process.env.NODE_ENV === 'development') {
-    return 'veraPDF service is not configured (set VERAPDF_SERVICE_URL). In development, run docker compose -f docker-compose.verapdf.yml up -d.';
+    return 'veraPDF service is not configured. In development, run docker compose -f docker-compose.verapdf.yml up -d.';
   }
-  return 'veraPDF verification is not enabled for this deployment. Set VERAPDF_SERVICE_URL in Vercel environment variables.';
+  return 'veraPDF verification is not enabled for this deployment.';
+}
+
+function refusedCode(response: Response): 'rate_limited' | 'cross_site' {
+  return response.status === 429 ? 'rate_limited' : 'cross_site';
 }
 
 function resolveInfoUrl(serviceUrl: string): string {
@@ -111,36 +126,37 @@ async function probeVerapdf(serviceUrl: string, timeoutMs = 3_000): Promise<bool
 }
 
 export async function GET(request: NextRequest) {
+  const log = startRequestLog(request, 'verapdf-status');
   const refused = guardApiRequest(request, 'verapdf-status', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (refused) return refused;
+  if (refused) {
+    log.finish({ status: refused.status, code: refusedCode(refused) });
+    return refused;
+  }
 
   const profile = getConfiguredProfile();
   const resolved = resolveServiceUrl();
   const serviceUrl = resolved.url;
 
   if (!serviceUrl) {
-    return NextResponse.json(
-      {
-        configured: false,
-        reachable: false,
-        source: resolved.source,
-        profile,
-        reason:
-          process.env.NODE_ENV === 'development'
-            ? 'Set VERAPDF_SERVICE_URL, or run local docker-compose in development.'
-            : 'Set VERAPDF_SERVICE_URL in Vercel environment variables to enable verification.'
-      },
-      { status: 503 }
-    );
+    log.finish({ status: 503, code: 'not_configured', detail: 'VERAPDF_SERVICE_URL is not set.' });
+    return jsonError(503, 'not_configured', {
+      configured: false,
+      reachable: false,
+      source: resolved.source,
+      profile,
+      reason: notConfiguredReason()
+    });
   }
 
   let reachable = false;
   try {
+    assertServiceUrlSafe(serviceUrl, 'VERAPDF_SERVICE_URL');
     reachable = await probeVerapdf(serviceUrl);
   } catch {
     reachable = false;
   }
 
+  log.finish({ status: reachable ? 200 : 503, ...(reachable ? {} : { code: 'upstream_error' }) });
   return NextResponse.json(
     {
       configured: true,
@@ -153,31 +169,52 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const log = startRequestLog(request, 'verapdf');
+  try {
+    return await handlePost(request, log);
+  } catch (error) {
+    log.finish({ status: 500, code: 'internal_error', detail: error instanceof Error ? error.name : undefined });
+    return jsonError(500, 'internal_error', { attempted: true, reason: 'veraPDF verification failed.' });
+  }
+}
+
+async function handlePost(request: NextRequest, log: RequestLog): Promise<Response> {
   const refused = guardApiRequest(request, 'verapdf', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  if (refused) return refused;
+  if (refused) {
+    log.finish({ status: refused.status, code: refusedCode(refused) });
+    return refused;
+  }
 
   const resolved = resolveServiceUrl();
   const serviceUrl = resolved.url;
   if (!serviceUrl) {
-    return NextResponse.json(
-      {
-        attempted: false,
-        reason: notConfiguredReason()
-      },
-      { status: 503 }
-    );
+    log.finish({ status: 503, code: 'not_configured', detail: 'VERAPDF_SERVICE_URL is not set.' });
+    return jsonError(503, 'not_configured', {
+      attempted: false,
+      reason: notConfiguredReason()
+    });
+  }
+
+  if (contentLengthExceeds(request, PLATFORM_MAX_BODY_BYTES)) {
+    log.finish({ status: 413, code: 'payload_too_large' });
+    return jsonError(413, 'payload_too_large', {
+      attempted: false,
+      reason: 'This file is too large for veraPDF verification on this deployment.'
+    });
   }
 
   const formData = await request.formData().catch(() => null);
   const file = formData?.get('file');
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'Expected multipart field "file".' }, { status: 400 });
+    log.finish({ status: 400, code: 'invalid_request' });
+    return jsonError(400, 'invalid_request', { error: 'Expected multipart field "file".' });
   }
 
   const fileName = file.name?.trim() || 'document.pdf';
   if (!fileName.toLowerCase().endsWith('.pdf')) {
-    return NextResponse.json({ error: 'Only PDF uploads are supported for veraPDF verification.' }, { status: 400 });
+    log.finish({ status: 400, code: 'invalid_request' });
+    return jsonError(400, 'invalid_request', { error: 'Only PDF uploads are supported for veraPDF verification.' });
   }
 
   const profile = getConfiguredProfile();
@@ -186,8 +223,8 @@ export async function POST(request: NextRequest) {
     assertServiceUrlSafe(serviceUrl, 'VERAPDF_SERVICE_URL');
     upstreamUrl = resolveValidationUrl(serviceUrl, profile);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Invalid VERAPDF_SERVICE_URL configuration.';
-    return NextResponse.json({ error: message }, { status: 500 });
+    log.finish({ status: 500, code: 'misconfigured', detail: err instanceof Error ? err.message : undefined });
+    return jsonError(500, 'misconfigured', { error: 'veraPDF service is misconfigured.' });
   }
 
   const upstreamForm = new FormData();
@@ -214,18 +251,25 @@ export async function POST(request: NextRequest) {
     });
 
     if (!upstream.ok) {
-      const message = await upstream.text().catch(() => '');
-      return NextResponse.json(
-        {
-          error: `veraPDF backend failed with status ${upstream.status}.`,
-          ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
-        },
-        { status: upstreamErrorStatus(upstream.status) }
-      );
+      const message = (await readTextCapped(upstream, 64 * 1024).catch(() => '')) ?? '';
+      const status = upstreamErrorStatus(upstream.status);
+      const code = upstreamErrorCode(upstream.status);
+      log.finish({ status, code, detail: `veraPDF backend returned ${upstream.status}.` });
+      return jsonError(status, code, {
+        error: `veraPDF backend failed with status ${upstream.status}.`,
+        ...(process.env.NODE_ENV === 'development' ? { detail: message.slice(0, 500) } : {})
+      });
     }
 
     const contentType = upstream.headers.get('content-type') ?? '';
-    const reportPayload = await upstream.text();
+    const reportPayload = await readTextCapped(upstream, MAX_REPORT_BYTES);
+    if (reportPayload === undefined) {
+      log.finish({ status: 502, code: 'upstream_error', detail: 'veraPDF report exceeded the size cap.' });
+      return jsonError(502, 'upstream_error', {
+        attempted: true,
+        reason: 'veraPDF returned a report that was too large to read.'
+      });
+    }
     const normalized = normalizeVerapdfPayload(reportPayload, contentType);
 
     const result: VerapdfResult = {
@@ -237,6 +281,7 @@ export async function POST(request: NextRequest) {
       result.reason = 'veraPDF response did not include a compliance verdict.';
     }
 
+    log.finish({ status: 200 });
     return NextResponse.json(result, {
       status: 200,
       headers: {
@@ -245,21 +290,20 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return NextResponse.json({ attempted: true, reason: 'veraPDF request timed out.' }, { status: 504 });
+      log.finish({ status: 504, code: 'upstream_timeout' });
+      return jsonError(504, 'upstream_timeout', { attempted: true, reason: 'veraPDF request timed out.' });
     }
-    return NextResponse.json(
-      {
-        attempted: true,
-        reason:
-          resolved.source === 'dev-default'
-            ? 'Failed to contact local veraPDF backend at http://127.0.0.1:8081. Start it with docker compose -f docker-compose.verapdf.yml up -d.'
-            : 'Failed to contact veraPDF backend.',
-        ...(process.env.NODE_ENV === 'development'
-          ? { detail: error instanceof Error ? error.message : 'Unknown error' }
-          : {})
-      },
-      { status: 502 }
-    );
+    log.finish({ status: 502, code: 'upstream_error', detail: 'Failed to contact veraPDF backend.' });
+    return jsonError(502, 'upstream_error', {
+      attempted: true,
+      reason:
+        resolved.source === 'dev-default'
+          ? 'Failed to contact local veraPDF backend at http://127.0.0.1:8081. Start it with docker compose -f docker-compose.verapdf.yml up -d.'
+          : 'Failed to contact veraPDF backend.',
+      ...(process.env.NODE_ENV === 'development'
+        ? { detail: error instanceof Error ? error.message : 'Unknown error' }
+        : {})
+    });
   } finally {
     clearTimeout(timer);
   }
