@@ -59,10 +59,11 @@ test.describe('upload and remediation workflow', () => {
     // Processing completes.
     await expect(page.getByText('Ready: review results')).toBeVisible({ timeout: PROCESSING_TIMEOUT_MS });
 
-    // Results page shows the new publish-readiness banner.
+    // Results page shows the publish-readiness banner.
+    await expect(page.getByRole('heading', { name: 'Is this PDF ready to publish?' })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('link', { name: /view results/i }).click();
     await expect(page.getByRole('heading', { name: /finish your pdf/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/^(Ready for final review|Not ready yet|Still processing)$/).first()).toBeVisible();
+    await expect(page.getByText(/^(Passed automated checks — a person still needs to review it|Not yet|Not confirmed|Still processing)$/).first()).toBeVisible();
 
     // Download action and the manual checklist are available.
     await expect(page.getByRole('button', { name: /download updated pdf/i })).toBeEnabled();
@@ -94,7 +95,7 @@ test.describe('upload and remediation workflow', () => {
     await expect(page.getByText('Ready: review results')).toBeVisible({ timeout: PROCESSING_TIMEOUT_MS });
 
     await page.getByRole('link', { name: /view results/i }).click();
-    await expect(page.getByText(/^(Ready for final review|Not ready yet|Still processing)$/).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/^(Passed automated checks — a person still needs to review it|Not yet|Not confirmed|Still processing)$/).first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /download updated pdf/i })).toBeEnabled();
   });
 });
