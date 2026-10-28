@@ -27,6 +27,23 @@ export const tableRules: AuditRule[] = [
           autoFixable: true
         }];
       }
+
+      // Data cells without any header cell: a screen reader cannot announce
+      // which row or column a value belongs to.
+      const hasHeaderCells =
+        parsed.tags.some((t) => t.type === 'TH') || (parsed.structureBinding?.headerCellStructCount ?? 0) > 0;
+      if (!hasHeaderCells) {
+        return [{
+          ruleId: 'TBL-001',
+          category: 'Tables',
+          severity: 'major',
+          description: 'Table has no header cells (TH); only data cells (TD) are tagged.',
+          wcagCriterion: '1.3.1 Info and Relationships',
+          location: { page: tablePages.find((page) => typeof page === 'number'), element: 'Table' },
+          recommendation: 'Tag the header row or column cells as TH (with Scope) so each value can be related to its header.',
+          autoFixable: false
+        }];
+      }
       return [];
     }
   },

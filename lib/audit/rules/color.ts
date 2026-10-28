@@ -61,6 +61,9 @@ export const colorRules: AuditRule[] = [
   },
   {
     id: 'CLR-002',
+    // Use of color alone (1.4.1) needs a person to look at the pages; there
+    // is no automated check, so it is always reported as not checked.
+    canEvaluate: () => false,
     evaluate: () => []
   }
 ];
