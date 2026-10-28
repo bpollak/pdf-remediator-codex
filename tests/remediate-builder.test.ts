@@ -5,6 +5,7 @@ import { runAudit } from '@/lib/audit/engine';
 import { decodeManifest } from '@/lib/remediate/manifest';
 import { parsePdfBytes } from '@/lib/pdf/parser';
 import type { ParsedPDF } from '@/lib/pdf/types';
+import { ANALYSIS_ONLY_SCORE_CAP } from '@/lib/utils/scoring';
 
 describe('buildRemediatedPdf', () => {
   it('handles characters outside WinAnsi encoding without throwing', async () => {
@@ -122,13 +123,14 @@ describe('buildRemediatedPdf', () => {
     const remediatedAudit = runAudit(remediatedParsed);
     const remediatedScore = remediatedAudit.score;
 
+    // No invisible tagged copy by default: the document stays untagged and
+    // says so, instead of tagging text a screen reader would not match.
     expect(remediatedParsed.remediationMode).toBe('analysis-only');
-    expect(remediatedParsed.hasStructTree).toBe(true);
-    expect(remediatedParsed.structureBinding?.hasContentBinding).toBe(true);
-    expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-002')).toBe(false);
+    expect(remediatedParsed.hasStructTree).toBe(false);
+    expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-002')).toBe(true);
     expect(remediatedAudit.findings.some((finding) => finding.ruleId === 'DOC-005')).toBe(false);
     expect(remediatedScore).toBeGreaterThanOrEqual(originalScore);
-    expect(remediatedScore).toBeLessThan(100);
+    expect(remediatedScore).toBeLessThanOrEqual(ANALYSIS_ONLY_SCORE_CAP);
   });
 
   it('does not duplicate manifest metadata across remediation passes', async () => {
