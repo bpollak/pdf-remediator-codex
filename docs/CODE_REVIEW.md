@@ -1,5 +1,7 @@
 # Code Review & Remediation Plan
 
+> **Superseded.** This April 2026 review is kept for history. Its open items were carried into [review-plan-2026-10-27.md](review-plan-2026-10-27.md) and [campus-readiness-2026-10-28.md](campus-readiness-2026-10-28.md).
+
 **Date:** 2026-04-08
 **Scope:** Full codebase review of `pdf-remediator-codex`
 **Branch:** `claude/code-review-remediation-MTw98`
