@@ -29,7 +29,7 @@ function audit(findings: AuditFinding[], notChecked?: string[]): AuditResult {
 describe('summarizeAutomaticFixes', () => {
   it('lists problems the automatic pass removed, in plain words, worst first', () => {
     const original = audit([
-      finding('META-001', { severity: 'minor', category: 'Metadata & Navigation' }),
+      finding('META-003', { severity: 'minor', category: 'Metadata & Navigation' }),
       finding('DOC-003'),
       finding('LNK-001', { category: 'Links & Navigation' }),
       finding('LNK-001', { category: 'Links & Navigation' }),
@@ -40,7 +40,7 @@ describe('summarizeAutomaticFixes', () => {
     expect(summarizeAutomaticFixes(original, remediated)).toEqual([
       { ruleId: 'LNK-001', label: 'Rewrote unclear link text', fixedCount: 2, partial: false },
       { ruleId: 'DOC-003', label: 'Set the document language', fixedCount: 1, partial: false },
-      { ruleId: 'META-001', label: 'Added a document subject', fixedCount: 1, partial: false }
+      { ruleId: 'META-003', label: 'Gave the document a descriptive title', fixedCount: 1, partial: false }
     ]);
   });
 

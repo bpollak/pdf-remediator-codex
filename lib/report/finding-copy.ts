@@ -40,8 +40,12 @@ export function findingActionTitle(finding: AuditFinding): string {
       return 'Add labels to form fields';
     case 'FRM-002':
       return 'Mark required fields programmatically';
-    case 'META-001':
-      return 'Add subject metadata';
+    case 'DOC-006':
+      return 'Confirm the document language';
+    case 'DOC-007':
+      return 'Tag all of the page text';
+    case 'META-003':
+      return 'Give the document a descriptive title';
     case 'META-002':
       return 'Set tab order to follow structure';
     case 'CLR-001':
@@ -157,10 +161,20 @@ const plainCopy: Record<string, { todo: string; how: string; fixed: string }> = 
     how: 'In Acrobat Pro, open Prepare Form and set “Required” on each field that must be filled in.',
     fixed: 'Marked required form fields'
   },
-  'META-001': {
-    todo: 'Add a document subject',
-    how: 'Fill in the subject in the source file’s document properties, or in Acrobat Pro under File → Properties.',
-    fixed: 'Added a document subject'
+  'DOC-006': {
+    todo: 'Confirm the document language',
+    how: 'The original PDF did not say what language it is in, so we set one. If it is wrong, set the language in the source file (in Word: Review → Language) and export again, or in Acrobat Pro under File → Properties → Advanced.',
+    fixed: 'Confirmed the document language'
+  },
+  'DOC-007': {
+    todo: 'Tag all of the page text',
+    how: 'Some text is not connected to the hidden structure (tags), so screen readers skip it. Export the PDF again from the source file as a tagged PDF, or ask accessibility staff to retag it in Acrobat Pro.',
+    fixed: 'Connected all page text to the tags'
+  },
+  'META-003': {
+    todo: 'Give the document a descriptive title',
+    how: 'Set a title that says what the document is (not a file name). In Word: File → Info → Properties → Title, then export again. In Acrobat Pro: File → Properties → Description → Title.',
+    fixed: 'Gave the document a descriptive title'
   },
   'META-002': {
     todo: 'Make the keyboard tab order follow the document structure',
@@ -246,8 +260,12 @@ function manualFixHint(ruleId: string): string | undefined {
     case 'FRM-001':
     case 'FRM-002':
       return 'Open Prepare Form, provide a clear tooltip/accessible name for each field, and flag required fields programmatically.';
-    case 'META-001':
-      return 'Add meaningful subject metadata that describes the document purpose.';
+    case 'DOC-006':
+      return 'Confirm the primary language in File → Properties → Advanced → Language and correct it if needed.';
+    case 'DOC-007':
+      return 'In the Tags panel, find untagged page text (Reading Order or Content panel) and tag it, or retag the document from the source.';
+    case 'META-003':
+      return 'Set a descriptive Title in File → Properties → Description and set Initial View → Show to Document Title.';
     case 'META-002':
       return 'Set tab order to Use Document Structure so keyboard navigation follows logical reading order.';
     case 'CLR-001':

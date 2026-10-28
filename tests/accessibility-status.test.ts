@@ -46,6 +46,14 @@ function file(overrides: Partial<FileEntry> = {}): FileEntry {
 }
 
 describe('getAccessibilityStatus', () => {
+  it('shows the analysis-only cap on scores stored before the audit applied it', () => {
+    const result = getAccessibilityStatus(
+      file({ remediationMode: 'analysis-only', postRemediationAudit: auditResult(92) })
+    );
+    expect(result.automatedScore).toBe(40);
+    expect(result.status).not.toBe('accessible');
+  });
+
   it('returns the top state only when all publish checks pass, without claiming the PDF is accessible', () => {
     const result = getAccessibilityStatus(file());
 

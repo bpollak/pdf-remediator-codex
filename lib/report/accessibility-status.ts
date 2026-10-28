@@ -66,7 +66,8 @@ export function getAccessibilityStatus(file: FileEntry | undefined): Accessibili
   const automatedScore = computeDisplayedAutomatedScore({
     auditResult,
     variant: 'remediated',
-    verapdfResult: file.verapdfResult
+    verapdfResult: file.verapdfResult,
+    remediationMode: file.remediationMode
   });
 
   if (!auditResult) {

@@ -27,7 +27,7 @@ const severityRank: Record<Severity, number> = { critical: 3, major: 2, minor: 1
 
 // Rules that describe tagging. An analysis-only result did not add usable
 // tags, so these must never be reported as fixed for it.
-const TAGGING_RULE_IDS = new Set(['DOC-002', 'DOC-005', 'META-002']);
+const TAGGING_RULE_IDS = new Set(['DOC-002', 'DOC-005', 'DOC-007', 'META-002']);
 
 function groupByRule(findings: AuditFinding[]): Map<string, AuditFinding[]> {
   const groups = new Map<string, AuditFinding[]>();

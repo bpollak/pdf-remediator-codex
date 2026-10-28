@@ -65,7 +65,9 @@ describe('findingActionTitle', () => {
     expect(findingActionTitle(makeFinding({ ruleId: 'LNK-002' }))).toContain('bookmark');
     expect(findingActionTitle(makeFinding({ ruleId: 'FRM-001' }))).toContain('label');
     expect(findingActionTitle(makeFinding({ ruleId: 'FRM-002' }))).toContain('required');
-    expect(findingActionTitle(makeFinding({ ruleId: 'META-001' }))).toContain('subject');
+    expect(findingActionTitle(makeFinding({ ruleId: 'META-003' }))).toContain('title');
+    expect(findingActionTitle(makeFinding({ ruleId: 'DOC-006' }))).toContain('language');
+    expect(findingActionTitle(makeFinding({ ruleId: 'DOC-007' }))).toContain('text');
     expect(findingActionTitle(makeFinding({ ruleId: 'META-002' }))).toContain('tab order');
     expect(findingActionTitle(makeFinding({ ruleId: 'CLR-001' }))).toContain('contrast');
   });

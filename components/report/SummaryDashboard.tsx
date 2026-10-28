@@ -47,7 +47,8 @@ export function SummaryDashboard({ fileId, variant = 'original' }: SummaryDashbo
   const displayedScore = computeDisplayedAutomatedScore({
     auditResult,
     variant,
-    verapdfResult
+    verapdfResult,
+    remediationMode: variant === 'remediated' ? file?.remediationMode : undefined
   });
 
   const notChecked = summarizeNotChecked(auditResult);

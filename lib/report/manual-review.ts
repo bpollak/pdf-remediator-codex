@@ -294,7 +294,7 @@ function isCoveredByOtherItems(
   if (finding.ruleId === 'TBL-002' && context.tableItems) return true;
   if (context.structureItem) {
     // DOC-001 (PDF/UA identifier) only means something once real tags exist.
-    if (['DOC-001', 'DOC-002', 'DOC-005', 'META-002'].includes(finding.ruleId)) return true;
+    if (['DOC-001', 'DOC-002', 'DOC-005', 'DOC-007', 'META-002'].includes(finding.ruleId)) return true;
     if (['Headings & Structure', 'Lists', 'Tables'].includes(finding.category)) return true;
   }
   return false;
