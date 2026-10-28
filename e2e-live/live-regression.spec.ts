@@ -6,7 +6,9 @@ const PROCESSING_TIMEOUT_MS = 180_000;
 
 async function uploadFixture(page: Page, fileName: string) {
   await page.goto('/app');
-  const fileInput = page.locator('input[type="file"]');
+  // The input stays disabled until saved files are restored from the browser.
+  const fileInput = page.locator('input[type="file"]:enabled');
+  await fileInput.waitFor({ state: 'attached' });
   await fileInput.setInputFiles(path.join(FIXTURE_DIR, fileName));
 }
 

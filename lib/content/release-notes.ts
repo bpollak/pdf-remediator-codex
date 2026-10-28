@@ -8,6 +8,25 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-10-27-code-review-fixes',
+    versionLabel: 'Release 2026.10.27',
+    deployedOn: 'October 27, 2026',
+    summary:
+      'Fixes from a full code review: more accurate tags in the updated PDF, a more reliable processing queue, an honest manual checklist, and security updates.',
+    highlights: [
+      'Upgraded to Next.js 15.5.28 and React 19, which closes the published security advisories that affected the previous version.',
+      'Fixed embedded image descriptions corrupting some page content and garbling non-English characters, and stopped already-tagged images from getting a second Figure tag.',
+      'The updated PDF now tags headings and paragraphs in reading order instead of listing every heading first, and keeps sibling headings at the same level.',
+      'Permissions-restricted (owner-password) PDFs now get a clear message instead of producing a broken file.',
+      'Only one file is processed at a time, processing keeps going while you look at results, and a file can be cancelled and removed while it is still processing.',
+      'Choosing table or heading options no longer marks "Fix document structure in Acrobat or PAC" as done; only your own tick does.',
+      'If the browser runs out of storage, the file card now says so instead of silently losing the result on reload.',
+      'Image description fields are labelled for screen readers, table choices announce which option is selected, and low-contrast text was darkened.',
+      'The OCR and alt-text services now give each AI model its own time limit, so a slow model no longer prevents the backup models from being tried, and requests from other websites are refused.',
+      'Removed unused screens and updated the About page so it only describes what the app does today.'
+    ]
+  },
+  {
     id: '2026-06-09-ux-clarity-and-alt-text-reliability',
     versionLabel: 'Release 2026.06.09',
     deployedOn: 'June 9, 2026',
