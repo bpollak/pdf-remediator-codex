@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runVerapdfViaApi } from '@/lib/verapdf/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { __resetVerapdfCircuitForTests, runVerapdfViaApi } from '@/lib/verapdf/client';
 
 function createSampleBytes(): ArrayBuffer {
   const bytes = new TextEncoder().encode('%PDF-1.4 sample');
@@ -7,6 +7,10 @@ function createSampleBytes(): ArrayBuffer {
 }
 
 describe('runVerapdfViaApi', () => {
+  beforeEach(() => {
+    __resetVerapdfCircuitForTests();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

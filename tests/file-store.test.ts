@@ -46,11 +46,17 @@ describe('file store', () => {
     expect(text(files[0].remediatedBytes)).toBe('fixed');
   });
 
-  it('never stores in-memory-only fields', async () => {
-    await saveFileEntry(entry({ processingStartedAt: 'now', persistError: 'oops' }), { assets: { uploaded: bytes('x') } });
+  it('never stores in-memory-only fields, but keeps the processing marker', async () => {
+    await saveFileEntry(
+      entry({ processingStartedAt: 'now', processingAttempts: 1, persistError: 'oops', uploadedBytesStored: false }),
+      { assets: { uploaded: bytes('x') } }
+    );
     const { files } = await loadPersistedFiles();
-    expect(files[0].processingStartedAt).toBeUndefined();
+    expect(files[0].processingStartedAt).toBe('now');
+    expect(files[0].processingAttempts).toBe(1);
     expect(files[0].persistError).toBeUndefined();
+    // Derived from what is actually stored, not from the saved flag.
+    expect(files[0].uploadedBytesStored).toBe(true);
   });
 
   it('reports records whose uploaded PDF is missing', async () => {

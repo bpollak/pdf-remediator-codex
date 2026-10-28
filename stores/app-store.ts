@@ -9,7 +9,23 @@ import {
   getParsedReviewBase,
   normalizeManualReviewDrafts
 } from '@/lib/report/manual-review';
-import { deleteFileEntries, loadAssetBytes, loadPersistedFiles, saveFileEntry } from '@/lib/persistence/file-store';
+import {
+  clearAllStoredFiles,
+  deleteFileEntries,
+  loadAssetBytes,
+  loadPersistedFile,
+  loadPersistedFiles,
+  saveFileEntry
+} from '@/lib/persistence/file-store';
+import { requestPersistentStorageOnce } from '@/lib/persistence/storage-quota';
+import {
+  broadcastFileChange,
+  isQueueLeader,
+  isQueueRunningInOtherTab,
+  subscribeToFileChanges,
+  type FileChangeMessage
+} from '@/lib/client/tab-sync';
+import { INTERRUPTED_MESSAGE } from '@/lib/client/error-copy';
 import type {
   FileEntry,
   ManualAltTextDraft,
@@ -48,6 +64,8 @@ export const MAX_FILES_PER_UPLOAD = 10;
 export interface AddFilesResult {
   added: number;
   skipped: number;
+  /** Names of the files beyond the per-upload limit, which were not added. */
+  skippedNames: string[];
 }
 
 interface AppStore {
@@ -55,11 +73,27 @@ interface AppStore {
   hydrated: boolean;
   /** Set when saved files could not be restored from browser storage. */
   hydrationError?: string;
+  /** Saved files deleted at the last restore because they passed the retention period. */
+  expiredFileCount: number;
+  /** Another tab of the app is running the processing queue, so files here wait. */
+  processingInOtherTab: boolean;
   previewFocusByFileId: Record<string, PreviewFocus | undefined>;
   hydrateFromPersistence: () => Promise<void>;
   addFiles: (files: File[], options?: AddFilesOptions) => Promise<AddFilesResult>;
   updateFile: (id: string, patch: Partial<FileEntry>) => void;
+  /**
+   * Mark a file as started and wait until that is saved, so a tab that
+   * crashes during the heavy work is detected on reload.
+   */
+  beginProcessing: (id: string) => Promise<void>;
+  /** Put a failed file back in the queue. */
+  retryFile: (id: string) => void;
+  /** Turn files left mid-processing by a tab that is gone into a retryable error. */
+  markInterrupted: (ids: string[]) => void;
   removeFile: (id: string) => void;
+  /** Delete every file from this browser's storage and the list. */
+  clearAllFiles: () => Promise<void>;
+  setProcessingInOtherTab: (value: boolean) => void;
   updateAltTextDraft: (fileId: string, imageId: string, draft: ManualAltTextDraft | undefined) => void;
   updateStructureHeadingIncluded: (fileId: string, key: string, include: boolean) => void;
   updateStructureHeadingLevel: (fileId: string, key: string, level: number | undefined) => void;
@@ -82,8 +116,8 @@ interface AppStore {
   setPreviewFocus: (fileId: string, focus: PreviewFocus | undefined) => void;
 }
 
-const NON_PERSISTED_STATUSES = new Set<FileEntry['status']>([
-  'queued',
+/** Statuses that only exist while a tab is working on the file. */
+export const MID_PROCESSING_STATUSES = new Set<FileEntry['status']>([
   'parsing',
   'ocr',
   'auditing',
@@ -91,19 +125,21 @@ const NON_PERSISTED_STATUSES = new Set<FileEntry['status']>([
   'remediating'
 ]);
 
+function interruptedPatch(file: FileEntry): Partial<FileEntry> {
+  return {
+    status: 'error',
+    progress: 100,
+    error: INTERRUPTED_MESSAGE,
+    errorCode: 'interrupted',
+    errorDetail: `Stopped while "${file.status}" (attempt ${file.processingAttempts ?? 1}, started ${file.processingStartedAt ?? 'at an unknown time'}).`
+  };
+}
+
 function normalizePersistedFile(file: FileEntry): FileEntry {
-  const normalized = {
+  return {
     ...file,
     manualReviewDrafts: normalizeManualReviewDrafts(file.manualReviewDrafts)
   } satisfies FileEntry;
-
-  if (!NON_PERSISTED_STATUSES.has(file.status)) return normalized;
-  return {
-    ...normalized,
-    status: 'queued',
-    progress: 0,
-    error: undefined
-  };
 }
 
 function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
@@ -118,14 +154,15 @@ function shouldPersistPatch(patch: Partial<FileEntry>): boolean {
   ) {
     return true;
   }
-  if ('ocrAttempted' in patch || 'ocrApplied' in patch || 'ocrReason' in patch) return true;
+  if ('ocrAttempted' in patch || 'ocrApplied' in patch || 'ocrReason' in patch || 'ocrCoverage' in patch) return true;
   if ('remediationMode' in patch || 'verapdfResult' in patch) return true;
   if ('remediationCompletedAt' in patch || 'validationCompletedAt' in patch) return true;
   if ('remediationIterations' in patch || 'remediationStopReason' in patch) return true;
+  if ('processingAttempts' in patch || 'processingStartedAt' in patch || 'pageCount' in patch) return true;
   if ('manualReviewDrafts' in patch) return true;
   if ('workflowProgress' in patch) return true;
-  if ('error' in patch) return true;
-  if (patch.status === 'remediated' || patch.status === 'error') return true;
+  if ('error' in patch || 'errorCode' in patch || 'errorDetail' in patch) return true;
+  if (patch.status === 'remediated' || patch.status === 'error' || patch.status === 'queued') return true;
   return false;
 }
 
@@ -138,12 +175,17 @@ function assetsForPatch(patch: Partial<FileEntry>) {
 
 function describePersistError(error: unknown): string {
   if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-    return 'This browser is out of storage space, so this result will not survive a page reload. Download it now, or remove older files from the list.';
+    return 'This browser is out of storage space, so this file was not fully saved and will not survive a page reload. Keep this tab open, download the result when it is ready, and remove older files from the list.';
   }
-  return 'This result could not be saved in this browser, so it will not survive a page reload. Download it now.';
+  return 'This file could not be saved in this browser, so it will not survive a page reload. Keep this tab open and download the result when it is ready.';
+}
+
+function isFullyStored(file: FileEntry): boolean {
+  return file.uploadedBytesStored !== false && file.remediatedBytesStored !== false;
 }
 
 let hydrationInFlight: Promise<void> | undefined;
+let unsubscribeFromOtherTabs: (() => void) | undefined;
 
 function buildManualReviewDrafts(
   file: FileEntry,
@@ -213,30 +255,137 @@ export function collectDescendantFileIds(files: FileEntry[], rootId: string): st
   return descendants;
 }
 
+/** Change a file in memory only (no save, no broadcast). */
+function patchInMemory(id: string, patch: Partial<FileEntry> | ((file: FileEntry) => FileEntry)) {
+  useAppStore.setState((state) => ({
+    files: state.files.map((file) => {
+      if (file.id !== id) return file;
+      return typeof patch === 'function' ? patch(file) : { ...file, ...patch };
+    })
+  }));
+}
+
+/**
+ * Save a file's current state. PDFs an earlier save could not store (for
+ * example because storage was full) are retried with every save, and the
+ * storage warning stays until both are stored.
+ */
+function persistEntry(id: string, patch: Partial<FileEntry>): Promise<void> {
+  const entry = useAppStore.getState().files.find((file) => file.id === id);
+  if (!entry) return Promise.resolve();
+
+  const assets = assetsForPatch(patch);
+  if (!assets.uploaded && entry.uploadedBytesStored === false && entry.uploadedBytes) {
+    assets.uploaded = entry.uploadedBytes;
+  }
+  if (!('remediated' in assets) && entry.remediatedBytesStored === false && entry.remediatedBytes) {
+    assets.remediated = entry.remediatedBytes;
+  }
+
+  return saveFileEntry(entry, { assets })
+    .then(() => {
+      patchInMemory(id, (file) => {
+        const next: FileEntry = { ...file };
+        if (assets.uploaded) next.uploadedBytesStored = true;
+        if (assets.remediated) next.remediatedBytesStored = true;
+        if (assets.remediated === null) next.remediatedBytesStored = undefined;
+        if (next.persistError && isFullyStored(next)) next.persistError = undefined;
+        return next;
+      });
+      broadcastFileChange({ type: 'saved', id });
+    })
+    .catch((err) => {
+      console.error(`[app-store] Failed to persist file ${id}:`, err);
+      patchInMemory(id, {
+        persistError: describePersistError(err),
+        ...(assets.uploaded ? { uploadedBytesStored: false } : {}),
+        ...(assets.remediated ? { remediatedBytesStored: false } : {})
+      });
+    });
+}
+
+/** Refresh this tab after another tab saved, removed or cleared files. */
+function applyChangeFromOtherTab(message: FileChangeMessage) {
+  if (message.type === 'cleared') {
+    useAppStore.setState({ files: [], previewFocusByFileId: {} });
+    return;
+  }
+  if (message.type === 'removed') {
+    const ids = new Set(message.ids);
+    useAppStore.setState((state) => ({ files: state.files.filter((file) => !ids.has(file.id)) }));
+    return;
+  }
+
+  const local = useAppStore.getState().files.find((file) => file.id === message.id);
+  // The tab running the queue owns the files it is processing.
+  if (local && isQueueLeader() && MID_PROCESSING_STATUSES.has(local.status)) return;
+  void (async () => {
+    const stored = await loadPersistedFile(message.id, { loadBytes: false });
+    if (!stored) return;
+    const current = useAppStore.getState().files.find((file) => file.id === message.id);
+    // Only read the remediated PDF again when the result itself changed.
+    const resultChanged = current?.remediationCompletedAt !== stored.remediationCompletedAt;
+    const remediatedBytes =
+      stored.remediatedBytesStored && (resultChanged || !current?.remediatedBytes)
+        ? await loadAssetBytes(message.id, 'remediated')
+        : resultChanged
+          ? undefined
+          : current?.remediatedBytes;
+    const merged = normalizePersistedFile({
+      ...stored,
+      uploadedBytes: current?.uploadedBytes,
+      remediatedBytes,
+      persistError: current?.persistError
+    });
+    useAppStore.setState((state) => ({
+      files: state.files.some((file) => file.id === message.id)
+        ? state.files.map((file) => (file.id === message.id ? merged : file))
+        : [...state.files, merged]
+    }));
+  })().catch((err) => {
+    console.error('[app-store] Failed to refresh a file changed in another tab:', err);
+  });
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   files: [],
   hydrated: false,
+  expiredFileCount: 0,
+  processingInOtherTab: false,
   previewFocusByFileId: {},
   hydrateFromPersistence: () => {
     if (get().hydrated || typeof window === 'undefined') return Promise.resolve();
     // React strict mode runs effects twice; share one restore.
     hydrationInFlight ??= (async () => {
       try {
-        const { files: persistedFiles, droppedIds } = await loadPersistedFiles();
+        // Files mid-processing belong to another tab if one is running the queue.
+        const otherTabIsProcessing = await isQueueRunningInOtherTab();
+        const { files: persistedFiles, droppedIds, expiredIds } = await loadPersistedFiles();
+        const interruptedIds: string[] = [];
         set((state) => {
           const seenIds = new Set(state.files.map((file) => file.id));
           const hydratedFiles = persistedFiles
             .filter((file) => !seenIds.has(file.id))
-            .map((file) => normalizePersistedFile(file));
+            .map((file) => {
+              const normalized = normalizePersistedFile(file);
+              if (otherTabIsProcessing || !MID_PROCESSING_STATUSES.has(normalized.status)) return normalized;
+              // Never restart these automatically: if the file crashed the
+              // tab, it would crash it again on every visit.
+              interruptedIds.push(normalized.id);
+              return { ...normalized, ...interruptedPatch(normalized) };
+            });
 
           return {
             files: [...hydratedFiles, ...state.files],
-            hydrated: true
+            hydrated: true,
+            expiredFileCount: expiredIds.length
           };
         });
-        if (droppedIds.length > 0) {
-          void deleteFileEntries(droppedIds).catch((err) => {
-            console.error('[app-store] Failed to delete incomplete saved files:', err);
+        for (const id of interruptedIds) void persistEntry(id, { status: 'error' });
+        const deleteIds = [...droppedIds, ...expiredIds];
+        if (deleteIds.length > 0) {
+          void deleteFileEntries(deleteIds).catch((err) => {
+            console.error('[app-store] Failed to delete incomplete or expired saved files:', err);
           });
         }
       } catch (err) {
@@ -247,17 +396,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
         });
       } finally {
         hydrationInFlight = undefined;
+        unsubscribeFromOtherTabs ??= subscribeToFileChanges((message) => {
+          if (get().hydrated) applyChangeFromOtherTab(message);
+        });
       }
     })();
     return hydrationInFlight;
   },
   addFiles: async (files, options) => {
-    const entries = await Promise.all(
+    const createdAt = new Date().toISOString();
+    const entries: FileEntry[] = await Promise.all(
       files.slice(0, MAX_FILES_PER_UPLOAD).map(async (file) => ({
         id: crypto.randomUUID(),
         name: file.name,
         size: file.size,
+        createdAt,
         uploadedBytes: await file.arrayBuffer(),
+        uploadedBytesStored: false,
         uploadIntent: options?.uploadIntent ?? 'new-upload',
         derivedFromFileId: options?.uploadIntent === 'revalidation' ? options.derivedFromFileId : undefined,
         status: 'queued' as const,
@@ -266,40 +421,49 @@ export const useAppStore = create<AppStore>((set, get) => ({
     );
 
     set((state) => ({ files: [...state.files, ...entries] }));
-    // Ask the browser not to evict saved PDFs under storage pressure.
-    void navigator.storage?.persist?.().catch(() => false);
+    requestPersistentStorageOnce();
     for (const entry of entries) {
-      void saveFileEntry(entry, { assets: { uploaded: entry.uploadedBytes } }).catch((err) => {
-        console.error('[app-store] Failed to persist new file entry:', err);
-        get().updateFile(entry.id, { persistError: describePersistError(err) });
-      });
+      void persistEntry(entry.id, { uploadedBytes: entry.uploadedBytes });
     }
-    return { added: entries.length, skipped: Math.max(0, files.length - entries.length) };
+    const skippedNames = files.slice(MAX_FILES_PER_UPLOAD).map((file) => file.name);
+    return { added: entries.length, skipped: skippedNames.length, skippedNames };
   },
   updateFile: (id, patch) => {
-    let updatedEntry: FileEntry | undefined;
-
-    set((state) => {
-      const nextFiles = state.files.map((file) => {
-        if (file.id !== id) return file;
-        const nextEntry = { ...file, ...patch } satisfies FileEntry;
-        updatedEntry = nextEntry;
-        return nextEntry;
-      });
-
-      return { files: nextFiles };
+    if (!get().files.some((file) => file.id === id)) return;
+    patchInMemory(id, patch);
+    if (shouldPersistPatch(patch)) void persistEntry(id, patch);
+  },
+  beginProcessing: async (id) => {
+    const file = get().files.find((entry) => entry.id === id);
+    if (!file) return;
+    const patch: Partial<FileEntry> = {
+      status: 'parsing',
+      progress: 10,
+      processingStartedAt: new Date().toISOString(),
+      processingAttempts: (file.processingAttempts ?? 0) + 1,
+      error: undefined,
+      errorCode: undefined,
+      errorDetail: undefined
+    };
+    patchInMemory(id, patch);
+    await persistEntry(id, patch);
+  },
+  retryFile: (id) => {
+    const file = get().files.find((entry) => entry.id === id);
+    if (!file || file.status !== 'error') return;
+    get().updateFile(id, {
+      status: 'queued',
+      progress: 0,
+      error: undefined,
+      errorCode: undefined,
+      errorDetail: undefined,
+      processingStartedAt: undefined
     });
-
-    if (updatedEntry && shouldPersistPatch(patch)) {
-      const entry: FileEntry = updatedEntry;
-      void saveFileEntry(entry, { assets: assetsForPatch(patch) })
-        .then(() => {
-          if (entry.persistError) get().updateFile(id, { persistError: undefined });
-        })
-        .catch((err) => {
-          console.error(`[app-store] Failed to persist update for file ${id}:`, err);
-          get().updateFile(id, { persistError: describePersistError(err) });
-        });
+  },
+  markInterrupted: (ids) => {
+    for (const id of ids) {
+      const file = get().files.find((entry) => entry.id === id);
+      if (file && MID_PROCESSING_STATUSES.has(file.status)) get().updateFile(id, interruptedPatch(file));
     }
   },
   removeFile: (id) => {
@@ -321,9 +485,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
       };
     });
 
-    void deleteFileEntries(fileIdsToRemove).catch((err) => {
-      console.error('[app-store] Failed to delete persisted file entries:', err);
-    });
+    void deleteFileEntries(fileIdsToRemove)
+      .then(() => broadcastFileChange({ type: 'removed', ids: fileIdsToRemove }))
+      .catch((err) => {
+        console.error('[app-store] Failed to delete persisted file entries:', err);
+      });
+  },
+  clearAllFiles: async () => {
+    set({ files: [], previewFocusByFileId: {}, expiredFileCount: 0 });
+    await clearAllStoredFiles();
+    broadcastFileChange({ type: 'cleared' });
+  },
+  setProcessingInOtherTab: (value) => {
+    if (get().processingInOtherTab !== value) set({ processingInOtherTab: value });
   },
   updateAltTextDraft: (fileId, imageId, draft) => {
     const file = get().files.find((entry) => entry.id === fileId);
@@ -532,7 +706,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   releaseUploadedBytes: (fileId) => {
     set((state) => ({
       files: state.files.map((file) => {
-        if (file.id !== fileId) return file;
+        // Keep the only copy if storage never got one.
+        if (file.id !== fileId || !file.uploadedBytesStored) return file;
         // Replace in-memory buffer with undefined; bytes remain in IndexedDB.
         return { ...file, uploadedBytes: undefined };
       })

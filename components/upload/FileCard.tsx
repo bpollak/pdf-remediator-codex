@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { collectDescendantFileIds, useAppStore, type FileEntry } from '@/stores/app-store';
+import { getFileCardTone, hasPartialOcr, isSettledStatus, type FileCardTone } from '@/lib/client/file-status';
+import { SCANNED_TEXT_UNREADABLE_MESSAGE, isRetryableErrorCode, redactConfigNames } from '@/lib/client/error-copy';
+import { LONG_DOCUMENT_PAGE_THRESHOLD } from '@/lib/client/page-limits';
 
 const LONG_RUNNING_THRESHOLD_MS = 90_000;
 
@@ -30,27 +33,34 @@ function useIsLongRunning(file: FileEntry): boolean {
   return longRunning;
 }
 
-function statusLabel(status: FileEntry['status']): string {
+function statusLabel(file: FileEntry): string {
+  const { status } = file;
   if (status === 'queued') return 'Queued';
   if (status === 'parsing') return 'Reading your PDF';
   if (status === 'ocr') return 'Making scanned text searchable';
   if (status === 'auditing') return 'Checking accessibility issues';
   if (status === 'audited') return 'Preparing fixes';
   if (status === 'remediating') return 'Applying fixes';
-  if (status === 'remediated') return 'Ready: review results';
-  return 'Needs attention';
+  if (status === 'remediated') return getFileCardTone(file) === 'done' ? 'Done' : 'Done – needs your review';
+  return 'Could not process';
 }
 
-function statusHint(file: FileEntry): string | null {
+function statusHint(file: FileEntry, processingInOtherTab: boolean): string | null {
   const { status } = file;
   if (file.sourceType === 'checker-report-artifact') {
     return 'This file looks like a checker/report artifact. Upload the source PDF for publishable remediation output.';
   }
+  if (status === 'error') return null;
   if (file.uploadIntent === 'revalidation' && status === 'remediated') {
     return 'Open results to compare this revised upload against the earlier review and check the updated validation outcome.';
   }
   if (file.uploadIntent === 'revalidation') {
     return 'This revised upload stays linked to an earlier review while the new validation run completes.';
+  }
+  if (processingInOtherTab && isWorkingStatus(status)) {
+    return status === 'queued'
+      ? 'Waiting: another tab of this app is processing files. Keep that tab open; this file starts when it is free.'
+      : 'Being processed in another tab of this app. Keep that tab open.';
   }
   if (status === 'queued') return 'Waiting to start.';
   if (status === 'parsing') return 'Reading document text and structure.';
@@ -58,54 +68,84 @@ function statusHint(file: FileEntry): string | null {
   if (status === 'auditing') return 'Checking the original file for accessibility issues.';
   if (status === 'audited') return 'Building a plan for automated fixes.';
   if (status === 'remediating') return 'Creating your updated PDF.';
-  if (status === 'remediated' && file.remediationMode === 'analysis-only') {
+  if (file.remediationMode === 'analysis-only') {
     return 'Open results to review. Structural tagging remains a manual step for this file.';
   }
-  if (status === 'remediated') return 'Open results to review, download, and complete manual steps.';
-  return 'Something went wrong. Review the error and upload again.';
+  if (getFileCardTone(file) === 'done') return 'Open results to download the updated PDF.';
+  return 'Open results to see what still needs your attention, then download the updated PDF.';
 }
 
-function statusBadge(status: FileEntry['status']) {
-  if (status === 'remediated') {
-    return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">{statusLabel(status)}</span>;
-  }
-  if (status === 'error') {
-    return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">{statusLabel(status)}</span>;
-  }
+const TONE_BADGE_CLASS: Record<FileCardTone, string> = {
+  done: 'bg-green-100 text-green-800',
+  review: 'bg-amber-100 text-amber-900',
+  error: 'bg-red-100 text-red-700',
+  working: 'bg-blue-100 text-[var(--ucsd-blue)]'
+};
+
+const TONE_BORDER_CLASS: Record<FileCardTone, string> = {
+  done: 'border-l-4 border-l-green-500',
+  review: 'border-l-4 border-l-amber-500',
+  error: 'border-l-4 border-l-red-500',
+  working: 'border-l-4 border-l-[var(--ucsd-blue)]'
+};
+
+// Status changes are announced once, by the queue's live region (FileQueue),
+// so the badge itself is not a live region.
+function StatusBadge({ file, tone }: { file: FileEntry; tone: FileCardTone }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-[var(--ucsd-blue)]" role="status" aria-live="polite">
-      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" className="opacity-25" stroke="currentColor" strokeWidth="3" />
-        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      </svg>
-      {statusLabel(status)}
+    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE_BADGE_CLASS[tone]}`}>
+      {tone === 'working' ? (
+        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" className="opacity-25" stroke="currentColor" strokeWidth="3" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+      ) : null}
+      {statusLabel(file)}
     </span>
   );
 }
 
-function accentBorder(file: FileEntry) {
-  if (file.status === 'remediated') return 'border-l-4 border-l-green-500';
-  if (file.status === 'error') return 'border-l-4 border-l-red-500';
-  return 'border-l-4 border-l-[var(--ucsd-blue)]';
+function SupportDetails({ detail }: { detail: string }) {
+  return (
+    <details className="mt-1 text-xs text-[var(--ucsd-text)]">
+      <summary className="cursor-pointer underline underline-offset-2">Details for support</summary>
+      <p className="mt-1 break-words font-mono">{redactConfigNames(detail)}</p>
+    </details>
+  );
 }
 
-function isSettledStatus(status: FileEntry['status']): boolean {
-  return status === 'remediated' || status === 'error';
+export function fileCardHeadingId(fileId: string): string {
+  return `file-card-${fileId}`;
 }
 
-export function FileCard({ file }: { file: FileEntry }) {
+interface FileCardProps {
+  file: FileEntry;
+  /** Called after the user confirms Remove; defaults to removing from the store. */
+  onRemove?: (file: FileEntry) => void;
+}
+
+export function FileCard({ file, onRemove }: FileCardProps) {
   const files = useAppStore((state) => state.files);
   const removeFile = useAppStore((state) => state.removeFile);
+  const retryFile = useAppStore((state) => state.retryFile);
+  const processingInOtherTab = useAppStore((state) => state.processingInOtherTab);
   const isLongRunning = useIsLongRunning(file);
+  const tone = getFileCardTone(file);
   const sourceFile = file.derivedFromFileId ? files.find((entry) => entry.id === file.derivedFromFileId) : undefined;
   const canViewResults = file.status === 'remediated';
-  // Removing a file mid-run cancels it: the queue drops the job at its next step.
+  // Removing a file mid-run cancels it: the running job is aborted.
   const canRemove = true;
+  const canRetry =
+    file.status === 'error' &&
+    isRetryableErrorCode(file.errorCode) &&
+    Boolean(file.uploadedBytes || file.uploadedBytesStored);
   const isWorking = isWorkingStatus(file.status);
   const descendantIds = collectDescendantFileIds(files, file.id);
   const descendantIdSet = new Set(descendantIds);
   const descendantFiles = files.filter((entry) => descendantIdSet.has(entry.id));
   const hasActiveDescendants = descendantFiles.some((entry) => !isSettledStatus(entry.status));
+  const hint = statusHint(file, processingInOtherTab);
+  const isLongDocument = typeof file.pageCount === 'number' && file.pageCount > LONG_DOCUMENT_PAGE_THRESHOLD;
 
   function handleRemove() {
     const linkedUploadLabel =
@@ -117,50 +157,69 @@ export function FileCard({ file }: { file: FileEntry }) {
     );
 
     if (!confirmed) return;
-    removeFile(file.id);
+    if (onRemove) onRemove(file);
+    else removeFile(file.id);
   }
 
   return (
-    <article className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${accentBorder(file)}`}>
-      <div className="flex items-center justify-between gap-3">
+    <article
+      className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${TONE_BORDER_CLASS[tone]}`}
+      aria-labelledby={fileCardHeadingId(file.id)}
+    >
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-medium text-[var(--ucsd-navy)]">{file.name}</p>
+          <h3
+            id={fileCardHeadingId(file.id)}
+            tabIndex={-1}
+            title={file.name}
+            className="break-words text-base font-medium text-[var(--ucsd-navy)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)]"
+          >
+            {file.name}
+          </h3>
           {file.uploadIntent === 'revalidation' ? (
             <p className="mt-1 text-xs text-[var(--ucsd-text)]">
               Validation revision{sourceFile ? ` for ${sourceFile.name}` : ''}
             </p>
           ) : null}
         </div>
-        {statusBadge(file.status)}
+        <StatusBadge file={file} tone={tone} />
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
+      {/* Decorative: the status text above says the same thing. */}
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
         <div
           className={`h-1.5 rounded-full bg-[var(--ucsd-blue)] transition-all duration-300 ${isWorking ? 'animate-pulse' : ''}`}
           style={{ width: `${file.progress}%` }}
         />
       </div>
-      <p className="mt-2 text-sm text-[var(--ucsd-text)]">{statusHint(file)}</p>
-      {isWorking && file.status !== 'queued' ? (
+      {hint ? <p className="mt-2 text-sm text-[var(--ucsd-text)]">{hint}</p> : null}
+      {isWorking && file.status !== 'queued' && !processingInOtherTab ? (
         <p className="mt-1 text-xs text-[var(--ucsd-text)]">
-          {isLongRunning
-            ? 'Still working — large or scanned PDFs can take several minutes. Keep this tab open.'
-            : 'This usually takes a few seconds to about two minutes, depending on file size.'}
+          {isLongDocument
+            ? `This PDF has ${file.pageCount} pages, so processing may take several minutes. Keep this tab open and in front.`
+            : isLongRunning
+              ? 'Still working — large or scanned PDFs can take several minutes. Keep this tab open.'
+              : 'This usually takes a few seconds to about two minutes, depending on file size.'}
         </p>
       ) : null}
       {file.status === 'remediated' && file.ocrAttempted && !file.ocrApplied ? (
         <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+          <p>{SCANNED_TEXT_UNREADABLE_MESSAGE}</p>
+          {file.ocrReason ? <SupportDetails detail={file.ocrReason} /> : null}
+        </div>
+      ) : null}
+      {file.status === 'remediated' && hasPartialOcr(file) && file.ocrCoverage ? (
+        <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
           <p>
-            This file looks like a scanned document, but OCR could not add searchable text
-            {file.ocrReason ? ` (${file.ocrReason})` : ''}. The updated PDF may not be readable by screen readers. Run
-            OCR in a desktop tool (such as Adobe Acrobat), then upload the OCR&rsquo;d file here.
+            Only the first {file.ocrCoverage.pagesProcessed} of {file.ocrCoverage.totalPages} pages were made
+            searchable. In Acrobat, run Scan &amp; OCR &gt; Recognize text on the whole file, then upload it again.
           </p>
         </div>
       ) : null}
-      {file.sourceType && (
+      {file.sourceType === 'checker-report-artifact' ? (
         <p className="mt-1 text-xs text-[var(--ucsd-text)]">
           Source type: {file.sourceType.replace(/-/g, ' ')} ({file.sourceTypeConfidence ?? 'n/a'} confidence)
         </p>
-      )}
+      ) : null}
       {sourceFile ? (
         <p className="mt-1 text-xs text-[var(--ucsd-text)]">
           Linked review:{' '}
@@ -170,24 +229,38 @@ export function FileCard({ file }: { file: FileEntry }) {
         </p>
       ) : null}
 
-      {file.error ? <p className="mt-2 text-sm text-red-600">{file.error}</p> : null}
+      {file.error ? (
+        <div className="mt-2">
+          <p className="text-sm text-red-700">{file.error}</p>
+          {file.errorDetail ? <SupportDetails detail={file.errorDetail} /> : null}
+        </div>
+      ) : null}
       {file.persistError ? (
         <p className="mt-2 text-sm text-red-700" role="alert">
           {file.persistError}
         </p>
       ) : null}
-      {canViewResults || canRemove ? (
+      {canViewResults || canRetry || canRemove ? (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {canViewResults ? (
             <Link
               className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--ucsd-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)] focus-visible:ring-offset-2"
               href={`/app/${file.id}/compare`}
             >
-              View results
+              View results<span className="sr-only"> for {file.name}</span>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
                 <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638l-3.96-3.96a.75.75 0 1 1 1.06-1.06l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06l3.96-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
               </svg>
             </Link>
+          ) : null}
+          {canRetry ? (
+            <button
+              type="button"
+              onClick={() => retryFile(file.id)}
+              className="inline-flex items-center rounded-md bg-[var(--ucsd-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--ucsd-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ucsd-gold)] focus-visible:ring-offset-2"
+            >
+              Try again<span className="sr-only"> with {file.name}</span>
+            </button>
           ) : null}
           {canRemove ? (
             <button
@@ -197,11 +270,12 @@ export function FileCard({ file }: { file: FileEntry }) {
               title={hasActiveDescendants ? 'Wait for linked revised uploads to finish before removing this saved upload.' : undefined}
               className={`inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition ${
                 hasActiveDescendants
-                  ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                  ? 'cursor-not-allowed border-gray-200 text-gray-500'
                   : 'border-red-200 text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2'
               }`}
             >
               {isWorking ? 'Cancel and remove' : 'Remove from list'}
+              <span className="sr-only"> {file.name}</span>
             </button>
           ) : null}
         </div>
