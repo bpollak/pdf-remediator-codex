@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "services": {
+    "altText": true,
+    "ocr": false,
+    "tritonAiOcr": true,
+    "verapdf": true
+  },
+  "version": "3da9958"
+}

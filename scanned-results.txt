@@ -1,0 +1,80 @@
+Finish your PDF
+
+scansmpl.pdf
+
+Is this PDF ready to publish?
+
+Not yet
+
+We couldn't add the hidden structure (tags) that screen readers need. Fix it in the source file (Word, PowerPoint, Google Docs) and export again as a tagged PDF, or add tags in Acrobat Pro.
+?
+
+Show automated check details
+
+NEXT STEP
+
+Finish the checklist
+
+Work through the checklist below. When it is complete, download the best available PDF and upload your revised file for a final check.
+
+Go to checklist
+Download updated PDF
+Upload revised PDF
+
+Checklist progress
+
+0%
+
+2 checklist items left
+
+What we fixed automatically
+Made the scanned text readable (OCR)
+Set a document language for you to confirm
+What's still left
+Confirm the document language
+Mark the PDF as following the accessibility standard (PDF/UA)
+We couldn't check color contrast. Check it yourself before publishing.
+Our PDF/UA checker still reports 4 problems in the hidden structure. Accessibility staff can see them in the technical report.
+
+The checklist below covers the ones you must fix before publishing.
+
+Technical report (for accessibility staff)
+
+Need help?
+
+Some fixes can't be made in this app. You have two options:
+
+Fix the source file. Open the original Word, PowerPoint or Google Docs file, make the fix there, and export it again as a PDF. This usually works best.
+Ask for help. Contact UC San Diego Digital Accessibility. Include this PDF and a screenshot of this page.
+Manual checklist
+
+Complete each item that applies to this PDF. The progress meter updates as you save descriptions, confirm tables, or tick items done.
+
+How to finish:
+
+Save any image descriptions, or mark decorative images so screen readers can skip them.
+For items marked “Required before publishing”, make the fix in the source file or Acrobat Pro, then tick the item.
+Download the best available PDF, make any desktop edits, then upload the revised PDF so we can check it again.
+Fixes to make outside this app
+Add the hidden structure (tags) screen readers need
+
+The easiest way is to go back to the source file (Word, PowerPoint, Google Docs) and export it again as a tagged PDF. Otherwise, add tags in Acrobat Pro, including heading order, reading order and table structure.
+
+Required before publishing. Tick this once you have made the fix.
+
+Confirm the document language
+
+The original PDF did not say what language it is in, so we set one. If it is wrong, set the language in the source file (in Word: Review → Language) and export again, or in Acrobat Pro under File → Properties → Advanced.
+
+Required before publishing. Tick this once you have made the fix.
+
+Other manual tasks
+
+No extra manual tasks have been added.
+
+Add another task
+Validate the final PDF
+
+After you apply the manual edits, upload the revised PDF to check it again.
+
+Upload revised PDF
