@@ -210,8 +210,8 @@ export function FileCard({ file, onRemove }: FileCardProps) {
       {file.status === 'remediated' && hasPartialOcr(file) && file.ocrCoverage ? (
         <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
           <p>
-            Only the first {file.ocrCoverage.pagesProcessed} of {file.ocrCoverage.totalPages} pages were made
-            searchable. In Acrobat, run Scan &amp; OCR &gt; Recognize text on the whole file, then upload it again.
+            OCR fully read {file.ocrCoverage.pagesProcessed} of {file.ocrCoverage.totalPages} pages. Some scanned text
+            still needs review. In Acrobat, run Scan &amp; OCR &gt; Recognize text on the whole file, then upload it again.
           </p>
         </div>
       ) : null}

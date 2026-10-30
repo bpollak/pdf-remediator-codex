@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertServiceUrlSafe, guardApiRequest } from '@/lib/rate-limit';
 import { validateImageDataUrl } from '@/lib/alt-text/tritonai';
 import { createRequestDeadline, type RequestDeadline } from '@/lib/server/deadline';
-import { contentLengthExceeds, isTimeoutError, jsonError } from '@/lib/server/http';
+import { contentLengthExceeds, isTimeoutError, jsonError, readTextCapped } from '@/lib/server/http';
 import { addTokenUsage, readTokenUsage, startRequestLog, type RequestLog, type TokenUsage } from '@/lib/server/log';
-import { getModelCandidates, getOcrGatewaySettings, stripJsonFences } from '@/lib/tritonai/gateway';
+import { getModelCandidates, getOcrGatewaySettings } from '@/lib/tritonai/gateway';
+import { parseOcrExtraction, type OcrExtraction } from '@/lib/ocr/response';
 import { formatUntrustedBlock, sanitizeUntrustedText } from '@/lib/tritonai/prompt';
 
 export const runtime = 'nodejs';
@@ -15,8 +16,6 @@ const DEFAULT_OCR_MODEL = 'api-lightonocr-1b';
 const ROUTE = 'ocr-tritonai';
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const MAX_LINES = 120;
-const MAX_LINE_LENGTH = 240;
 const MIN_CONFIDENT_PAGE_LINES = 2;
 // Each model gets its own time budget so a stalled primary still leaves room
 // for the fallbacks, and every attempt is also capped by what is left of the
@@ -29,50 +28,6 @@ const DEADLINE_SAFETY_MARGIN_MS = 5_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
 const MAX_BODY_BYTES = MAX_IMAGE_DATA_URL_LENGTH + 64 * 1024;
 const MAX_PAGE = 10_000;
-
-interface OcrLine {
-  text: string;
-}
-
-function normalizeLine(value: unknown): OcrLine | undefined {
-  const raw = typeof value === 'string' ? value : value && typeof value === 'object' ? (value as Record<string, unknown>).text : '';
-  if (typeof raw !== 'string') return undefined;
-  const text = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_LINE_LENGTH);
-  if (!text || text.length < 2) return undefined;
-  return { text };
-}
-
-function parseOcrResponse(content: unknown): OcrLine[] {
-  if (typeof content !== 'string' || !content.trim()) {
-    throw new Error('TritonAI returned an empty OCR response.');
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripJsonFences(content));
-  } catch {
-    const lines = content
-      .split(/\r?\n/)
-      .map(normalizeLine)
-      .filter((line): line is OcrLine => Boolean(line));
-    if (lines.length) return lines.slice(0, MAX_LINES);
-    throw new Error('TritonAI returned OCR text that could not be parsed.');
-  }
-
-  const record = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  const rawLines = Array.isArray(record.lines)
-    ? record.lines
-    : typeof record.text === 'string'
-      ? record.text.split(/\r?\n/)
-      : [];
-  const lines = rawLines.map(normalizeLine).filter((line): line is OcrLine => Boolean(line));
-
-  if (!lines.length) {
-    throw new Error('TritonAI did not return usable OCR text.');
-  }
-
-  return lines.slice(0, MAX_LINES);
-}
 
 function buildOcrPrompt(page: number, documentName?: string, language?: string) {
   return [
@@ -123,7 +78,7 @@ function buildTritonOcrRequest(input: {
         ]
       }
     ],
-    max_tokens: 1800,
+    max_tokens: 4096,
     response_format: { type: 'json_object' }
   };
 }
@@ -191,7 +146,7 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
 
   const models = getOcrModelCandidates();
   const failures: Failure[] = [];
-  let bestResult: { model: string; lines: OcrLine[] } | undefined;
+  let bestResult: (OcrExtraction & { model: string }) | undefined;
   let usage: TokenUsage | undefined;
 
   for (const model of models) {
@@ -228,10 +183,8 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
         continue;
       }
 
-      payload = await response.json().catch((error: unknown) => {
-        if (isTimeoutError(error)) throw error;
-        return null;
-      });
+      const responseText = await readTextCapped(response, 2 * 1024 * 1024);
+      payload = responseText === undefined ? null : JSON.parse(responseText);
     } catch (error) {
       failures.push({ model, status: isTimeoutError(error) ? 504 : 502 });
       continue;
@@ -239,15 +192,17 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
 
     usage = addTokenUsage(usage, readTokenUsage(payload));
     try {
-      const choices = (payload as { choices?: Array<{ message?: { content?: unknown } }> } | null)?.choices;
-      const lines = parseOcrResponse(choices?.[0]?.message?.content);
-      if (!bestResult || lines.length > bestResult.lines.length) {
-        bestResult = { model, lines };
+      const choices = (payload as { choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }> } | null)?.choices;
+      const extraction = parseOcrExtraction(choices?.[0]?.message?.content, choices?.[0]?.finish_reason);
+      const { lines } = extraction;
+      if (!bestResult || (extraction.complete && !bestResult.complete) || (extraction.complete === bestResult.complete && lines.length > bestResult.lines.length)) {
+        bestResult = { model, ...extraction };
       }
-      if (lines.length >= MIN_CONFIDENT_PAGE_LINES) {
+      if (extraction.complete && lines.length >= MIN_CONFIDENT_PAGE_LINES) {
         log.finish({ status: 200, model, attempts: failures.length + 1, failures, usage });
         return NextResponse.json({
           model,
+          complete: true,
           lines,
           text: lines.map((line) => line.text).join('\n')
         });
@@ -268,7 +223,8 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
     log.finish({ status: 200, model: bestResult.model, attempts: failures.length, failures, usage });
     return NextResponse.json({
       model: bestResult.model,
-      warning: `TritonAI OCR returned limited text (${bestResult.lines.length} line${bestResult.lines.length === 1 ? '' : 's'}).`,
+      complete: false,
+      warning: bestResult.warning ?? `TritonAI OCR returned limited text (${bestResult.lines.length} line${bestResult.lines.length === 1 ? '' : 's'}).`,
       lines: bestResult.lines,
       text: bestResult.lines.map((line) => line.text).join('\n'),
       attemptedModels
@@ -295,6 +251,7 @@ async function handle(request: NextRequest, deadline: RequestDeadline, log: Requ
   log.finish({ status: 200, attempts: failures.length, failures, usage });
   return NextResponse.json(
     {
+      complete: false,
       warning: 'TritonAI OCR could not extract usable text for this page.',
       lines: [],
       text: '',

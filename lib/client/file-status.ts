@@ -10,7 +10,7 @@ export function isSettledStatus(status: FileEntry['status']): boolean {
 
 /** OCR added text, but not for every page (it reads at most the first few). */
 export function hasPartialOcr(file: FileEntry): boolean {
-  return Boolean(file.ocrApplied && file.ocrCoverage && file.ocrCoverage.pagesProcessed < file.ocrCoverage.totalPages);
+  return Boolean(file.ocrApplied && file.ocrCoverage && (file.ocrCoverage.pagesProcessed < file.ocrCoverage.totalPages || file.ocrCoverage.incompletePages?.length));
 }
 
 /**

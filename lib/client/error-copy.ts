@@ -72,6 +72,9 @@ export function describeProcessingFailure(error: unknown): ProcessingFailure {
   if (name === 'SignedPdfError') {
     return { code: 'signed', message: raw };
   }
+  if (name === 'OcrStructureError' || name === 'OcrTextLimitError') {
+    return { code: 'unreadable', message: raw };
+  }
   if (name === 'PasswordException' || /password|encrypt/i.test(raw)) {
     return {
       code: 'password_protected',

@@ -8,6 +8,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    id: '2026-10-30-ocr-and-queue-reliability',
+    versionLabel: 'Upcoming release',
+    deployedOn: 'In development',
+    summary: 'Preserve existing PDF tags during OCR, show incomplete text extraction, and keep uploads moving across browser tabs.',
+    highlights: [
+      'OCR extends existing headings, image descriptions, and annotation bindings instead of replacing the document’s tag tree.',
+      'Dense pages and long OCR lines retain their text. Model cutoffs, resource limits, empty pages, and low-confidence text gaps remain visible as required follow-up.',
+      'A tab on Home or About can keep processing uploads from another tab. Processing warnings remain visible after navigation.'
+    ]
+  },
+  {
     id: '2026-10-28-campus-readiness',
     versionLabel: 'Release 2026.10.28',
     deployedOn: 'October 28, 2026',

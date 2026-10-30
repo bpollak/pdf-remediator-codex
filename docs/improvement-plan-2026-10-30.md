@@ -1,6 +1,8 @@
 # PDF Remediator improvement plan
 
-October 30, 2026. Status: ready for execution.
+October 30, 2026. Status: in progress.
+
+Scope correction: Brett removed SSO from this goal on October 30. No sign-in, identity registration, or authenticated-user gate is required. This correction supersedes SSO and per-user identity wording in the original goal; usage controls below use shared app-level and per-IP accounting.
 
 Complete the October 30 review improvements: preserve existing PDF structure during OCR, prevent silent text loss, fix queue ownership across browser tabs, deliver the current release reliably, and establish the access and release controls needed for campus use.
 
@@ -32,17 +34,16 @@ Done when the reviewed heading-loss and text-truncation reproductions no longer 
 
 Done when uploads in the second tab finish without closing the first, cross-tab updates remain consistent, and no file is processed concurrently by multiple tabs.
 
-## Phase 3 Establish access and usage controls
+## Phase 3 Establish shared usage controls
 
-1. Discover available campus SSO configuration and approved infrastructure for shared quota storage before requesting missing settings. Confirm the tenant, app registration, permitted audience, callback URLs, and operational owner from authoritative configuration rather than inventing them.
-2. Implement campus sign-in and enforce sessions on protected pages and API routes, including server-side checks before any external AI, OCR, or validation request. Cover sign-in, sign-out, expiry, denied users, and direct API requests.
-3. Replace process-local usage accounting as the primary control with shared per-user request and daily quotas. Keep a per-IP backstop and enforce limits across instances, concurrent requests, and restarts. Refuse external processing safely when mandatory authentication or quota configuration is missing.
-4. Verify an app-specific TritonAI key and an enforced gateway budget with the available administration path. Do not treat UI copy or a local counter as proof of a gateway spend cap.
-5. Add tests showing that unauthenticated, unauthorized, and over-quota requests make no upstream calls. Verify the configured behavior in a suitable deployment before production promotion.
+1. Discover existing approved infrastructure for shared quota storage and the app-specific TritonAI key before requesting missing configuration. Keep the app usable without sign-in.
+2. Replace process-local usage accounting as the primary control with shared per-IP request limits and an app-wide daily cap. Enforce limits across instances, concurrent requests, and restarts; document campus NAT implications.
+3. Verify an app-specific TritonAI key and an enforced gateway budget with the available administration path. Do not treat UI copy or a local counter as proof of a gateway spend cap.
+4. Add tests showing that over-quota requests make no upstream calls, including concurrent requests across independent app instances. Verify configured behavior before production promotion.
 
-Dependencies: campus identity settings, approved shared quota storage, and gateway administration access. Continue independent code and test work while resolving these. If a required configuration or owner decision is unavailable, record the exact missing item and obtain it; this phase remains incomplete until enforcement is verified. Do not create paid infrastructure or accept institutional agreements without the required user decision.
+Dependencies: approved shared quota storage and gateway administration access. Continue independent code and test work while resolving these. If a required configuration or owner decision is unavailable, record the exact missing item and obtain it; this phase remains incomplete until enforcement is verified. Do not create paid infrastructure or accept institutional agreements without the required user decision.
 
-Done when intended campus users can sign in, direct API access requires an authorized session, quotas work across instances, and the app's gateway budget is confirmed.
+Done when the app remains available without sign-in, shared usage caps work across instances, and the app's gateway budget is confirmed.
 
 ## Phase 4 Require CI before release and finish verification
 
@@ -67,11 +68,11 @@ Done when a release from main reaches production through the intended process, i
 
 ## Completion criteria
 
-- [ ] Existing PDF structure survives OCR, with regression evidence.
-- [ ] OCR never silently discards text; incomplete extraction is surfaced and remains actionable.
-- [ ] A tab on Home or About cannot stall another tab's queue.
+- [x] Existing PDF structure survives OCR, with regression evidence.
+- [x] OCR never silently discards text; incomplete extraction is surfaced and remains actionable.
+- [x] A tab on Home or About cannot stall another tab's queue.
 - [ ] The current release is delivered reliably and the deployed commit is verified live.
-- [ ] Campus SSO, shared quotas, and the app-specific gateway budget are verified.
+- [ ] Shared app-level and per-IP quotas and the app-specific gateway budget are verified; SSO is excluded.
 - [ ] Required CI checks and pull requests protect main.
 - [ ] Full checks, release notes, production walkthrough, and handoff evidence are complete.
 
@@ -80,3 +81,11 @@ The goal is complete only when every criterion is satisfied. A missing credentia
 ## Boundaries
 
 This plan does not implement general semantic tagging of untagged PDFs, full-document OCR beyond the current limit, direct large-file service uploads, or a framework migration. The app must continue to explain those limits accurately. Campus privacy classification, hosting agreements, and the named support owner remain institutional rollout decisions from the October 28 readiness review; this plan does not claim to approve them.
+
+## Execution checkpoint
+
+October 30: phases 1 and 2 are implemented on the improvement branch. Regression checks cover preserved headings, Figure descriptions, role maps, annotation bindings, flat and branched ParentTrees, multiple pages, repeated passes, long lines, dense pages, cutoffs, and incomplete OCR coverage. The local production browser suite passed all 22 checks, including three new cross-tab regressions; the run also used the configured external veraPDF service. The production build, lint, typecheck, coverage suite, and 16-test PDF release gate passed.
+
+Main now requires pull requests and all four CI jobs, including for administrators, with branches required to be current before merging. Final PR enforcement evidence and live release verification remain open.
+
+The existing Vercel project is reachable from this Mac. No shared quota datastore is configured; the quota datastore and requested request/budget limits are awaiting user input. Production has not been changed by this implementation pass. Its Node setting is 24.x while the repository targets Node 22; align this during delivery.

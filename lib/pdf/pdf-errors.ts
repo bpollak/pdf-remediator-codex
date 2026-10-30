@@ -32,3 +32,17 @@ export class SignedPdfError extends Error {
     this.name = 'SignedPdfError';
   }
 }
+
+export class OcrStructureError extends Error {
+  constructor() {
+    super('OCR could not safely extend this PDF’s existing tags. The original PDF is unchanged. Run OCR in Acrobat and upload that copy.');
+    this.name = 'OcrStructureError';
+  }
+}
+
+export class OcrTextLimitError extends Error {
+  constructor() {
+    super('This OCR text exceeds the safe document limit. Run OCR in Acrobat and upload that copy.');
+    this.name = 'OcrTextLimitError';
+  }
+}

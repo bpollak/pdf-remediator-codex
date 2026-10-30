@@ -77,4 +77,15 @@ describe('local OCR deadlines', () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
+  it('keeps low-confidence text gaps visible instead of counting the page complete', async () => {
+    const lines = [
+      ...Array.from({ length: 6 }, (_, i) => ({ text: `Readable line ${i}`, confidence: 95, bbox: { x0: 0, y0: i * 12, x1: 90, y1: i * 12 + 10 } })),
+      { text: 'Uncertain line', confidence: 10, bbox: { x0: 0, y0: 90, x1: 90, y1: 100 } }
+    ];
+    createWorker.mockResolvedValue({ terminate: vi.fn(async () => undefined), recognize: vi.fn(async () => ({ data: { lines } })) });
+    const result = await runLocalOcr(parsed, new ArrayBuffer(8));
+    expect(result).toMatchObject({ applied: true, pagesProcessed: 0, totalPages: 3, incompletePages: [1, 2, 3] });
+    expect(result.parsed?.textItems).toHaveLength(18);
+  });
+
 });

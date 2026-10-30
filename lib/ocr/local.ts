@@ -72,9 +72,10 @@ export interface LocalOcrResult {
   applied: boolean;
   parsed?: ParsedPDF;
   reason?: string;
-  /** Pages tesseract recognized. */
+  /** Pages with at least one accepted text line. */
   pagesProcessed: number;
   totalPages: number;
+  incompletePages: number[];
 }
 
 export interface LocalOcrOptions {
@@ -93,8 +94,9 @@ export async function runLocalOcr(
 ): Promise<LocalOcrResult> {
   const { signal, setupTimeoutMs = LOCAL_OCR_SETUP_TIMEOUT_MS, pageTimeoutMs = LOCAL_OCR_PAGE_TIMEOUT_MS } = options;
   const totalPages = parsed.pageCount;
+  const incompletePages: number[] = [];
   if (typeof window === 'undefined') {
-    return { attempted: false, applied: false, reason: 'Local OCR only runs in browser context', pagesProcessed: 0, totalPages };
+    return { attempted: false, applied: false, reason: 'Local OCR only runs in browser context', pagesProcessed: 0, totalPages, incompletePages };
   }
 
   ensurePdfJsWorkerConfigured();
@@ -142,13 +144,17 @@ export async function runLocalOcr(
               timeoutMs: pageTimeoutMs,
               signal
             })) as OcrRecognitionLike;
-            pagesProcessed += 1;
+            const beforeItems = ocrItems.length;
             const lines = recognition.data?.lines ?? [];
 
+            let rejectedText = false;
             for (const line of lines) {
               const item = ocrLineToTextItem(line, pageNumber, viewport);
               if (item) ocrItems.push(item);
+              else if (normalizeText(line.text)) rejectedText = true;
             }
+            if (ocrItems.length > beforeItems && !rejectedText) pagesProcessed += 1;
+            else incompletePages.push(pageNumber);
           } finally {
             canvas.width = 0;
             canvas.height = 0;
@@ -172,7 +178,8 @@ export async function runLocalOcr(
         applied: false,
         reason: `Local OCR did not detect enough text (found ${ocrItems.length}, need ${minItems})`,
         pagesProcessed,
-        totalPages
+        totalPages,
+        incompletePages
       };
     }
 
@@ -185,7 +192,8 @@ export async function runLocalOcr(
         textItems: [...parsed.textItems, ...ocrItems]
       },
       pagesProcessed,
-      totalPages
+      totalPages,
+      incompletePages
     };
   } catch (error) {
     if (signal?.aborted) throw createAbortError();
@@ -194,7 +202,8 @@ export async function runLocalOcr(
       applied: false,
       reason: error instanceof Error ? error.message : 'Unknown local OCR error',
       pagesProcessed,
-      totalPages
+      totalPages,
+      incompletePages
     };
   } finally {
     await loadingTask.destroy().catch(() => undefined);

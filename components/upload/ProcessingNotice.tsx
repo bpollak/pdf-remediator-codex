@@ -12,8 +12,8 @@ function isInProgress(status: FileEntry['status']): boolean {
 
 /**
  * Files are processed inside this browser tab, so closing or refreshing it
- * stops unfinished files. The instance in the /app layout (`appWide`) warns
- * before unload on every /app route and shows the note on result pages; the
+ * stops unfinished files. The instance in the root layout (`appWide`) warns
+ * before unload on every route, including Home and About, and shows the note; the
  * upload page renders its own instance where the note sits above the list.
  */
 export function ProcessingNotice({ appWide = false }: { appWide?: boolean }) {
