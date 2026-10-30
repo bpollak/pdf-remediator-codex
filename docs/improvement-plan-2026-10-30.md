@@ -73,7 +73,7 @@ Done when a release from main reaches production through the intended process, i
 - [x] A tab on Home or About cannot stall another tab's queue.
 - [ ] The current release is delivered reliably and the deployed commit is verified live.
 - [ ] Shared app-level and per-IP quotas and the app-specific gateway budget are verified; SSO is excluded.
-- [ ] Required CI checks and pull requests protect main.
+- [x] Required CI checks and pull requests protect main.
 - [ ] Full checks, release notes, production walkthrough, and handoff evidence are complete.
 
 The goal is complete only when every criterion is satisfied. A missing credential, unconfigured service, pending deployment, or unverified external control is an open dependency, not a completed improvement.
@@ -86,6 +86,10 @@ This plan does not implement general semantic tagging of untagged PDFs, full-doc
 
 October 30: phases 1 and 2 are implemented on the improvement branch. Regression checks cover preserved headings, Figure descriptions, role maps, annotation bindings, flat and branched ParentTrees, multiple pages, repeated passes, long lines, dense pages, cutoffs, and incomplete OCR coverage. The local production browser suite passed all 22 checks, including three new cross-tab regressions; the run also used the configured external veraPDF service. The production build, lint, typecheck, coverage suite, and 16-test PDF release gate passed.
 
-Main now requires pull requests and all four CI jobs, including for administrators, with branches required to be current before merging. Final PR enforcement evidence and live release verification remain open.
+Main now requires pull requests and all four CI jobs, including for administrators, with branches required to be current before merging. PR #70 was blocked while required checks were pending and became mergeable only after all four passed. Live release verification remains open.
 
-The existing Vercel project is reachable from this Mac. No shared quota datastore is configured; the quota datastore and requested request/budget limits are awaiting user input. Production has not been changed by this implementation pass. Its Node setting is 24.x while the repository targets Node 22; align this during delivery.
+The existing Vercel project is reachable from this Mac. No shared quota datastore is configured; the quota datastore and requested request/budget limits are awaiting user input. Production has not been changed by this implementation pass. Vercel now targets Node 22.x, matching the repository. The Vercel GitHub app cannot access this repository; refreshing its existing project link returned an installation-required error. The authenticated local Vercel CLI works. CI now fails immediately if deployment credentials are absent; an explicit verification-only dispatch checks an authenticated local release without claiming to deploy it.
+
+Independent validation: veraPDF 1.28.2 checked a synthetic tagged source and OCR output with its PDF/UA-1 profile. Existing H1/P structure remained, bound text increased from 32 to 157 characters, and unbound text stayed at zero. Failed rules decreased from four to three with no new failing rule IDs. The output is not PDF/UA compliant: the fixture still has an untagged image, a missing DisplayDocTitle preference, and a non-embedded original font. This is regression evidence, not accessibility certification.
+
+Production dependency review (October 30): `npm audit --omit=dev` reports zero critical findings, one high PostCSS finding and the inherited moderate Next.js finding. `npm ls postcss` locates the affected copy at `next/node_modules/postcss` 8.4.31; the direct build dependency is 8.5.32. The reports concern [inline CSS escaping](https://github.com/advisories/GHSA-qx2v-qp2m-jg93) and untrusted CSS source-map loading ([initial report](https://github.com/advisories/GHSA-6g55-p6wh-862q), [follow-up](https://github.com/advisories/GHSA-fxqj-rqcc-2cmp), [traversal report](https://github.com/advisories/GHSA-r28c-9q8g-f849)). The app has no user-supplied CSS or runtime PostCSS processing path; CSS is compiled from repository source. This limits current runtime applicability but does not remove the vulnerable dependency or the risk from untrusted build inputs. Keep the Next.js upgrade as separately tested work; do not claim the audit is clean.

@@ -9,8 +9,8 @@ export type ReleaseNote = {
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     id: '2026-10-30-ocr-and-queue-reliability',
-    versionLabel: 'Upcoming release',
-    deployedOn: 'In development',
+    versionLabel: 'Release 2026.10.30',
+    deployedOn: 'October 30, 2026',
     summary: 'Preserve existing PDF tags during OCR, show incomplete text extraction, and keep uploads moving across browser tabs.',
     highlights: [
       'OCR extends existing headings, image descriptions, and annotation bindings instead of replacing the document’s tag tree.',
