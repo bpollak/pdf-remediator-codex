@@ -1,3 +1,4 @@
+import { OcrStructureError, OcrTextLimitError } from '@/lib/pdf/pdf-errors';
 import { describe, expect, it } from 'vitest';
 import { StepTimeoutError } from '@/lib/client/deadline';
 import {
@@ -60,3 +61,10 @@ describe('plain-language processing errors', () => {
     expect(isRetryableErrorCode('too_many_pages')).toBe(false);
   });
 });
+
+ it.each([new OcrStructureError(), new OcrTextLimitError()])('shows actionable OCR refusal guidance', (error) => {
+  const failure = describeProcessingFailure(error);
+  expect(failure.message).toBe(error.message);
+  expect(failure.message).toContain('Acrobat');
+  expect(isRetryableErrorCode(failure.code)).toBe(false);
+ });

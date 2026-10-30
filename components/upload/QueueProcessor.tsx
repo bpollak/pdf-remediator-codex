@@ -102,6 +102,11 @@ function startQueueRuntime(): void {
     if (activeJob && !state.files.some((file) => file.id === activeJob?.fileId)) {
       activeJob.controller.abort();
     }
+    // This subscription survives route changes. In particular, a saved
+    // upload broadcast by another tab must wake an idle leader on Home or About.
+    if (state.hydrated && isQueueLeader() && state.files.some((file) => file.status === 'queued')) {
+      queueMicrotask(pumpQueue);
+    }
   });
 
   onQueueLeadershipChange(({ leader, waitingForOtherTab }) => {
@@ -168,11 +173,11 @@ async function processFile(next: FileEntry, signal: AbortSignal): Promise<void> 
       })
     ).catch((error: unknown) => {
       if (!(error instanceof StepTimeoutError)) throw error;
-      return { attempted: true, applied: false, parsed: undefined, reason: 'TritonAI OCR took too long', pagesProcessed: 0, totalPages: originalParsedData.pageCount };
+      return { attempted: true, applied: false, parsed: undefined, reason: 'TritonAI OCR took too long', pagesProcessed: 0, totalPages: originalParsedData.pageCount, incompletePages: [] as number[] };
     });
     assertStillQueued(next.id, signal);
     let upstreamOcrFailureReason = tritonOcr.reason;
-    ocrCoverage = { pagesProcessed: tritonOcr.pagesProcessed, totalPages: tritonOcr.totalPages };
+    ocrCoverage = { pagesProcessed: tritonOcr.pagesProcessed, totalPages: tritonOcr.totalPages, incompletePages: tritonOcr.incompletePages };
 
     if (tritonOcr.applied && tritonOcr.parsed) {
       const tritonAssessment = assessOcrTextGain(originalParsedData, tritonOcr.parsed);
@@ -180,7 +185,7 @@ async function processFile(next: FileEntry, signal: AbortSignal): Promise<void> 
         remediationParsedData = tritonOcr.parsed;
         ocrApplied = true;
         ocrTextLayerApplied = true;
-        ocrReason = 'Used TritonAI OCR';
+        ocrReason = tritonOcr.reason ? `Used TritonAI OCR; ${tritonOcr.reason}` : 'Used TritonAI OCR';
         upstreamOcrFailureReason = undefined;
       } else {
         upstreamOcrFailureReason = [upstreamOcrFailureReason, tritonAssessment.reason].filter(Boolean).join('; ') || undefined;
@@ -193,7 +198,7 @@ async function processFile(next: FileEntry, signal: AbortSignal): Promise<void> 
         runLocalOcr(remediationParsedData, remediationSourceBytes, remediationParsedData.language, { signal: stepSignal })
       ).catch((error: unknown) => {
         if (!(error instanceof StepTimeoutError)) throw error;
-        return { attempted: true, applied: false, parsed: undefined, reason: 'Local OCR took too long', pagesProcessed: 0, totalPages: originalParsedData.pageCount };
+        return { attempted: true, applied: false, parsed: undefined, reason: 'Local OCR took too long', pagesProcessed: 0, totalPages: originalParsedData.pageCount, incompletePages: [] as number[] };
       });
       assertStillQueued(next.id, signal);
       if (localOcr.applied && localOcr.parsed) {
@@ -201,11 +206,11 @@ async function processFile(next: FileEntry, signal: AbortSignal): Promise<void> 
         ocrApplied = true;
         ocrTextLayerApplied = true;
         ocrReason = upstreamOcrFailureReason ? `${upstreamOcrFailureReason}; used local OCR fallback` : 'Used local OCR fallback';
-        ocrCoverage = { pagesProcessed: localOcr.pagesProcessed, totalPages: localOcr.totalPages };
+        ocrCoverage = { pagesProcessed: localOcr.pagesProcessed, totalPages: localOcr.totalPages, incompletePages: localOcr.incompletePages };
       } else {
         ocrReason = upstreamOcrFailureReason ?? localOcr.reason;
         if (localOcr.pagesProcessed > ocrCoverage.pagesProcessed) {
-          ocrCoverage = { pagesProcessed: localOcr.pagesProcessed, totalPages: localOcr.totalPages };
+          ocrCoverage = { pagesProcessed: localOcr.pagesProcessed, totalPages: localOcr.totalPages, incompletePages: localOcr.incompletePages };
         }
       }
     }

@@ -270,3 +270,33 @@ describe('/api/ocr/tritonai hardening', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('OCR route text fidelity', () => {
+  const originalEnv = process.env;
+  beforeEach(() => {
+    process.env = { ...originalEnv, OCR_LITELLM_API_KEY: 'test-key', OCR_LITELLM_BASE_URL: 'https://example.test', OCR_LITELLM_MODEL: 'ocr-primary', OCR_LITELLM_FALLBACK_MODELS: 'ocr-backup' };
+  });
+  afterEach(() => { process.env = originalEnv; vi.restoreAllMocks(); });
+
+  it('returns every line and character from a complete dense page', async () => {
+    const lines = Array.from({ length: 130 }, (_, i) => ({ text: `Line ${i}: ${'x'.repeat(350)}` }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ lines }) } }] }));
+    const body = await (await POST(makeRequest())).json();
+    expect(body).toMatchObject({ complete: true, lines });
+    expect(body.warning).toBeUndefined();
+  });
+  it('tries a fallback after a truncated response, and prefers complete text', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ choices: [{ finish_reason: 'length', message: { content: '{"lines":["First line","Second line"]}' } }] }))
+      .mockResolvedValueOnce(Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{"lines":["Full first line","Full second line"]}' } }] }));
+    const body = await (await POST(makeRequest())).json();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(body).toMatchObject({ model: 'ocr-backup', complete: true });
+  });
+  it('reports incomplete output if every model stops early', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ choices: [{ finish_reason: 'length', message: { content: '{"lines":["First line","Second line"]}' } }] }));
+    const body = await (await POST(makeRequest())).json();
+    expect(body).toMatchObject({ complete: false, lines: [{ text: 'First line' }, { text: 'Second line' }] });
+    expect(body.warning).toMatch(/stopped/);
+  });
+});

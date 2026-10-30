@@ -2,7 +2,19 @@
 
 October 28, 2026. Start here when picking this work up on your own computer.
 
-## Where things stand
+## October 30 update
+
+The current plan is [improvement-plan-2026-10-30.md](improvement-plan-2026-10-30.md). SSO and sign-in are excluded by the user's instruction. Anonymous usage remains intentional. Shared per-IP/app-wide request accounting and an app-specific TritonAI budget remain open pending the datastore and limits.
+
+PR #70 preserves existing PDF structure during OCR, reports incomplete extraction, and keeps queues moving when their owner navigates Home or About. All four required CI jobs passed. The full suite has 484 tests and 22 browser checks. Independent veraPDF validation found no new failing PDF/UA-1 rules on the synthetic OCR fixture; three pre-existing failures remain. This does not certify PDF accessibility.
+
+Main requires pull requests and all four CI checks, including for administrators. Vercel uses Node 22.x. The Vercel GitHub app needs repository access restored, and GitHub has no deployment secrets. The existing local CLI is authenticated. Production release and live verification are pending in this checkpoint.
+
+Automatic deployment now fails clearly when credentials are absent. After a successful authenticated local release, run `gh workflow run post-deploy.yml --ref main -f verify_only=true` to independently verify production. Automatic delivery still requires a team-scoped Vercel token in `VERCEL_TOKEN`, plus `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, stored as repository secrets. Do not copy a cached personal CLI session token into CI.
+
+Rollback: inspect a previously verified Vercel production deployment and promote that exact deployment with `vercel promote <verified-deployment-url>`. Confirm `/api/health` and run the live browser suite afterward. A rollback also restores that deployment's older behavior and limitations.
+
+## October 28 historical checkpoint
 
 - The campus-readiness release is merged to `main` (bpollak/pdf-remediator-codex#50), with post-deploy checks
   (bpollak/pdf-remediator-codex#65) and CI-driven deploys (bpollak/pdf-remediator-codex#69). See
@@ -84,13 +96,13 @@ Open Claude Code in the repo folder and paste:
 
 From [campus-readiness-2026-10-28.md](campus-readiness-2026-10-28.md):
 
-1. Sign-in (campus SSO). Until then, anyone who can reach the site can use the app's TritonAI key.
+1. SSO is excluded. Shared app-wide/per-IP quotas and the approved datastore/limits remain open; anyone who can reach the site can use the app's TritonAI key.
 2. Data classification and which AI processors may see documents (`lib/content/privacy.ts` copy).
 3. Where veraPDF and the OCR worker run (Vercel's 4.5 MB request limit blocks most online verification).
 4. Vercel plan and agreement for a campus service.
 5. The help contact and feedback owner (`lib/content/support.ts`).
 6. A TritonAI key with its own budget.
-7. Making CI a required check on `main`.
+7. Required CI and pull requests are now enforced on `main` (October 30).
 
 ## Notes
 

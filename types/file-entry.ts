@@ -103,7 +103,7 @@ export interface FileEntry {
   ocrApplied?: boolean;
   ocrReason?: string;
   /** Pages OCR read, out of the document's pages. Set whenever OCR ran (TritonAI or local). */
-  ocrCoverage?: { pagesProcessed: number; totalPages: number };
+  ocrCoverage?: { pagesProcessed: number; totalPages: number; incompletePages?: number[] };
   parsedData?: ParsedPDF;
   remediatedParsedData?: ParsedPDF;
   auditResult?: AuditResult;

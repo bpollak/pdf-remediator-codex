@@ -58,6 +58,7 @@ interface TritonOcrResponse {
   code?: string;
   error?: string;
   warning?: string;
+  complete?: boolean;
   attemptedModels?: Array<{ model: string; status?: number }>;
 }
 
@@ -66,9 +67,10 @@ export interface TritonOcrResult {
   applied: boolean;
   parsed?: ParsedPDF;
   reason?: string;
-  /** Pages the server returned a result for. */
+  /** Pages with nonempty extraction that was not cut off or limited. */
   pagesProcessed: number;
   totalPages: number;
+  incompletePages: number[];
 }
 
 export interface TritonOcrOptions {
@@ -168,7 +170,7 @@ async function requestPageOcr(input: {
   page: number;
   documentName: string;
   language?: string;
-}, signal?: AbortSignal): Promise<{ lines: TritonOcrLine[]; warning?: string }> {
+}, signal?: AbortSignal): Promise<{ lines: TritonOcrLine[]; warning?: string; complete: boolean }> {
   const deadline = deadlineSignal(TRITON_OCR_PAGE_TIMEOUT_MS, signal);
   let response: Response;
   let payload: TritonOcrResponse;
@@ -209,7 +211,7 @@ async function requestPageOcr(input: {
       .filter((line) => line.text);
   }
 
-  return { lines, warning: payload.warning };
+  return { lines, warning: payload.warning, complete: payload.complete !== false && !payload.warning && lines.length > 0 };
 }
 
 export async function runTritonAiOcr(
@@ -221,11 +223,12 @@ export async function runTritonAiOcr(
 ): Promise<TritonOcrResult> {
   const { signal } = options;
   const totalPages = parsed.pageCount;
+  const incompletePages: number[] = [];
   if (typeof window === 'undefined') {
-    return { attempted: false, applied: false, reason: 'TritonAI OCR only runs in browser context', pagesProcessed: 0, totalPages };
+    return { attempted: false, applied: false, reason: 'TritonAI OCR only runs in browser context', pagesProcessed: 0, totalPages, incompletePages };
   }
   if (Date.now() < serviceUnavailableUntil) {
-    return { attempted: false, applied: false, reason: NOT_AVAILABLE_REASON, pagesProcessed: 0, totalPages };
+    return { attempted: false, applied: false, reason: NOT_AVAILABLE_REASON, pagesProcessed: 0, totalPages, incompletePages };
   }
 
   ensurePdfJsWorkerConfigured();
@@ -265,13 +268,15 @@ export async function runTritonAiOcr(
             await sleep(error.retryAfterMs ?? DEFAULT_RETRY_AFTER_MS, signal);
             result = await request();
           }
-          pagesProcessed += 1;
+          if (result.complete) pagesProcessed += 1;
+          else incompletePages.push(pageNumber);
           if (result.warning) {
             pageWarnings.push(`Page ${pageNumber}: ${result.warning}`);
           }
           ocrItems.push(...pageOcrLinesToTextItems(result.lines, pageNumber, rendered.pageWidth, rendered.pageHeight));
         } catch (error) {
           if (signal?.aborted) throw createAbortError();
+          incompletePages.push(pageNumber);
           pageWarnings.push(
             `Page ${pageNumber}: ${error instanceof Error ? error.message : 'TritonAI OCR did not complete'}`
           );
@@ -300,7 +305,8 @@ export async function runTritonAiOcr(
           pageWarnings.slice(0, 3).join('; ')
         ].filter(Boolean).join(': '),
         pagesProcessed,
-        totalPages
+        totalPages,
+        incompletePages
       };
     }
 
@@ -314,7 +320,8 @@ export async function runTritonAiOcr(
       },
       reason: pageWarnings.length > 0 ? pageWarnings.slice(0, 3).join('; ') : undefined,
       pagesProcessed,
-      totalPages
+      totalPages,
+      incompletePages
     };
   } catch (error) {
     if (signal?.aborted) throw createAbortError();
@@ -323,7 +330,8 @@ export async function runTritonAiOcr(
       applied: false,
       reason: error instanceof Error ? redactConfigNames(error.message) : 'Unknown TritonAI OCR error',
       pagesProcessed,
-      totalPages
+      totalPages,
+      incompletePages
     };
   }
 }

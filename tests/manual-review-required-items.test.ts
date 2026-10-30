@@ -83,6 +83,12 @@ describe('required checklist items: OCR', () => {
     expect(getRequiredChecklistItems(makeFile())).toEqual([]);
   });
 
+  it('keeps the OCR task open for an explicitly incomplete page', () => {
+    const items = getRequiredChecklistItems(makeFile({ ocrAttempted: true, ocrApplied: true, ocrCoverage: { pagesProcessed: 2, totalPages: 2, incompletePages: [2] } } as Partial<FileEntry>));
+    expect(items[0]).toMatchObject({ id: 'ocr', done: false });
+    expect(items[0].detail).toContain('Review pages 2');
+  });
+
   it('leaves the full-page scan image out of image descriptions, but keeps real photos', () => {
     const data = parsed({ images: [fullPageScan, photo] });
     const scan = makeFile({ ocrAttempted: true, ocrApplied: false, remediatedParsedData: data });

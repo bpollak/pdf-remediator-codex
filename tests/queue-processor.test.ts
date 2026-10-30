@@ -1,23 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ParsedPDF } from '@/lib/pdf/types';
 
-const { parsePdfInWorker, readPdfPageCount, runTritonAiOcr, isLikelyScannedPdf, saveFileEntry } = vi.hoisted(() => ({
+const { parsePdfInWorker, readPdfPageCount, runTritonAiOcr, isLikelyScannedPdf, saveFileEntry, runAuditInWorker, remediatePdfInWorker, assessOcrTextGain } = vi.hoisted(() => ({
   // Never settles by default: simulates a long parse so the lock stays held.
   parsePdfInWorker: vi.fn((..._args: unknown[]): Promise<unknown> => new Promise(() => undefined)),
   readPdfPageCount: vi.fn((..._args: unknown[]): Promise<number> => Promise.reject(new Error('not a PDF'))),
   runTritonAiOcr: vi.fn((..._args: unknown[]): Promise<unknown> => new Promise(() => undefined)),
   isLikelyScannedPdf: vi.fn(() => false),
+  runAuditInWorker: vi.fn(),
+  remediatePdfInWorker: vi.fn(),
+  assessOcrTextGain: vi.fn(),
   saveFileEntry: vi.fn((..._args: unknown[]) => Promise.resolve())
 }));
 
 vi.mock('@/lib/workers/client', () => ({
   parsePdfInWorker,
-  runAuditInWorker: vi.fn(),
-  remediatePdfInWorker: vi.fn()
+  runAuditInWorker,
+  remediatePdfInWorker
 }));
 vi.mock('@/lib/client/page-count', () => ({ readPdfPageCount }));
 vi.mock('@/lib/ocr/tritonai', () => ({ runTritonAiOcr }));
-vi.mock('@/lib/ocr/detection', () => ({ isLikelyScannedPdf, assessOcrTextGain: vi.fn() }));
+vi.mock('@/lib/ocr/detection', () => ({ isLikelyScannedPdf, assessOcrTextGain }));
 vi.mock('@/lib/persistence/file-store', () => ({
   STORED_FILE_RETENTION_DAYS: 30,
   loadPersistedFiles: vi.fn(() => Promise.resolve({ files: [], droppedIds: [], expiredIds: [] })),
@@ -171,4 +174,21 @@ describe('processing queue', () => {
     expect(fileById('bad')?.error).toMatch(/^We couldn't read this PDF/);
     expect(fileById('bad')?.errorDetail).toBe('Invalid PDF structure at offset 12');
   });
+  it('persists incomplete OCR coverage with the finished result', async () => {
+    parsePdfInWorker.mockResolvedValue(scannedParse);
+    isLikelyScannedPdf.mockReturnValue(true);
+    assessOcrTextGain.mockReturnValue({ accepted: true });
+    runAuditInWorker.mockResolvedValue({ score: 40, findings: [] });
+    remediatePdfInWorker.mockResolvedValue(new ArrayBuffer(16));
+    runTritonAiOcr.mockResolvedValue({ attempted: true, applied: true, parsed: scannedParse, pagesProcessed: 1, totalPages: 2, incompletePages: [2], reason: 'Page 2: text stopped early' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ attempted: false, reason: 'No verifier in this test.' }));
+    useAppStore.setState({ files: [queued('partial-ocr')], hydrated: true });
+    pumpQueue();
+    await vi.waitFor(() => expect(fileById('partial-ocr')?.status).toBe('remediated'));
+    expect(fileById('partial-ocr')).toMatchObject({ ocrApplied: true, ocrCoverage: { pagesProcessed: 1, totalPages: 2, incompletePages: [2] } });
+    expect(fileById('partial-ocr')?.ocrReason).toContain('stopped early');
+    expect(saveFileEntry).toHaveBeenCalledWith(expect.objectContaining({ status: 'remediated', ocrCoverage: { pagesProcessed: 1, totalPages: 2, incompletePages: [2] } }), expect.anything());
+    fetchMock.mockRestore();
+  });
+
 });

@@ -255,12 +255,12 @@ function getOcrChecklistItem(file: FileEntry | undefined): Omit<RequiredChecklis
     coverage !== undefined &&
     Number.isFinite(coverage.pagesProcessed) &&
     Number.isFinite(coverage.totalPages) &&
-    coverage.pagesProcessed < coverage.totalPages;
+    (coverage.pagesProcessed < coverage.totalPages || Boolean(coverage.incompletePages?.length));
   if (file?.ocrApplied && !partial) return undefined;
 
   const detail =
     file?.ocrApplied && coverage
-      ? `We could only read the text on ${coverage.pagesProcessed} of ${pagesLabel(coverage.totalPages)}. Screen readers can't read the rest.`
+      ? `OCR fully read ${coverage.pagesProcessed} of ${pagesLabel(coverage.totalPages)}. Some scanned text is still missing or incomplete.${coverage.incompletePages?.length ? ` Review pages ${coverage.incompletePages.join(', ')}.` : ''}`
       : "This looks like a scan, and we couldn't read any text in it. Screen readers can't read it yet.";
 
   return {

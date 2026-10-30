@@ -128,4 +128,14 @@ describe('TritonAI OCR client', () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
+  it('does not count an empty page or cut-off page as fully read', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(async () => json({ lines: [], complete: false, warning: 'No usable text' }))
+      .mockImplementationOnce(async () => json({ ...lines(8), complete: false, warning: 'Output was cut off' }))
+      .mockImplementation(async () => json({ ...lines(8), complete: true }));
+    const result = await runTritonAiOcr(parsed(3), new ArrayBuffer(8), 'scan.pdf');
+    expect(result).toMatchObject({ applied: true, pagesProcessed: 1, totalPages: 3, incompletePages: [1, 2] });
+    expect(result.parsed?.textItems).toHaveLength(16);
+  });
+
 });

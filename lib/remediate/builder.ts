@@ -4,7 +4,6 @@ import {
   PDFDict,
   PDFDocument,
   PDFName,
-  PDFNull,
   PDFNumber,
   PDFOperator,
   PDFOperatorNames,
@@ -27,7 +26,8 @@ import type { ParsedPDF, RemediationMode } from '@/lib/pdf/types';
 import { extractRemediationPlan } from './extractor';
 import { createHeadingLevelNormalizer } from './heuristics';
 import { encodePdfTextString } from './pdf-text';
-import { decodePageContent, maxMcidInContent } from './page-content';
+import { prepareTextStructure, type TextBinding } from './text-structure';
+import { OcrTextLimitError } from '@/lib/pdf/pdf-errors';
 import { buildXmpMetadata } from './xmp';
 import { assertNotEncrypted, assertNotSigned } from '@/lib/pdf/encryption';
 import { mapFontName } from './font-mapper';
@@ -49,11 +49,6 @@ interface TaggedTextLayerItem {
   fontSize: number;
 }
 
-interface TaggedBinding {
-  role: string;
-  page: number;
-  mcid: number;
-}
 
 interface PdfPageWithFontDictionary {
   node: {
@@ -238,7 +233,9 @@ function resolveTaggedLayerItems(
   }
 
   if (ocrOnly) {
-    for (const item of parsed.textItems.filter((textItem) => textItem.fontName === 'OCR').slice(0, MAX_OCR_TEXT_LAYER_ITEMS)) {
+    const ocrItems = parsed.textItems.filter((textItem) => textItem.fontName === 'OCR');
+    if (ocrItems.length > MAX_OCR_TEXT_LAYER_ITEMS) throw new OcrTextLimitError();
+    for (const item of ocrItems) {
       pushItem('P', item.page, item.text, item.x, item.y, item.fontSize);
     }
     return items;
@@ -277,14 +274,15 @@ function beginMarkedContentSequence(
 async function embedTaggedInvisibleTextLayer(
   pdf: PDFDocument,
   items: TaggedTextLayerItem[]
-): Promise<TaggedBinding[]> {
+): Promise<TextBinding[]> {
   if (!items.length) return [];
 
+  const structure = prepareTextStructure(pdf, items.map((item) => item.page));
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = pdf.getPages();
   const fontKeyByPage = new Map<number, PDFName>();
-  const nextMcidByPage = new Map<number, number>();
-  const bindings: TaggedBinding[] = [];
+  const nextMcidByPage = structure.nextMcids;
+  const bindings: TextBinding[] = [];
 
   function fontResourceForPage(pageNumber: number, page: (typeof pages)[number]): PDFName {
     const existing = fontKeyByPage.get(pageNumber);
@@ -292,16 +290,6 @@ async function embedTaggedInvisibleTextLayer(
     const key = (page as unknown as PdfPageWithFontDictionary).node.newFontDictionary('F', font.ref);
     fontKeyByPage.set(pageNumber, key);
     return key;
-  }
-
-  // Existing marked content keeps its MCIDs; new sequences start above
-  // them. Read before any page is touched (adding resources normalizes the
-  // page and wraps its content).
-  for (const pageNumber of new Set(items.map((item) => item.page))) {
-    const page = pages[pageNumber - 1];
-    if (!page) continue;
-    const content = decodePageContent(pdf, page);
-    nextMcidByPage.set(pageNumber, content === undefined ? 0 : maxMcidInContent(content) + 1);
   }
 
   for (const item of items) {
@@ -348,100 +336,8 @@ async function embedTaggedInvisibleTextLayer(
     });
   }
 
+  structure.append(bindings);
   return bindings;
-}
-
-function injectBoundStructTreeFromBindings(pdf: PDFDocument, bindings: TaggedBinding[]): boolean {
-  if (bindings.length === 0) return false;
-
-  const context = pdf.context;
-  const pages = pdf.getPages();
-
-  // Keep any existing MarkInfo entries (Suspects, UserProperties); only
-  // Marked is set, because the document now has a bound structure tree.
-  const markInfoDict = lookupMaybeDict(pdf, pdf.catalog.get(PDFName.of('MarkInfo'))) ?? context.obj({});
-  markInfoDict.set(PDFName.of('Marked'), PDFBool.True);
-  if (!pdf.catalog.get(PDFName.of('MarkInfo'))) {
-    pdf.catalog.set(PDFName.of('MarkInfo'), context.register(markInfoDict));
-  }
-
-  const structTreeRootDict = context.obj({ Type: 'StructTreeRoot' });
-  const structTreeRootRef = context.register(structTreeRootDict);
-
-  // Only standard structure types are used, so no RoleMap is needed (an
-  // identity RoleMap would remap standard types onto themselves).
-
-  const documentElemDict = context.obj({
-    Type: 'StructElem',
-    S: 'Document'
-  });
-  documentElemDict.set(PDFName.of('P'), structTreeRootRef);
-  const documentElemRef = context.register(documentElemDict);
-
-  const children = PDFArray.withContext(context);
-  const parentEntriesByPage = new Map<number, Array<{ mcid: number; ref: ReturnType<typeof context.register> }>>();
-
-  for (const binding of bindings) {
-    const pageRef = pages[binding.page - 1]?.ref;
-    if (!pageRef) continue;
-
-    const role = /^H[1-6]$/.test(binding.role) ? binding.role : 'P';
-    const elemDict = context.obj({
-      Type: 'StructElem',
-      S: role
-    });
-    elemDict.set(PDFName.of('P'), documentElemRef);
-    elemDict.set(PDFName.of('Pg'), pageRef);
-    elemDict.set(PDFName.of('K'), PDFNumber.of(binding.mcid));
-
-    const elemRef = context.register(elemDict);
-    children.push(elemRef);
-
-    let pageEntries = parentEntriesByPage.get(binding.page);
-    if (!pageEntries) {
-      pageEntries = [];
-      parentEntriesByPage.set(binding.page, pageEntries);
-    }
-    pageEntries.push({ mcid: binding.mcid, ref: elemRef });
-  }
-
-  if (children.size() === 0) return false;
-  documentElemDict.set(PDFName.of('K'), children);
-  structTreeRootDict.set(PDFName.of('K'), documentElemRef);
-
-  const nums = PDFArray.withContext(context);
-  let maxStructParents = -1;
-
-  for (const [pageNumber, entries] of [...parentEntriesByPage.entries()].sort((a, b) => a[0] - b[0])) {
-    const page = pages[pageNumber - 1];
-    if (!page) continue;
-
-    const structParents = pageNumber - 1;
-    maxStructParents = Math.max(maxStructParents, structParents);
-    page.node.set(PDFName.of('StructParents'), PDFNumber.of(structParents));
-    page.node.set(PDFName.of('Tabs'), PDFName.of('S'));
-
-    const maxMcid = entries.reduce((max, entry) => Math.max(max, entry.mcid), -1);
-    const parentArray = PDFArray.withContext(context);
-    for (let index = 0; index <= maxMcid; index += 1) {
-      parentArray.push(PDFNull);
-    }
-    for (const entry of entries) {
-      parentArray.set(entry.mcid, entry.ref);
-    }
-
-    const parentArrayRef = context.register(parentArray);
-    nums.push(PDFNumber.of(structParents));
-    nums.push(parentArrayRef);
-  }
-
-  const parentTreeDict = context.obj({ Nums: nums });
-  const parentTreeRef = context.register(parentTreeDict);
-  structTreeRootDict.set(PDFName.of('ParentTree'), parentTreeRef);
-  structTreeRootDict.set(PDFName.of('ParentTreeNextKey'), PDFNumber.of(maxStructParents + 1));
-
-  pdf.catalog.set(PDFName.of('StructTreeRoot'), structTreeRootRef);
-  return true;
 }
 
 function applyStructureTabOrder(pdf: PDFDocument): void {
@@ -803,18 +699,12 @@ export async function buildRemediatedPdf(
 
   if (loadableSourceBytes && options.addInvisibleTextLayer) {
     const taggedItems = resolveTaggedLayerItems(parsed, plan, true);
-    const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
-    if (bindings.length > 0) {
-      injectBoundStructTreeFromBindings(pdf, bindings);
-    }
+    await embedTaggedInvisibleTextLayer(pdf, taggedItems);
   }
 
   if (!hasBoundStructure && options.injectBoundTextLayer === true && !options.addInvisibleTextLayer) {
     const taggedItems = resolveTaggedLayerItems(parsed, plan, false);
-    const bindings = await embedTaggedInvisibleTextLayer(pdf, taggedItems);
-    if (bindings.length > 0) {
-      injectBoundStructTreeFromBindings(pdf, bindings);
-    }
+    await embedTaggedInvisibleTextLayer(pdf, taggedItems);
   }
 
   if (hasBoundStructure || pdf.catalog.get(PDFName.of('StructTreeRoot'))) {

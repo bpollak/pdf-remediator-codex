@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { RouteFocus } from '@/components/ux/RouteFocus';
+import { ProcessingNotice } from '@/components/upload/ProcessingNotice';
 import { SITE_TITLE } from '@/lib/content/site';
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <Header />
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+          <ProcessingNotice appWide />
           {children}
         </main>
         <Footer />

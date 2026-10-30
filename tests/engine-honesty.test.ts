@@ -441,3 +441,89 @@ describe('alt text Figures follow reading order', () => {
     expect(reparsed.images[0]?.alt).toBe('Bar chart of enrollment');
   });
 });
+
+describe('OCR preserves the existing tag tree', () => {
+  async function taggedScan(options: { branched?: boolean; rootArray?: boolean; secondPage?: boolean } = {}) {
+    const original = await taggedPdf({ paras: ['Original heading', 'Original paragraph'], image: true, lang: 'en-US', title: 'Tagged scan' });
+    const described = await applyManualAltText(original, [{ imageId: 'img-1-1', alt: 'Existing diagram description', decorative: false }], { 1: 1 });
+    const pdf = await PDFDocument.load(described.bytes);
+    const ctx = pdf.context;
+    const page = pdf.getPages()[0];
+    const root = pdf.catalog.lookup(PDFName.of('StructTreeRoot')) as PDFDict;
+    const documentRef = root.get(PDFName.of('K'))!;
+    const document = ctx.lookup(documentRef) as PDFDict;
+    const kids = document.lookup(PDFName.of('K')) as PDFArray;
+    const heading = ctx.lookup(kids.get(0)) as PDFDict;
+    heading.set(PDFName.of('S'), PDFName.of('CustomHeading'));
+    root.set(PDFName.of('RoleMap'), ctx.obj({ CustomHeading: 'H1' }));
+    // A second, undescribed full-page image makes this a real scan without
+    // removing the already-described small figure or its content binding.
+    page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(pageContent(pdf) + '\nq 612 0 0 792 0 0 cm /Im0 Do Q\n')));
+    const annotation = ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], StructParent: 18, A: { S: 'URI', URI: PDFString.of('https://example.test/') } }));
+    page.node.set(PDFName.of('Annots'), ctx.obj([annotation]));
+    const link = ctx.register(ctx.obj({ Type: 'StructElem', S: 'Link', P: documentRef, Pg: page.ref, K: { Type: 'OBJR', Obj: annotation } }));
+    kids.push(link);
+    const tree = root.lookup(PDFName.of('ParentTree')) as PDFDict;
+    const nums = tree.lookup(PDFName.of('Nums')) as PDFArray;
+    nums.push(PDFNumber.of(18)); nums.push(link);
+    if (options.branched) root.set(PDFName.of('ParentTree'), ctx.register(ctx.obj({ Kids: [ctx.register(ctx.obj({ Nums: nums, Limits: [0, 18] }))] })));
+    if (options.rootArray) root.set(PDFName.of('K'), ctx.obj([documentRef]));
+    if (options.secondPage) pdf.addPage([612, 792]);
+    // A stale allocation hint must not collide with the annotation's key.
+    root.set(PDFName.of('ParentTreeNextKey'), PDFNumber.of(1));
+    return { bytes: await pdf.save(), rootRef: pdf.catalog.get(PDFName.of('StructTreeRoot'))!.toString(), annotationRef: link.toString() };
+  }
+
+  it.each([{ }, { branched: true }, { rootArray: true }, { branched: true, rootArray: true, secondPage: true }])(
+    'keeps headings, alt text, role maps and annotation bindings: %j', async (options) => {
+      const fixture = await taggedScan(options);
+      const parsed = await parsePdfBytes(ab(fixture.bytes));
+      expect(parsed.tags.some((tag) => tag.type === 'H1')).toBe(true);
+      const pageCount = options.secondPage ? 2 : 1;
+      const textItems = [...parsed.textItems];
+      for (let page = 1; page <= pageCount; page++) {
+        for (let i = 0; i < 5; i++) textItems.push({ text: `OCR page ${page} line ${i}`, x: 36, y: 600 - i * 15, width: 200, height: 12, fontName: 'OCR', fontSize: 10, page });
+      }
+      const output = await buildRemediatedPdf({ ...parsed, textItems }, 'en-US', ab(fixture.bytes), { addInvisibleTextLayer: true });
+      const after = await parsePdfBytes(ab(output));
+      expect(after.tags.some((tag) => tag.type === 'H1')).toBe(true);
+      expect(after.images.some((image) => image.alt === 'Existing diagram description')).toBe(true);
+      expect(after.textTagCoverage?.untaggedChars).toBe(0);
+      expect(after.textItems.some((item) => item.text === `OCR page ${pageCount} line 4`)).toBe(true);
+      const doc = await PDFDocument.load(output);
+      expect(doc.catalog.get(PDFName.of('StructTreeRoot'))!.toString()).toBe(fixture.rootRef);
+      const root = doc.catalog.lookup(PDFName.of('StructTreeRoot')) as PDFDict;
+      expect((root.lookup(PDFName.of('RoleMap')) as PDFDict).get(PDFName.of('CustomHeading'))!.toString()).toBe('/H1');
+      const nums = (root.lookup(PDFName.of('ParentTree')) as PDFDict).lookup(PDFName.of('Nums')) as PDFArray;
+      const values = nums.asArray();
+      const annotationKey = values.findIndex((value, i) => i % 2 === 0 && value.toString() === '18');
+      expect(values[annotationKey + 1].toString()).toBe(fixture.annotationRef);
+      if (options.secondPage) expect((doc.getPages()[1].node.get(PDFName.of('StructParents')) as PDFNumber).asNumber()).toBeGreaterThan(18);
+      const second = await buildRemediatedPdf(after, 'en-US', ab(output), { addInvisibleTextLayer: true });
+      const twice = await parsePdfBytes(ab(second));
+      expect(twice.tags.filter((tag) => tag.type === 'H1')).toHaveLength(1);
+      expect(twice.textTagCoverage?.untaggedChars).toBe(0);
+    }
+  );
+
+  it('refuses ambiguous existing mappings rather than replacing them', async () => {
+    const fixture = await taggedScan();
+    const doc = await PDFDocument.load(fixture.bytes);
+    const root = doc.catalog.lookup(PDFName.of('StructTreeRoot')) as PDFDict;
+    const nums = (root.lookup(PDFName.of('ParentTree')) as PDFDict).lookup(PDFName.of('Nums')) as PDFArray;
+    nums.push(PDFNumber.of(0)); nums.push(nums.get(1));
+    const bytes = await doc.save();
+    const original = bytes.slice();
+    const parsed = await parsePdfBytes(ab(bytes));
+    parsed.textItems.push({ text: 'New OCR text', x: 36, y: 500, width: 150, height: 12, fontName: 'OCR', fontSize: 10, page: 1 });
+    await expect(buildRemediatedPdf(parsed, 'en-US', bytes, { addInvisibleTextLayer: true })).rejects.toThrow(/safely extend/);
+    expect(bytes).toEqual(original);
+  });
+});
+
+it('refuses an OCR layer beyond its safe capacity instead of silently dropping lines', async () => {
+  const bytes = await untaggedPdf();
+  const parsed = await parsePdfBytes(ab(bytes));
+  const item = { text: 'A recognized line', x: 36, y: 500, width: 200, height: 12, fontName: 'OCR', fontSize: 10, page: 1 };
+  await expect(buildRemediatedPdf({ ...parsed, textItems: Array.from({ length: 20_001 }, () => item) }, 'en-US', bytes, { addInvisibleTextLayer: true })).rejects.toThrow(/safe document limit/);
+});
