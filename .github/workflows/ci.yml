@@ -116,7 +116,7 @@ jobs:
       - if: steps.changes.outputs.worker == 'true'
         run: docker build -t ocrmypdf-worker services/ocrmypdf-worker
       - if: steps.changes.outputs.worker == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - if: steps.changes.outputs.worker == 'true'
