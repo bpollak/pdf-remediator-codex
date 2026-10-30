@@ -180,7 +180,9 @@ if [ "$run_deploy" = 1 ]; then
   export GITHUB_SHA="$sha"
   vercel_cli pull --yes --environment=production
   vercel_cli build --prod
-  deploy_url="$(vercel_cli deploy --prebuilt --prod | tail -n 1)"
+  deployment_json="test-results/vercel-deployment.json"
+  vercel_cli deploy --prebuilt --prod --json > "$deployment_json" || fail "Vercel production deployment"
+  deploy_url="$(node scripts/read-vercel-deployment.mjs "$deployment_json")" || fail "Vercel did not confirm a ready production deployment (see $deployment_json)"
   record "Deployed $short_sha to production ($deploy_url)."
 else
   bold "3. Deploy skipped"

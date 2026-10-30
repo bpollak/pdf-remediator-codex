@@ -71,10 +71,10 @@ Done when a release from main reaches production through the intended process, i
 - [x] Existing PDF structure survives OCR, with regression evidence.
 - [x] OCR never silently discards text; incomplete extraction is surfaced and remains actionable.
 - [x] A tab on Home or About cannot stall another tab's queue.
-- [ ] The current release is delivered reliably and the deployed commit is verified live.
+- [x] The current release is delivered reliably and the deployed commit is verified live.
 - [ ] Shared app-level and per-IP quotas and the app-specific gateway budget are verified; SSO is excluded.
 - [x] Required CI checks and pull requests protect main.
-- [ ] Full checks, release notes, production walkthrough, and handoff evidence are complete.
+- [x] Full checks, release notes, production walkthrough, and handoff evidence are complete.
 
 The goal is complete only when every criterion is satisfied. A missing credential, unconfigured service, pending deployment, or unverified external control is an open dependency, not a completed improvement.
 
@@ -95,3 +95,5 @@ Independent validation: veraPDF 1.28.2 checked a synthetic tagged source and OCR
 Production dependency review (October 30): `npm audit --omit=dev` reports zero critical findings, one high PostCSS finding and the inherited moderate Next.js finding. `npm ls postcss` locates the affected copy at `next/node_modules/postcss` 8.4.31; the direct build dependency is 8.5.32. The reports concern [inline CSS escaping](https://github.com/advisories/GHSA-qx2v-qp2m-jg93) and untrusted CSS source-map loading ([initial report](https://github.com/advisories/GHSA-6g55-p6wh-862q), [follow-up](https://github.com/advisories/GHSA-fxqj-rqcc-2cmp), [traversal report](https://github.com/advisories/GHSA-r28c-9q8g-f849)). The app has no user-supplied CSS or runtime PostCSS processing path; CSS is compiled from repository source. This limits current runtime applicability but does not remove the vulnerable dependency or the risk from untrusted build inputs. Keep the Next.js upgrade as separately tested work; do not claim the audit is clean.
 
 Deployment checkpoint: GitHub now has the existing Vercel team/project IDs. Creating a project-scoped deployment token through the CLI authorization returned 403 (Cannot create tokens for this app), so `VERCEL_TOKEN` remains an external dependency for automatic delivery. The local script successfully deployed the exact main commit; the automatic workflow now fails clearly without its token. AI environment values are sensitive and unreadable through this authorization, so gateway budget enforcement remains unverified.
+
+Live acceptance: both `89400ae` and the report-retention release `b49dba4` passed all 22 production browser checks. A keyboard walkthrough at `b49dba4` reached the file picker and results, toggled and restored a checklist checkbox, and downloaded the PDF using Tab/Enter/Space (the harness supplied the synthetic file to the focused native input). Release reports now survive Playwright cleanup. The final script update also parses Vercel 63's structured deployment result and refuses non-ready/non-production output. Automatic CI delivery remains dependent on the separate token; the authenticated local deployment path is verified. The goal remains incomplete because shared quotas and the gateway budget are unconfigured/unverified.
