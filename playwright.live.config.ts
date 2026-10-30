@@ -8,6 +8,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e-live',
+  // Keep Playwright cleanup away from release reports and validation evidence.
+  outputDir: './test-results/playwright',
   fullyParallel: false,
   workers: 1,
   retries: 1,

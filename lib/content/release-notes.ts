@@ -15,7 +15,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     highlights: [
       'OCR extends existing headings, image descriptions, and annotation bindings instead of replacing the document’s tag tree.',
       'Dense pages and long OCR lines retain their text. Model cutoffs, resource limits, empty pages, and low-confidence text gaps remain visible as required follow-up.',
-      'A tab on Home or About can keep processing uploads from another tab. Processing warnings remain visible after navigation.'
+      'A tab on Home or About can keep processing uploads from another tab. Processing warnings remain visible after navigation.',
+      'Release checks verify the version running on the live site and retain the desktop, phone, keyboard, and automated accessibility results.'
     ]
   },
   {
