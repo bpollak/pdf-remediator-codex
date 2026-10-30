@@ -103,7 +103,7 @@ jobs:
         env:
           LIVE_BASE_URL: ${{ env.PRODUCTION_URL }}
         run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: live-walkthrough
